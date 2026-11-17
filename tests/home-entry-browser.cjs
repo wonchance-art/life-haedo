@@ -56,7 +56,7 @@ async function recordActions(page) {
   return [selection, ...destinations];
 }
 async function home(page) {
-  if (!await page.locator('[data-haedo-navigation] a[data-haedo-section="schedule"]').isVisible()) {
+  if (!await page.locator('[data-haedo-navigation] a[data-haedo-section="notes"]').isVisible()) {
     if (await page.locator('.photo-editor').isVisible()) await page.getByRole('button', { name: '닫기', exact: true }).click();
     else await page.locator('[data-subview-return]').click();
     await settle(page);
@@ -129,9 +129,9 @@ async function main() {
     await check('index starts at home, legacy life stays records, and quick links enter working sections', async ({ page }) => {
       await freshHome(page);
       assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'home');
-      assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section]').count(), 4); // 2026-11-02: 뉴스·일정·자료·설정
+      assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section]').count(), 5); // 2026-11-16: 뉴스·일정·노트·자료·설정 (rule change; 2026-11-02 had four)
       assert.equal(await page.locator('[data-haedo-navigation] .haedo-brand').getAttribute('href'), 'index.html');
-      assert.equal(await page.locator('a[data-haedo-section="schedule"]').getAttribute('aria-current'), 'page');
+      assert.equal(await page.locator('a[data-haedo-section="notes"]').getAttribute('aria-current'), 'page');
       assert.equal(await page.locator('#homeFirstWrite').isVisible(), true);
       // 2026-11-08 S3: no 자료 block or second write button in the list; 가져오기 is 자료's, 글쓰기 the global one.
       assert.equal(await page.locator('#lifeHome .home-library, #lifeHome [data-home-destination="import"], #lifeHome [data-home-destination="sources"], .home-blog-write').count(), 0);
@@ -337,7 +337,8 @@ async function main() {
       // 2026-11-08 S4·S8: Y's link line opens the 연표 목록 directly.
       await home(page); await nav(page, 'tools'); await page.locator('#lifeMain .schedule-plan-links').getByRole('link', { name: '연표', exact: true }).click();
       await page.waitForURL(url => url.pathname.endsWith('/workspace.html'));
-      await page.locator('[data-haedo-navigation] a[data-haedo-section="schedule"]').click(); await ready(page);
+      // 2026-11-16: the list is 노트's tab (일정 opens its calendar).
+      await page.locator('[data-haedo-navigation] a[data-haedo-section="notes"]').click(); await ready(page);
       await page.locator('#homePosts[aria-busy="false"]').waitFor();
       await nav(page, 'tools'); assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'tools');
       await nav(page, 'manage'); assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'manage');

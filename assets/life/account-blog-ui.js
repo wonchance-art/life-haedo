@@ -88,9 +88,12 @@
         const article = el('article', null, 'ab-post'); article.dataset.remoteId = row.id; article.dataset.state = row.status;
         article.append(el('h3', row.title?.trim() || (row.draft ? '제목 없는 초안' : '제목 없는 글')));
         const local = !!row.localPostId;
-        const parts = [row.draft ? '초안' : row.archived ? '숨긴 글' : '글', !row.localPostId ? '이 기기로 받는 중' : labels[row.status] || labels.error];
-        if (row.publication?.active) parts.push('공개 중');
-        const metadata = el('p', parts.join(' · '), 'life-meta ab-post-state');
+        // 2026-11-16 owner: a post's 계정에 올림, 계정에 올리기 대기 and 이 기기로 받는 중 are said to screen
+        // readers only; 계정에 올리지 못함 is shown. The publication (공개 중) is not a save state and stays.
+        const said = !row.localPostId ? '이 기기로 받는 중' : labels[row.status] || labels.error, quiet = !row.localPostId || ['synced', 'pending'].includes(row.status);
+        const metadata = el('p', row.draft ? '초안' : row.archived ? '숨긴 글' : '글', 'life-meta ab-post-state');
+        metadata.append(el('span', ' · ' + said, quiet ? 'ab-post-sync life-sr-only' : 'ab-post-sync'));
+        if (row.publication?.active) metadata.append(document.createTextNode(' · 공개 중'));
         const date = new Date(row.updated_at);
         if (Number.isFinite(date.getTime())) { const time = el('time', new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium' }).format(date)); time.dateTime = date.toISOString(); metadata.append(document.createTextNode(' · '), time); }
         article.append(metadata);

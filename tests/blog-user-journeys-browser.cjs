@@ -177,7 +177,8 @@ async function main() {
         assert.equal(await page.locator('.wb-post-feed').count(), 0, 'Profile editing must not mount a second private post list');
         await page.locator('#wbPageTitle').fill('새 이름으로 이어 쓰는 블로그'); await page.locator('#wbPageIntro').fill('목록을 벗어나지 않고 소개를 정돈합니다.'); await snap(page, 'profile');
         await page.getByRole('button', { name: '저장하고 돌아가기', exact: true }).click(); await page.locator('#homePosts[aria-busy="false"]').waitFor();
-        assert.equal(await page.locator('#homePostSearch').inputValue(), '세 형식 공통검색'); assert.match(await page.locator('.home-profile-bar').innerText(), /새 이름으로 이어 쓰는 블로그/);
+        // Rule change 2026-11-16 노션 방향 (Designer default 2): 노트 has no blog profile row; name, intro, avatar and 소개 표시 live in 글 메뉴 → 프로필 편집. The saved name is read from the library.
+        assert.equal(await page.locator('#homePostSearch').inputValue(), '세 형식 공통검색'); assert.equal(await page.evaluate(() => (async () => { const s = HaedoLife.Shell.storage; return (await s.readWorkbench(await s.getActive())).page; })().then(page => page.title)), '새 이름으로 이어 쓰는 블로그');
         assert.equal((await documents(page)).docs.find(doc => doc.id === refs.photo).title, '세 형식 공통검색 사진 글');
       });
       await check('search and expanded range survive reading and save while Korean composition keeps the current search', async ({ page }) => {
@@ -231,10 +232,11 @@ async function main() {
         const rows = () => page.locator('#homePosts .home-post').evaluateAll(nodes => nodes.map(node => node.dataset.photoPostId + '@' + node.dataset.workspaceId).sort());
         const expected = sample.ids.map(id => id + '@' + sample.workspaceId).sort();
         assert.equal((await documents(page)).workspaceId, other); assert.deepEqual(await rows(), expected);
-        assert.equal(await page.locator('.home-author-name').innerText(), '내 블로그', 'the selected library\'s own profile');
+        // No profile row in 노트 since 2026-11-16 (Designer default 2): the old library's name must not show anywhere in it.
+        assert.doesNotMatch(await page.locator('#lifeHome').innerText(), /느린 오후의 기록/, 'nothing of the other library\'s profile');
         await page.evaluate(() => __journeyReleaseOldList()); await settle(page);
         assert.equal((await documents(page)).workspaceId, other); assert.deepEqual(await rows(), expected, 'the late old read adds or duplicates nothing');
-        assert.equal(await page.locator('.home-author-name').innerText(), '내 블로그'); assert.doesNotMatch(await page.locator('#lifeHome').innerText(), /느린 오후의 기록/);
+        assert.doesNotMatch(await page.locator('#lifeHome').innerText(), /느린 오후의 기록/);
       });
       await check('late account reads cannot paint old private rows into the next context', async ({ page, server, device }) => {
         await openHome(page); const sample = await seed(page); await nav(page, 'tools'); await page.evaluate(() => { window.__journeyHoldList = true; }); await nav(page, 'home'); await page.waitForFunction(() => window.__journeyHeldList);

@@ -155,9 +155,10 @@ async function main() {
       const result = await page.evaluate(() => { const nav = document.querySelector('[data-haedo-navigation]'), selected = nav.querySelector('[aria-current="page"]'), marker = nav.querySelector('.haedo-nav-indicator'), a = selected.getBoundingClientRect(), b = marker.getBoundingClientRect(); return { selected: selected.dataset.haedoSection, left: Math.abs(a.left - b.left), top: Math.abs(a.top - b.top), width: Math.abs(a.width - b.width), height: Math.abs(a.height - b.height), hidden: marker.getAttribute('aria-hidden') }; });
       assert.equal(result.selected, 'manage'); assert.equal(result.hidden, 'true');
       // 2026-11-02 decision: the phone tab bar has no selected pill; colour and weight mark the tab.
+      // 2026-11-16 W1 (notion-visual-contract.md): ink 600 for the current tab; teal is kept for 글쓰기.
       const phone = await page.evaluate(() => { const nav = document.querySelector('[data-haedo-navigation]'), selected = nav.querySelector('.haedo-nav-link[aria-current="page"]');
         return { indicator: getComputedStyle(nav.querySelector('.haedo-nav-indicator')).display, background: getComputedStyle(selected).backgroundColor, weight: getComputedStyle(selected.querySelector('.haedo-nav-text')).fontWeight, color: getComputedStyle(selected).color }; });
-      assert.deepEqual(phone, { indicator: 'none', background: 'rgba(0, 0, 0, 0)', weight: '750', color: 'rgb(20, 91, 80)' });
+      assert.deepEqual(phone, { indicator: 'none', background: 'rgba(0, 0, 0, 0)', weight: '600', color: 'rgb(55, 53, 47)' });
       // Wider layouts keep the moving indicator, painted inside the selected link.
       await page.setViewportSize({ width: 1440, height: 1000 }); await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))); await idle(page);
       const wide = await page.evaluate(() => { const nav = document.querySelector('[data-haedo-navigation]'), selected = nav.querySelector('.haedo-nav-link[aria-current="page"]'), marker = nav.querySelector('.haedo-nav-indicator'), a = selected.getBoundingClientRect(), b = marker.getBoundingClientRect(); return { left: Math.abs(a.left - b.left), top: Math.abs(a.top - b.top), width: Math.abs(a.width - b.width), height: Math.abs(a.height - b.height) }; });
@@ -188,12 +189,14 @@ async function main() {
     await check('main section scroll memory survives round trips without changing the filtered home list', async ({ page }) => {
       await open(page); await seed(page, 24); await page.reload(); await ready(page); await loaded(page); await search(page, '기록');
       await page.evaluate(() => scrollTo({ top: 900, behavior: 'instant' })); const y = await page.evaluate(() => scrollY); assert(y > 100);
-      // Dispatching the control retains the actual origin scroll, as a touch does; the plan is 일정's other view.
-      await page.evaluate(() => document.querySelector('[data-schedule-view="tools"]').click()); await page.waitForFunction(() => document.querySelector('#lifeMain')?.dataset.mode === 'tools');
+      // Dispatching the control retains the actual origin scroll, as a touch does. Rule change (2026-11-16 notes-menu):
+      // the list is 노트 and 일정 (opening its calendar) is another section of the menu; until then 일정's Y was a view of the
+      // list's own unit bar.
+      await page.evaluate(() => document.querySelector('[data-haedo-navigation] [data-haedo-section="schedule"]').click()); await page.waitForFunction(() => document.querySelector('#lifeMain')?.dataset.mode === 'month');
       await nav(page, 'home'); await loaded(page); await idle(page); await page.waitForFunction(y => Math.abs(scrollY - y) < 2, y);
       assert.equal(await page.locator('#homePostSearch').inputValue(), '기록');
       // Round trips through the other sections return to the same list, search and scroll.
-      for (const section of ['records', 'news', 'manage']) {
+      for (const section of ['records', 'news', 'manage', 'schedule']) {
         await page.evaluate(section => document.querySelector(`[data-haedo-section="${section}"]`).click(), section);
         await page.waitForFunction(section => document.body.dataset.haedoSection === section && !document.querySelector('.life-app[aria-busy="true"]'), section);
         await nav(page, 'home'); await loaded(page); await idle(page); await page.waitForFunction(y => Math.abs(scrollY - y) < 2, y);

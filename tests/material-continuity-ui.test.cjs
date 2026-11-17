@@ -10,6 +10,7 @@ class Node {
   set textContent(value) { this.replaceChildren(); this._text = String(value); }
   get textContent() { return this._text + this.children.map(node => node.textContent).join(''); }
   setAttribute(key, value) { this.attributes[key] = String(value); }
+  get classList() { const node = this, names = () => (node.className || '').split(' ').filter(Boolean); return { contains: name => names().includes(name), toggle(name, on = !names().includes(name)) { node.className = [...names().filter(value => value !== name), ...(on ? [name] : [])].join(' '); return on; } }; }
   getAttribute(key) { return this.attributes[key] ?? null; }
   get isConnected() { return this === this.ownerDocument.body || !!this.parentNode?.isConnected; }
   contains(node) { return !!node && (this === node || this.children.some(child => child.contains(node))); }
@@ -67,6 +68,8 @@ const writes = calls => calls.filter(call => ['connect', 'receive', 'resolve', '
 test('the panel is a compact status: no consent, review, receive, pause or keep-this-device controls and no write on mount', async t => {
   const f = await fixture(t); f.setState({ enabled: true, status: 'synced', output: null }); await f.ui.refresh();
   assert.equal(f.get('#mcStatus').textContent, '모든 기기에 동기화됨');
+  // 2026-11-16 owner: said to screen readers, not shown.
+  assert.equal(f.get('#mcStatus').classList.contains('life-save-quiet'), true);
   for (const id of ['#mcReview', '#mcConsent', '#mcConnect', '#mcList', '#mcReceive', '#mcPause', '#mcCompare', '#mcResolveLocal', '#mcResolveRemote', '#mcOutputReview'])
     assert.equal(f.host.querySelector(id), null, id);
   assert.doesNotMatch(f.host.textContent, /다른 기기에서 이어쓰기|이 기기 준비로 이어쓰기|이 준비 받기|이 브라우저에만/);
@@ -96,6 +99,7 @@ test('a just-created preparation before its first save shows the waiting state, 
 test('a sync error offers one retry that runs the automatic step after flushing input and opens a received change', async t => {
   const f = await fixture(t); f.setState({ enabled: true, status: 'error', error: 'network_error', output: null }); await f.ui.refresh();
   assert.equal(f.get('.mc-error').hidden, false);
+  assert.equal(f.get('#mcStatus').classList.contains('life-save-quiet'), false, 'a failure is shown');
   f.setBefore(() => { throw Error('입력을 먼저 마치세요'); }); await f.click('#mcSync');
   assert.equal(f.calls.filter(call => call[0] === 'autoSync').length, 0); assert.match(f.get('.mc-error').textContent, /입력을 먼저 마치세요/);
   f.setBefore(null); f.hold.received = { workspaceId: f.ws, planId: f.plan.id }; await f.click('#mcSync');

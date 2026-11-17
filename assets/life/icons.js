@@ -5,7 +5,7 @@
  * one picture per concept: 자료 = book-open, 인용 = text-quote, 글쓰기 = pencil, 편집 = square-pen,
  * 웹 주소 = link, 일정 = calendar, 연표 = chart-gantt, 연간 계획 = chart-spline, AI 글 표시 = sparkle,
  * AI 제안은 당분간 편집 그림(square-pen)을 같이 쓴다(2026-11-05 총괄 디자인 결정).
- * 비공개 = lock, 새 탭에서 열기 = external-link, 사진 = image, 되돌리기 = undo-2, 서식 = type. No icon runtime, font or remote request.
+ * 노트 = file-text (2026-11-16), 비공개 = lock, 새 탭에서 열기 = external-link, 사진 = image, 되돌리기 = undo-2, 서식 = type. No icon runtime, font or remote request.
  */
 (function (root) {
   'use strict';
@@ -18,6 +18,8 @@
     sparkle: ['sparkle', '<path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/>'],
     book: ['book-open', '<path d="M12 5v16"/><path d="M20.001 19A2 2 0 0022 17V5a2 2 0 00-1.999-2L16 3.002A5 5 0 0012 5a5 5 0 00-4-2H4a2 2 0 00-2 2v12a2 2 0 001.999 2H8a5 5 0 014 2 5 5 0 014-2z"/>'],
     search: ['search', '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>'],
+    // 노트 메뉴 (2026-11-16 notes-menu, Designer): the unchanged vendor/lucide/icons/file-text.svg.
+    note: ['file-text', '<path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>'],
     bookmark: ['bookmark', '<path d="M17 3a2 2 0 0 1 2 2v15a1 1 0 0 1-1.496.868l-4.512-2.578a2 2 0 0 0-1.984 0l-4.512 2.578A1 1 0 0 1 5 20V5a2 2 0 0 1 2-2z"/>'],
     heart: ['heart', '<path d="M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5"/>'],
     more: ['ellipsis', '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>'],

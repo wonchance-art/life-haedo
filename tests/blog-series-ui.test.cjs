@@ -15,6 +15,7 @@ class Node {
   set textContent(value) { this.replaceChildren(); this._text = String(value); }
   get textContent() { return this._text + this.children.map(n => n.textContent).join(''); }
   setAttribute(key, value) { this.attributes[key] = String(value); }
+  get classList() { const node = this, names = () => (node.className || '').split(' ').filter(Boolean); return { contains: name => names().includes(name), toggle(name, on = !names().includes(name)) { node.className = [...names().filter(value => value !== name), ...(on ? [name] : [])].join(' '); return on; }, add: name => { if (!names().includes(name)) node.className = [...names(), name].join(' '); }, remove: name => { node.className = names().filter(value => value !== name).join(' '); } }; }
   getAttribute(key) { return this.attributes[key] ?? null; }
   get isConnected() { return this === this.ownerDocument.body || !!this.parentNode?.isConnected; }
   addEventListener(name, fn) { (this.listeners[name] ||= []).push(fn); }
@@ -133,6 +134,20 @@ test('storage and catalog failures preserve inputs and old candidates for explic
   const title = await f.input('#bsTitle', '보존할 입력'); await assert.rejects(f.module.flush(), /실제 저장 실패/);
   assert.equal(f.get('#bsTitle'), title); assert.equal(title.value, '보존할 입력'); assert.equal(f.db().series[0].title, '');
   f.setBeforeSave(null); await f.click('#bsRetry'); assert.equal(f.db().series[0].title, '보존할 입력');
+});
+
+// 2026-11-16 review R1: the autosave skips while a ZIP is inspected; input typed meanwhile is stored after it.
+test('input typed during a ZIP inspection is stored after the inspection', async t => {
+  const hold = deferred(), f = await fixture(t, { onInspectImport: async () => { await hold.promise; return { title: '여행 모음 파일', posts: 1, photos: 0 }; }, onImport: async () => { throw new Error('설치 안 함'); } });
+  await f.input('#bsTitle', '검사 전 제목'); await f.module.flush();
+  const file = f.get('#bsImport'); file.files = [{ name: 'trip.zip' }]; const inspecting = file.emit('change'); await settle();
+  await f.input('#bsTitle', '검사 중에 고친 제목');
+  await new Promise(resolve => setTimeout(resolve, 700));
+  assert.notEqual(f.db().series[0].title, '검사 중에 고친 제목', 'held while the file is inspected');
+  hold.resolve(); await inspecting; await settle();
+  await new Promise(resolve => setTimeout(resolve, 100)); await settle();
+  assert.equal(f.db().series[0].title, '검사 중에 고친 제목', 'stored after the inspection');
+  assert.equal(f.get('.bs-status').textContent, '이 브라우저에 비공개로 저장됨');
 });
 
 test('failed import inspection keeps the existing editor and stale account callbacks cannot render or navigate', async t => {

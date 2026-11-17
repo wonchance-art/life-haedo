@@ -10,7 +10,7 @@
       },
       "link": {
         "role": "secondary",
-        "displayName": "틸 링크"
+        "displayName": "먹색 링크(밑줄)"
       },
       "paper": {
         "role": "neutral",
@@ -18,7 +18,7 @@
       },
       "canvas": {
         "role": "neutral",
-        "displayName": "옅은 초록 회색 캔버스"
+        "displayName": "흰 페이지 바탕"
       },
       "soft": {
         "role": "neutral",
@@ -26,7 +26,7 @@
       },
       "selected": {
         "role": "neutral",
-        "displayName": "현재 탐색·선택"
+        "displayName": "현재 탐색·선택 면(두 번째 표시와 함께)"
       },
       "muted": {
         "role": "neutral",
@@ -51,6 +51,18 @@
       "focus": {
         "role": "secondary",
         "displayName": "키보드 초점"
+      },
+      "sidebar": {
+        "role": "neutral",
+        "displayName": "데스크톱 메뉴 면"
+      },
+      "meta": {
+        "role": "neutral",
+        "displayName": "메타 글자(메뉴 면 위에는 쓰지 않음)"
+      },
+      "mark": {
+        "role": "neutral",
+        "displayName": "검색 일치 강조"
       }
     },
     "typographyMeta": {
@@ -82,7 +94,7 @@
     "shadows": [
       {
         "name": "account-menu",
-        "value": "0 10px 32px rgb(24 24 27 / .09)",
+        "value": "0 0 0 1px rgba(15,15,15,.05), 0 3px 6px rgba(15,15,15,.1), 0 9px 24px rgba(15,15,15,.2)",
         "purpose": "실제 계정 메뉴의 겹침 깊이. 기본 피드 행에는 사용하지 않는다."
       },
       {
@@ -132,12 +144,12 @@
       {
         "name": "desktop-navigation",
         "value": "1101px",
-        "purpose": "216px 예약·192px 라벨 탐색."
+        "purpose": "240px 메뉴 면(화면 높이)·라벨 탐색."
       },
       {
         "name": "compact-navigation",
         "value": "761px–1100px",
-        "purpose": "88px 예약·64px 탐색·60px 아이콘과 라벨 링크."
+        "purpose": "88px 메뉴 면·64px 항목·60px 아이콘과 라벨 링크."
       },
       {
         "name": "mobile-shell",
@@ -267,7 +279,7 @@
       "refersTo": "button-primary",
       "description": "새 글·저장처럼 현재 문맥에서 우선하는 실제 행동.",
       "html": "<button class=\"ds-primary\">글쓰기</button>",
-      "css": ".ds-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-width:44px;min-height:44px;padding:8px 16px;font:550 14px/1.6 var(--haedo-font, \"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif);cursor:pointer;transition:background 150ms ease,color 150ms ease,border-color 150ms ease;border:1px solid var(--haedo-accent,#145b50);border-radius:12px;background:var(--haedo-accent,#145b50);color:#fff;font-weight:650}.ds-primary:hover{background:#104a41;border-color:#104a41}.ds-primary:active{background:#0c3d35}.ds-primary:focus-visible{outline:3px solid var(--haedo-focus,#267a69);outline-offset:3px}.ds-primary:disabled{opacity:.55;cursor:not-allowed}@media(prefers-reduced-motion:reduce){.ds-primary{transition:none}}"
+      "css": ".ds-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-width:44px;min-height:44px;padding:8px 16px;font:550 14px/1.6 var(--haedo-font, \"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif);cursor:pointer;transition:background 150ms ease,color 150ms ease,border-color 150ms ease;border:1px solid var(--haedo-accent,#145b50);border-radius:6px;background:var(--haedo-accent,#145b50);color:#fff;font-weight:600}.ds-primary:hover{background:#104a41;border-color:#104a41}.ds-primary:active{background:#0c3d35}.ds-primary:focus-visible{outline:3px solid var(--haedo-focus,#267a69);outline-offset:3px}.ds-primary:disabled{opacity:.55;cursor:not-allowed}@media(prefers-reduced-motion:reduce){.ds-primary{transition:none}}"
     },
     {
       "name": "보조 행동",
@@ -289,9 +301,9 @@
       "name": "라벨 탐색",
       "kind": "nav",
       "refersTo": "navigation",
-      "description": "홈·자료실·도구·설정의 현재 위치. 모바일 작성 중 감추고 닫으면 복원한다.",
-      "html": "<nav class=\"ds-nav\" aria-label=\"주 메뉴\"><a href=\"#home\" aria-current=\"page\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m3 10 9-7 9 7v10H3z\"/><path d=\"M9 20v-7h6v7\"/></svg><span>홈</span></a><a href=\"#records\"><span>자료실</span></a><a href=\"#tools\"><span>도구</span></a><a href=\"#manage\"><span>설정</span></a></nav>",
-      "css": ".ds-nav{display:flex;flex-direction:column;gap:8px;width:192px;font:550 16px/1.5 var(--haedo-font, \"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif)}.ds-nav a{display:flex;align-items:center;gap:16px;min-height:52px;padding:12px 16px;border-radius:14px;color:var(--haedo-muted,#5d6b65);text-decoration:none}.ds-nav a[aria-current=page]{background:var(--haedo-selected,#eaf1ed);color:var(--haedo-accent,#145b50);font-weight:700}.ds-nav a:hover{background:var(--haedo-selected,#eaf1ed);color:var(--haedo-ink,#182522)}.ds-nav a:active{transform:none}.ds-nav a:focus-visible{outline:3px solid var(--haedo-focus,#267a69);outline-offset:3px}@media(prefers-reduced-motion:reduce){.ds-nav a{transform:none}}"
+      "description": "데스크톱 왼쪽 240px 메뉴 면의 `글쓰기`와 목적지(뉴스·일정·자료·설정, 노트는 노트 메뉴 단계에서 더함). 현재 링크는 선택 면·먹색·600, 호버는 더 옅은 면. 새 글을 쓰는 동안 `글쓰기`는 왼쪽 2px 틸 선을 더한다. 761–1100px은 88px 아이콘·짧은 라벨, 760px 이하는 하단 탭(현재 먹색 600)과 오른쪽 위 틸 연필. 모바일 작성 중 감추고 닫으면 복원한다(2026-11-16 노션 방향 W1).",
+      "html": "<nav class=\"ds-nav\" aria-label=\"주 메뉴\"><a class=\"ds-compose\" href=\"#compose\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z\"/><path d=\"m15 5 4 4\"/></svg><span>글쓰기</span></a><a href=\"#news\"><span>뉴스</span></a><a href=\"#schedule\" aria-current=\"page\"><span>일정</span></a><a href=\"#records\"><span>자료</span></a><a href=\"#manage\"><span>설정</span></a></nav>",
+      "css": ".ds-nav{display:flex;flex-direction:column;gap:2px;width:240px;padding:12px 8px;box-sizing:border-box;background:var(--haedo-sidebar,#f7f7f5);font:400 15px/1.5 var(--haedo-font, \"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif)}.ds-nav a{display:flex;align-items:center;gap:12px;min-height:44px;padding:0 12px;border-radius:var(--haedo-control-radius,6px);color:var(--haedo-muted,#5f5e5b);text-decoration:none}.ds-nav a:hover:not([aria-current=page]){background:var(--haedo-hover,rgba(55,53,47,.04));color:var(--haedo-ink,#37352f)}.ds-nav a[aria-current=page]{background:var(--haedo-selected,rgba(55,53,47,.06));color:var(--haedo-ink,#37352f);font-weight:600}.ds-nav a.ds-compose{color:var(--haedo-accent,#145b50);font-weight:600}.ds-nav a.ds-compose[aria-current=page]{color:var(--haedo-accent,#145b50);box-shadow:inset 2px 0 0 var(--haedo-accent,#145b50)}.ds-nav a:focus-visible{outline:3px solid var(--haedo-focus,#267a69);outline-offset:3px}"
     },
     {
       "name": "컬렉션 선택 필터",
@@ -339,10 +351,10 @@
   ],
   "narrative": {
     "northStar": "쓰고 저장한 글을 다시 읽는 개인 블로그",
-    "overview": "흰 읽기 면·옅은 초록 회색 캔버스·짙은 틸 조작과 자체 호스팅 Pretendard로 실제 프로필과 글 제목의 위계를 세운다. 앞선 쓰기→초안 보관/명시 저장→읽기→출발 목록 복귀와 선택 자료·공개 사본의 경계를 보존한다. 후속 앱 탐색은 안정된 조작·현재 메뉴와 실제 이동의 짧은 방향성을 연결하며 기본 문서 스크롤과 입력을 유지한다.",
+    "overview": "흰 바탕 하나·옅은 메뉴 면·먹색 세 단계 글자·글쓰기에만 쓰는 틸(2026-11-16 노션 방향)과 자체 호스팅 Pretendard로 실제 프로필과 글 제목의 위계를 세운다. 앞선 쓰기→초안 보관/명시 저장→읽기→출발 목록 복귀와 선택 자료·공개 사본의 경계를 보존한다. 후속 앱 탐색은 안정된 조작·현재 메뉴와 실제 이동의 짧은 방향성을 연결하며 기본 문서 스크롤과 입력을 유지한다.",
     "keyCharacteristics": [
       "실제 이름과 글 제목의 분명한 한글 활자 위계",
-      "본문과 별도인 틸 주 행동·선택·초점",
+      "본문과 별도인 틸 글쓰기·주 행동·초점, 먹색 선택",
       "얇은 경계의 한 작성 행",
       "평평한 흰 읽기 열과 실제 사진",
       "입력·정확 복귀·공개·보존 경계 유지"

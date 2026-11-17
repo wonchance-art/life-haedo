@@ -90,7 +90,7 @@ async function snap(page, scene) {
       if (metrics.horizontalOverflow) report.qualityFailures.push({ scene, width: size.width, check: 'horizontalOverflow' });
       for (const key of ['smallTargets', 'smallInputs', 'unnamed', 'contrastFailures']) if (metrics[key].length) report.qualityFailures.push({ scene, width: size.width, check: key, details: metrics[key] });
       if (scene !== 'public') {
-        const aligned = metrics.navigation.map(item => item.label).join(',') === '뉴스,일정,자료,설정' && metrics.navigation.every(item => item.width >= 44 && item.height >= 44 && item.iconWidth === 20 && item.iconHeight === 20 &&
+        const aligned = metrics.navigation.map(item => item.label).join(',') === '뉴스,일정,노트,자료,설정' /* 2026-11-16: five tabs */ && metrics.navigation.every(item => item.width >= 44 && item.height >= 44 && item.iconWidth === 20 && item.iconHeight === 20 &&
           (['rail', 'bottom'].includes(item.mode) ? item.centeredX < 1 && item.labelVisible && item.labelTop >= 3 && item.labelTop <= 5 : item.iconLeft === 12 && item.centeredY < 1 && item.labelVisible && item.labelGap === 12));
         if (scene === 'writing' && size.width <= 760) {
           const focusedWriting = await page.evaluate(() => document.body.dataset.writingFocus === 'true');
@@ -102,7 +102,8 @@ async function snap(page, scene) {
         // the reading column itself stays within 720px. 2026-11-07 owner request: that split fills the width up to
         // the 24px gutter (no 1200px cap), and the 자료·뉴스 list alone (no reading placeholder) widens up to 960px.
         const { split, wideList } = await page.evaluate(() => ({ split: !!document.querySelector('#lifeMain')?.dataset.split && innerWidth > 1100, wideList: !!document.querySelector('#lifeMain')?.dataset.wide && innerWidth > 1100 }));
-        const limit = scene === 'tools' ? 1152 : split ? size.width - 216 - 24 - 48 : wideList ? 960 : 720;
+        // The desktop menu reserves --haedo-nav-width (240px since 2026-11-16 W1, 216px before).
+        const limit = scene === 'tools' ? 1152 : split ? size.width - 240 - 24 - 48 : wideList ? 960 : 720;
         if (metrics.contentWidth > limit + 1) report.qualityFailures.push({ scene, width: size.width, check: scene === 'tools' ? 'calendarMaximum1152' : split ? 'splitWithinGutters' : wideList ? 'listMaximum960' : 'contentMaximum720', details: metrics.contentWidth });
         if (split) {
           const reader = await page.evaluate(() => { const node = document.querySelector('#lifeMain .records-reader-pane > .life-reader'); return node ? Math.round(node.getBoundingClientRect().width) : null; });
@@ -183,7 +184,8 @@ async function main() {
         const metadata = await page.locator('#homePosts .home-post-meta').allTextContents();
         assert.equal(metadata.length, 3);
         metadata.forEach(text => { assert.match(text, /비공개 원본/); assert.doesNotMatch(text, /이 브라우저에 보관/); });
-        assert.equal(await page.locator('.home-profile-open .home-avatar').innerText(), '느린');
+        // Rule change 2026-11-16 노션 방향 (Designer default 2): 노트 has no blog profile row; name, intro, avatar and 소개 표시 live in 글 메뉴 → 프로필 편집.
+        assert.equal(await page.locator('#lifeHome :is(.home-avatar, .home-author-name, .home-blog-description)').count(), 0);
       }
       await exactCover(page, sample.postIds[0], sample.width); await snap(page, 'feed');
       await profile(page); await snap(page, 'profile');
@@ -193,7 +195,8 @@ async function main() {
         await page.locator('#wbPageIntro').fill('걷고, 읽고, 좋아하는 것을 모으며 씁니다. 오늘의 문장도 천천히.');
       }
       await home(page);
-      if (phase === 'after') assert.match(await page.locator('.home-profile-intro,.home-blog-description').first().innerText(), /오늘의 문장도 천천히/);
+      // The intro is kept with the profile (seen in 프로필 편집 and the public blog), not shown in 노트 since 2026-11-16 (Designer default 2).
+      if (phase === 'after') assert.match(await page.evaluate(() => (async () => { const s = HaedoLife.Shell.storage; return (await s.readWorkbench(await s.getActive())).page; })().then(page => page.intro)), /오늘의 문장도 천천히/);
       await openPost(page, sample.postIds[0]); await snap(page, 'reading');
       await page.getByRole('button', { name: '글 수정', exact: true }).click(); await page.locator('#photoTitle').waitFor(); await snap(page, 'writing');
       await page.locator('#photoTitle').fill('빛이 길게 머무는 오후 — 다시 쓴 생각');

@@ -20,10 +20,10 @@
   const VERIFY_PATIENCE = 3;
   const LAPSE_KEY = 'caeyeon_life_platform_verify_lapses';
   const privatePages = new Set(['workspace.html', 'timeline.html', 'goals.html', 'habits.html', 'life.html']);
-  const homeSections = new Set(['schedule', 'home', 'news', 'records', 'tools', 'manage']);
+  const homeSections = new Set(['schedule', 'notes', 'home', 'news', 'records', 'tools', 'manage']);
   const materialViews = new Set(['tools', 'annual-plan', 'naver-blog', 'external-discovery', 'interests', 'collection', 'topics', 'sources', 'source-trash', 'find', 'time', 'import', 'write', 'transfer', 'sync', 'activities', 'page', 'discover', 'related', 'reflection', 'books', 'workbench-backup', 'preservation', 'obsidian-update', 'blog', 'account-blog', 'public-cover', 'public-pages']);
-  // 일정's calendar units and 백업·복원 are screens of their own with an address (2026-11-11 m1).
-  const calendarViews = new Set(['tools', 'quarter', 'month', 'week', 'day']);
+  // 일정's calendar units and 백업·복원 are screens of their own with an address (2026-11-11 m1); `year` names Y as `tools` does (2026-11-16).
+  const calendarViews = new Set(['tools', 'year', 'quarter', 'month', 'week', 'day']);
   const homeViews = new Set([...materialViews, ...calendarViews, 'backup']);
   // The values below are the only ones a return address may carry besides the names above; each has one exact shape.
   function civilDate(value) {
@@ -52,8 +52,9 @@
           if (typeof blog === 'string' && blogRoute.test(blog)) { params.set('view', 'page'); params.set('blog', blog); }
           else if (section === 'records') params.set('view', 'page');
         } else if (homeViews.has(view)) params.set('view', view);
-        // 일정 reads `date` for its calendar units (and for the old section=tools address).
-        if ((calendarViews.has(view) || section === 'tools') && civilDate(date)) params.set('date', date);
+        // 일정 reads `date` for its calendar units, the old section=tools address, and a date without a unit (that
+        // day's month, 2026-11-16 notes-menu: section=schedule|home without a unit and without a date is 노트).
+        if ((calendarViews.has(view) || section === 'tools' || !view && (section === 'schedule' || section === 'home')) && civilDate(date)) params.set('date', date);
       }
       if (url.pathname === '/index.html' && url.searchParams.get('compose') === '1') params.set('compose', '1');
       if (url.pathname === '/workspace.html' && url.searchParams.get('section') === 'manage') params.set('section', 'manage');

@@ -9,6 +9,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { FakeCloud, accounts, cloud, base } = require('./life-sync-browser.cjs');
 const { playwright, makeContext, ready } = require('./unified-home-browser.cjs');
+const { saveStatus } = require('./helpers/save-status.cjs');
 
 const output = path.resolve(process.env.SCHEDULE_ENTRIES_OUTPUT || '.local/schedule-entries-browser');
 // Finds and measures in one evaluation. locator.evaluateAll() resolves the nodes in one round trip and runs the
@@ -114,6 +115,8 @@ async function main() {
       await page.getByRole('checkbox', { name: '아침 산책', exact: true }).check();
       await statusOf(page).filter({ hasText: '계정에 올리기 대기' }).waitFor();
       await statusOf(page).filter({ hasText: '저장됨 · 계정에 올림' }).waitFor({ timeout: 10000 });
+      // 2026-11-16 owner: both steps are said to screen readers only; nothing shows.
+      assert.deepEqual(await saveStatus(statusOf(page)), { said: '저장됨 · 계정에 올림', shown: '' }, 'a save that went well is not shown');
       assert.deepEqual(tables.rows.haedo_items.get('h1').data.checks, ['2026-11-03']);
       // Reopening shows the saved check.
       await page.reload(); await ready(page); await shown(page, 'day'); await entries(page);
@@ -195,6 +198,7 @@ async function main() {
       page.__expectFailure = true; tables.fail = 'haedo_items';
       await page.getByRole('checkbox', { name: '아침 산책', exact: true }).check();
       await statusOf(page).filter({ hasText: '계정에 올리지 못함 · 다시 시도' }).waitFor({ timeout: 10000 });
+      assert.deepEqual(await saveStatus(statusOf(page)), { said: '계정에 올리지 못함 · 다시 시도', shown: '계정에 올리지 못함 · 다시 시도' }, 'a failure is shown');
       assert.equal(await page.getByRole('checkbox', { name: '아침 산책', exact: true }).isChecked(), true, 'the check stays');
       assert.deepEqual(tables.rows.haedo_items.get('h1').data.checks, []);
       tables.fail = null;
@@ -213,6 +217,10 @@ async function main() {
       tables.hold = null; release();
       await statusOf(page).filter({ hasText: '저장됨 · 계정에 올림' }).waitFor({ timeout: 10000 });
       assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('schedule-entry-status')), true, 'focus stays on the status line');
+      // The focused line shows while it has keyboard focus (never focus on something invisible), then goes quiet.
+      assert.deepEqual(await saveStatus(statusOf(page)), { said: '저장됨 · 계정에 올림', shown: '저장됨 · 계정에 올림' }, 'the focused result shows');
+      await page.evaluate(() => document.activeElement.blur());
+      assert.deepEqual(await saveStatus(statusOf(page)), { said: '저장됨 · 계정에 올림', shown: '' }, 'once focus leaves it is said only');
       assert.deepEqual(tables.rows.haedo_items.get('h1').data.checks, ['2026-11-03']);
     });
 
@@ -328,7 +336,8 @@ async function main() {
         const add = page.locator('.schedule-entries').getByRole('link', { name: '습관 추가' });
         await add.waitFor();
         assert.equal(await add.getAttribute('href'), 'habits.html', view);
-        assert.ok((await add.boundingBox()).height >= 44, view + ': 44px');
+        // Found and measured in one evaluation (the slot repaints on store notices; a resolved node may be detached by then).
+        assert.ok(await page.evaluate(() => [...document.querySelectorAll('.schedule-entries a')].find(a => a.textContent === '습관 추가').getBoundingClientRect().height) >= 44, view + ': 44px');
         assert.match(await page.locator('.schedule-entries').innerText(), /아직 습관이 없어요\./, view);
       }
       await page.locator('.schedule-entries').getByRole('link', { name: '습관 추가' }).click();
@@ -411,7 +420,8 @@ async function main() {
       await page.waitForTimeout(400);   // start-up notices (account documents, 행복도) have passed
       const result = await page.evaluate(async () => {
         const wait = () => new Promise(resolve => setTimeout(resolve, 150));
-        const box = document.querySelector('.schedule-entries input[type=checkbox]'), mood = document.querySelector('.schedule-happiness input[type=radio], .schedule-happiness-day');
+        // W draws no 행복도 row in a week without one (2026-11-16 notes-menu: no empty table); its one line stands in.
+        const box = document.querySelector('.schedule-entries input[type=checkbox]'), mood = document.querySelector('.schedule-happiness input[type=radio], .schedule-happiness-day, .schedule-no-happiness');
         for (let n = 0; n < 5; n++) document.dispatchEvent(new Event('haedo:store'));
         await wait();
         const same = { box: box.isConnected && box === document.querySelector('.schedule-entries input[type=checkbox]'), mood: mood.isConnected, size: box.getBoundingClientRect().width > 0 };
@@ -456,30 +466,37 @@ async function main() {
         await page.goto(base + '/index.html?section=schedule&view=' + view + '&date=2026-11-03'); await ready(page); await shown(page, view); await entries(page);
         await page.waitForFunction(() => HaedoPlatformStore.items.length === 4);
         if (view === 'day') {
-          // 2026-11-08 S7: 체크 (습관 + 행복도) → 그날 기록 → 다른 해; no goal in the day.
+          // Rule change (2026-11-16 notes-menu): the day's 체크 (습관 + 행복도) is in the side column after the body's
+          // 그날 기록 → 다른 해 (2026-11-08 S7 had it above the records); still no goal in the day.
           const order = await page.evaluate(() => {
             const parts = [['check', '.schedule-entries-day'], ['records', '.schedule-day-records'], ['others', '.schedule-other-years']].map(([name, sel]) => [name, document.querySelector('#lifeSchedule ' + sel)]).filter(([, n]) => n);
             const sorted = [...parts].sort(([, a], [, b]) => a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1).map(([name]) => name);
             const slot = document.querySelector('.schedule-entries-day');
-            return { sorted, inSlot: [...slot.querySelectorAll('h2')].map(n => n.textContent), goals: document.querySelectorAll('#lifeSchedule .schedule-goal, #lifeSchedule input[type=range]').length };
+            // Rule change 2026-11-16 노션 방향 m5: the side part's h2 is 습관 · 행복도; what the slot holds is named by h3.
+            return { sorted, inSlot: [...slot.querySelectorAll('h3')].map(n => n.textContent), part: slot.closest('.schedule-side')?.querySelector(':scope > h2')?.textContent, slotH2: slot.querySelectorAll('h2').length, goals: document.querySelectorAll('#lifeSchedule .schedule-goal, #lifeSchedule input[type=range]').length };
           });
-          assert.deepEqual(order, { sorted: ['check', 'records'], inSlot: ['습관', '행복도'], goals: 0 }, 'the day shows its checks, then its records, and no goal');
-          // An empty day says so at body size.
-          const empty = await page.locator('.schedule-day-records .schedule-empty').evaluate(n => ({ text: n.textContent, size: getComputedStyle(n).fontSize,
-            body: (() => { const probe = document.createElement('span'); probe.style.fontSize = 'var(--haedo-text-body)'; n.append(probe); const size = getComputedStyle(probe).fontSize; probe.remove(); return size; })() }));
-          assert.deepEqual([empty.text, empty.size], ['이 날 기록이 없어요.', empty.body], 'the empty day at body size');
-          // 행복도 0–10: one row on wide screens; on a phone two rows (0–5, 6–10), each choice 44 × 44.
+          assert.deepEqual(order, { sorted: ['records', 'check'], inSlot: ['습관', '행복도'], part: '습관 · 행복도', slotH2: 0, goals: 0 }, 'the day shows its records, then its checks beside them, and no goal');
+          // An empty day says so in one line. Rule change 2026-11-16 노션 방향 (contract 빈 상태): 14px in the meta grey
+          // (until then body size).
+          const empty = await page.locator('.schedule-day-records .schedule-empty').evaluate(n => ({ text: n.textContent, size: getComputedStyle(n).fontSize, color: getComputedStyle(n).color }));
+          assert.deepEqual([empty.text, empty.size, empty.color], ['이 날 기록이 없어요.', '14px', 'rgb(111, 110, 105)'], 'the empty day, one 14px meta line');
+          // 행복도 0–10: two rows (0–5, 6–10) on a phone and, since 2026-11-16 (notes-menu), in D's 280px side column from
+          // 1101px too (review 3 m2's rule: one row only where each choice gets 44px; until then the wide D slot had one row).
+          // Each choice is 44 × 44.
           const scale = await measureAll(page, '.schedule-happiness-option', nodes => nodes.map(n => { const b = n.getBoundingClientRect(); return { n: n.textContent, top: Math.round(b.top), w: b.width, h: b.height }; }));
           const rows = [...new Set(scale.map(o => o.top))].map(top => scale.filter(o => o.top === top).map(o => o.n));
-          if (width <= 760) assert.deepEqual(rows, [['0', '1', '2', '3', '4', '5'], ['6', '7', '8', '9', '10']]);
-          else assert.equal(rows.length, 1, 'one row on a wide screen');
+          if (width <= 760 || width > 1100) assert.deepEqual(rows, [['0', '1', '2', '3', '4', '5'], ['6', '7', '8', '9', '10']]);
+          else assert.equal(rows.length, 1, 'one row where the slot is 524px or wider');
           assert.deepEqual(scale.filter(o => o.w < 44 || o.h < 44).map(o => o.n), [], '행복도 choices are 44 × 44');
         }
         await overflow(page, view + ' ' + width);
         if (view === 'week') {
           // Every habit name is shown whole: its own line at phone width, the row header on wide screens.
           const names = await measureAll(page, '.schedule-grid-label td', cells => cells.filter(c => c.checkVisibility()).map(c => [c.textContent, c.scrollWidth <= c.clientWidth + 1]));
-          if (width <= 760) assert.deepEqual(names, [['아침 산책', true], ['저녁에 일기 한 줄 쓰기와 다음 날 할 일 세 가지 적기', true], ['행복도', true]]);
+          // Rule change (2026-11-16 notes-menu): from 1101px the week's table is in the 308px side column, laid out as at
+          // phone width (each name on its own line, seven 44px days); a week without a 행복도 draws no 행복도 row (one line
+          // says so instead), so this fixture has no 행복도 label.
+          if (width <= 760 || width > 1100) assert.deepEqual(names, [['아침 산책', true], ['저녁에 일기 한 줄 쓰기와 다음 날 할 일 세 가지 적기', true]]);
           else {
             assert.deepEqual(names, [], 'wide: names stay in the row headers');
             // Wide: the row header wraps instead of cutting, and keeps the name as its title.

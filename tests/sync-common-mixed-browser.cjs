@@ -6,6 +6,7 @@
 const assert = require('node:assert/strict');
 const { playwright, makeContext, ready, settle } = require('./unified-home-browser.cjs');
 const { FakeCloud, accounts, cloud, base } = require('./life-sync-browser.cjs');
+const { saveStatus } = require('./helpers/save-status.cjs');
 
 const REFRESH = '앱을 새로고침한 뒤 다시 시도해 주세요. 글은 이 기기에 그대로 있습니다.';
 const MISSING = '동기화 공통 모듈을 읽지 못했습니다. 새로고침해 주세요.';
@@ -44,6 +45,8 @@ async function main() {
       await page.getByRole('button', { name: '글 저장', exact: true }).click();
       const status = page.locator('#photoServerStatus');
       await status.filter({ hasText: '저장됨 · 앱을 새로고침하면 계정에 올림' }).waitFor();
+      // 2026-11-16 owner: something the owner has to do is shown, not only said.
+      assert.deepEqual(await saveStatus(status), { said: '저장됨 · 앱을 새로고침하면 계정에 올림', shown: '저장됨 · 앱을 새로고침하면 계정에 올림' });
       // The privacy pill names the problem; the normal states stay quiet (D1).
       assert.match(await page.locator('.photo-privacy').getAttribute('aria-label'), /새로고침 필요/);
       assert.equal(await status.getAttribute('data-state'), 'refresh');

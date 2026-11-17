@@ -24,7 +24,8 @@ async function openMenu(page, section, mode, id) {
 }
 
 const openRecordsMenu = page => openMenu(page, 'records', 'sources', 'lifeRecordsMenu');
-const openBlogMenu = page => openMenu(page, 'schedule', 'home', 'lifeBlogMenu');
+// 2026-11-16 (notes-menu): the 글 메뉴 belongs to 노트, the former 일정 list.
+const openBlogMenu = page => openMenu(page, 'notes', 'home', 'lifeBlogMenu');
 
 async function openNewsSettings(page) {
   await sectionRoot(page, 'news', 'external-discovery');

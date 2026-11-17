@@ -2,23 +2,28 @@
 (function (root) {
   'use strict';
   if (root.HaedoNavigation) return;
-  // 2026-11-02 soft redesign: 뉴스·일정·자료·설정. The former home/tools IDs stay
-  // as aliases of schedule so old links and saved addresses keep opening.
+  // 2026-11-16 (notes-menu.md): 뉴스·일정·노트·자료·설정. 노트 holds my posts (the former 일정 목록);
+  // 일정 is the Y·Q·M·W·D calendar only. The former IDs stay as aliases so old links and saved
+  // addresses keep opening: home (the former list) is 노트, tools (Y) is 일정.
+  // 노트 uses the `note` glyph (Lucide file-text, W1 2026-11-16; notion-visual-contract.md 노트 아이콘).
   const sections = [
     { id: 'news', label: '뉴스', glyph: 'news', href: 'index.html?section=news' },
-    { id: 'schedule', label: '일정', glyph: 'calendar', href: 'index.html' },
+    { id: 'schedule', label: '일정', glyph: 'calendar', href: 'index.html?section=schedule&view=month' },
+    { id: 'notes', label: '노트', glyph: 'note', href: 'index.html?section=notes' },
     { id: 'records', label: '자료', glyph: 'book', href: 'index.html?section=records' },
     { id: 'manage', label: '설정', glyph: 'settings', href: 'index.html?section=manage' }
   ];
-  const aliases = Object.freeze({ home: 'schedule', tools: 'schedule' });
+  const aliases = Object.freeze({ home: 'notes', tools: 'schedule' });
   const compose = Object.freeze({ id: 'compose', label: '글쓰기', href: 'index.html?compose=1' });
   function normalizeSection(id) {
     const value = Object.hasOwn(aliases, id) ? aliases[id] : id;
     return sections.some(section => section.id === value) ? value : null;
   }
   const viewSections = Object.freeze({
-    home: 'schedule', blog: 'schedule', 'account-blog': 'schedule', tools: 'schedule', 'annual-plan': 'schedule', time: 'schedule',
-    // 일정's calendar units (tools is Y): 분기·월·주·일.
+    // 노트: the list (home) and its 글 메뉴 screens 글 공개·보관 (blog) and 계정 보관 상태 (account-blog).
+    home: 'notes', blog: 'notes', 'account-blog': 'notes',
+    // 일정: Y (tools, also named year), its plan views and the calendar units 분기·월·주·일.
+    tools: 'schedule', year: 'schedule', 'annual-plan': 'schedule', time: 'schedule',
     quarter: 'schedule', month: 'schedule', week: 'schedule', day: 'schedule',
     'public-cover': 'manage', 'public-pages': 'manage',
     'external-discovery': 'news', interests: 'news',
@@ -114,7 +119,7 @@
   }
   // `composing` marks 글쓰기 as the current screen (decision 15); the section stays for the frame.
   function activate(section, { composing = false } = {}) {
-    const current = normalizeSection(section) || 'schedule';
+    const current = normalizeSection(section) || 'notes';
     root.document.body.dataset.haedoSection = current;
     root.document.querySelectorAll('[data-haedo-section]').forEach(node => {
       if (!node.matches('a')) return;
@@ -152,7 +157,7 @@
     brand.addEventListener('click', event => {
       if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || !handlers.size) return;
       event.preventDefault();
-      for (const handler of handlers) handler('schedule');
+      for (const handler of handlers) handler('notes');
     });
     nav.append(brand);
     // 글쓰기 keeps one place on every screen: top of the label menu, or the top
@@ -252,20 +257,32 @@
   if (loginNext) root.document.querySelectorAll('[data-login-link], #accessState a, #timelineAccess a').forEach(link => {
     link.href = 'login.html?next=' + encodeURIComponent(loginNext);
   });
+  // YYYY-MM-DD naming a day that exists (ScheduleData.valid's rule; that module may not be loaded on this page).
+  function civilDate(value) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(typeof value === 'string' ? value : '');
+    if (!match || +match[1] < 1900 || +match[1] > 2199) return false;
+    const day = new Date(Date.UTC(+match[1], +match[2] - 1, +match[3]));
+    return day.getUTCFullYear() === +match[1] && day.getUTCMonth() === +match[2] - 1 && day.getUTCDate() === +match[3];
+  }
   const query = new URLSearchParams(root.location.search);
   const fromQuery = query.get('section');
   const page = root.document.body.dataset.page;
   let initialSection = root.document.body.dataset.haedoSection;
   let composing = false;
   if (page === 'home' || page === 'life') {
-    // The blog editor/reader lives in schedule, also when reloaded with `blog`.
+    // The blog editor/reader lives in 노트, also when reloaded with `blog`.
     if (page === 'home' && (query.get('compose') === '1' || query.get('view') === 'page' && query.has('blog'))) {
-      initialSection = 'schedule'; composing = query.get('compose') === '1' || query.get('blog') === 'new';
+      initialSection = 'notes'; composing = query.get('compose') === '1' || query.get('blog') === 'new';
     }
     // 통합 검색 opens over the area it was opened from (`?section=schedule&view=find`), so the menu keeps
     // that area marked on reload. A find address without a section (older links) stays under 자료.
     else if (query.get('view') === 'find' && normalizeSection(fromQuery)) initialSection = normalizeSection(fromQuery);
     else if (getSectionForView(query.get('view'))) initialSection = getSectionForView(query.get('view'));
+    // An address naming a date opens that period in 일정 (its month when no unit is named).
+    // Only a real civil date does (as the app's router reads it); any other value is the former list address, 노트.
+    else if (civilDate(query.get('date')) && ['home', 'schedule'].includes(fromQuery)) initialSection = 'schedule';
+    // 일정 without a unit is the former list address: 노트 (2026-11-16 address table).
+    else if (fromQuery === 'schedule') initialSection = 'notes';
     else if (normalizeSection(fromQuery)) initialSection = normalizeSection(fromQuery);
   }
   activate(initialSection, { composing });

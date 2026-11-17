@@ -300,7 +300,7 @@ H.run(__filename, {
     assert.notEqual((await H.status(page)).state, 'error');
     await H.menu(page, '사본으로 이어 쓰기');
     const kept = (await H.stored(page, list => list.length === 2 && list.some(row => row.id !== first.id && row.text.includes('이 탭에서 계속 쓴 문장.')), 'the input is a new draft')).find(row => row.id !== first.id);
-    await H.until(() => H.status(page), value => value.text === '자동 저장됨', 'settled');
+    await H.until(() => H.status(page), value => value.text === '자동 저장됨' && value.shown === '', 'settled (said, not shown)');
     await page.evaluate(() => { window.__dying = true; });
     await page.locator('.ql-editor').click(); await page.keyboard.press('Control+End'); await page.keyboard.type(' 새 초안에서 잃은 입력');
     await hide(page);

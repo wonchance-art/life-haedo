@@ -506,7 +506,8 @@ async function main() {
       const saveCount = server.saves().length;
       try {
         await loadDocument(reopened, base + '/index.html'); await ready(reopened); await settle(reopened);
-        await reopened.locator('#homePostList [data-photo-post-id=\"' + postId + '\"] .home-post-read').click();
+        // The row opens from its title (2026-11-16 노션 방향, Designer default 3: no separate 글 읽기 button).
+        await reopened.locator('#homePostList [data-photo-post-id=\"' + postId + '\"] .home-post-open').click();
         await reopened.locator('.photo-article').waitFor();
         assert.match(await reopened.locator('.photo-article').innerText(), /직접 쓴 생각/);
         await reopened.waitForFunction(() => document.querySelector('.photo-read-image img')?.naturalWidth === 4032);

@@ -9,8 +9,9 @@
   const life = global.HaedoLife = global.HaedoLife || {};
   const UNIT_OF = Object.freeze({ tools: 'year', quarter: 'quarter', month: 'month', week: 'week', day: 'day' });
   const MODE_OF = Object.freeze({ year: 'tools', quarter: 'quarter', month: 'month', week: 'week', day: 'day' });
-  // 보기 단위: the list and the five calendar units (decision: Y/Q/M/W/D letters, named 연·분기·월·주·일).
-  const VIEWS = Object.freeze([['home', '목록', '목록', 'L'], ['tools', 'Y', '연', 'Y'], ['quarter', 'Q', '분기', 'Q'], ['month', 'M', '월', 'M'], ['week', 'W', '주', 'W'], ['day', 'D', '일', 'D']]);
+  // 보기 단위: the five calendar units (decision: Y/Q/M/W/D letters, named 연·분기·월·주·일). The former
+  // 목록 is 노트 since 2026-11-16 (notes-menu): the bar is a calendar's units only.
+  const VIEWS = Object.freeze([['tools', 'Y', '연', 'Y'], ['quarter', 'Q', '분기', 'Q'], ['month', 'M', '월', 'M'], ['week', 'W', '주', 'W'], ['day', 'D', '일', 'D']]);
   const STEP_NAMES = Object.freeze({ year: '해', quarter: '분기', month: '달', week: '주', day: '날' });
   const FILTERS = Object.freeze([['all', '전체'], ['posts', '글'], ['excerpts', '발췌'], ['photos', '사진']]);
   const data = () => life.ScheduleData;
@@ -87,7 +88,8 @@
   }
   const postTitle = post => String(post.title || '').trim() || snippet(post.body, 60) || (post.photos ? '사진이 있는 글' : '제목 없는 글');
   const isMode = mode => Object.hasOwn(UNIT_OF, mode);
-  const scheduleMode = mode => mode === 'home' || isMode(mode);
+  // A screen of 일정: its calendar units (the list moved to 노트, 2026-11-16).
+  const scheduleMode = mode => isMode(mode);
 
   function create({ storage, core, host, getBundle, isDisposed = () => false, announce = () => {}, open, go, links = {} }) {
     let disposed = false, generation = 0, visible = false, filter = 'all';
@@ -244,7 +246,7 @@
       return row;
     }
     function filterTabs(context, redraw) {
-      const tabs = el('div', null, 'schedule-filter'); tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', '점으로 보일 기록');
+      const tabs = el('div', null, 'schedule-filter'); tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', '보일 기록');
       for (const [key, label] of FILTERS) {
         const tab = plainButton(label, 'schedule-filter-tab'); tab.setAttribute('role', 'tab');
         tab.setAttribute('aria-selected', String(filter === key)); tab.tabIndex = filter === key ? 0 : -1;
@@ -299,29 +301,62 @@
       if (entries.length > limit) list.append(el('p', '그 밖의 계획 ' + (entries.length - limit) + '개는 연간 계획에서 볼 수 있어요.', 'life-meta schedule-more'));
       return list;
     }
-    // 계획 칸: the links to the plan screens, (Y) the year's sentence, then the dated plan entries of the period.
-    // Named for its period (올해 · 이 해 · 이 분기), not 계획: the link line inside is the 계획 navigation (review 3 m4).
-    function planAside(context, { heading, entries, empty, year, label }) {
+    // Each part opens with the same h2 (2026-11-16 노션 방향 m5): 예정 · 습관 · 행복도 · 목표 · 계획; what a part holds is
+    // named by h3 under it (D: 습관, 행복도; Y: 올해 계획, 목표).
+    // 2026-11-16 (notes-menu): every unit has the same frame. The body (거르기 above it) shows the period's records;
+    // the side column holds, always in this order, 예정 → 습관·행복도 → 목표·계획, each with what fits the period.
+    // From 1101px it stands beside the body, below that under it (schedule.css). An empty part is one line, no table.
+    function side(context, label, parts) {
       const aside = el('aside', null, 'schedule-aside'); aside.setAttribute('aria-label', label);
-      if (links.plan) aside.append(links.plan());
-      if (year) aside.append(...yearPlan(context, year, aside));
-      const title = el('h2', heading, 'schedule-aside-title'); aside.append(title, planRows(context, entries, { empty }));
+      for (const [key, nodes] of parts) {
+        const part = el('section', null, 'schedule-side schedule-side-' + key); part.dataset.side = key;
+        part.append(...nodes.filter(Boolean)); aside.append(part);
+      }
       return aside;
+    }
+    // 예정: the dated plan entries still to come in the period.
+    function plansPart(context, entries, empty) {
+      return ['plans', [el('h2', '예정', 'schedule-aside-title'), planRows(context, entries, { empty })]];
+    }
+    // Y·Q: one 습관 link (the habit screen is another page; the shell keeps drafts before leaving, links.page).
+    function habitLinkPart() {
+      const line = el('p', null, 'schedule-side-line');
+      const link = el('a', '습관', 'schedule-empty-link schedule-habit-link'); link.href = 'habits.html'; link.dataset.focusKey = 'schedule:habits';
+      link.addEventListener('click', event => {
+        if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || typeof links.page !== 'function') return;
+        event.preventDefault(); links.page(link.href);
+      });
+      line.append(link);
+      return ['habits', [el('h2', '습관 · 행복도', 'schedule-aside-title'), line]];
+    }
+    // Q·M·W·D: the 계획 link line (연간 계획 · 목표 · 습관 · 연표).
+    function planLinksPart() {
+      return ['goals', [el('h2', '목표 · 계획', 'schedule-aside-title'), links.plan ? links.plan() : null]];
+    }
+    const remaining = (context, from, to) => context.result.plans.filter(entry => entry.date >= from && entry.date <= to && entry.date >= data().today())
+      .sort((a, b) => a.date.localeCompare(b.date));
+    // The records the 거르기 (전체 · 글 · 발췌 · 사진) keeps. Plans are not records: the filter leaves them alone.
+    function shownRecords(entry) {
+      const posts = entry?.posts || [], excerpts = entry?.excerpts || [];
+      if (filter === 'posts') return { posts, excerpts: [] };
+      if (filter === 'excerpts') return { posts: [], excerpts };
+      if (filter === 'photos') return { posts: posts.filter(post => post.photos > 0), excerpts: [] };
+      return { posts, excerpts };
     }
     // 올해 계획 (2026-11-08 S4): the annual plan's sentence of the year under its own title; without one, a link
     // to the annual plan where it is written. The link moves inside the app the way the plan link line does
     // (links.annualPlan, else that line's own 연간 계획 link: drafts kept, history pushed); only a page without
     // either follows the address itself.
-    function yearPlan(context, year, aside) {
+    function yearPlan(context, year) {
       const thisYear = data().parts(data().today()).year === year;
       const text = context.result.rows.find(row => row.year === year)?.text;
-      const title = el('h2', thisYear ? '올해 계획' : year + '년 계획', 'schedule-aside-title schedule-year-title');
+      const title = el('h3', thisYear ? '올해 계획' : year + '년 계획', 'schedule-aside-sub schedule-year-title');
       if (String(text || '').trim()) return [title, el('p', snippet(text, 240), 'schedule-year-text')];
       const link = el('a', '연간 계획에 ' + (thisYear ? '올해' : '이 해') + ' 문장을 적을 수 있어요', 'schedule-year-empty');
       link.href = 'index.html?section=schedule&view=annual-plan'; link.dataset.focusKey = 'schedule:year-plan';
       link.addEventListener('click', event => {
         if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-        const planLink = aside.querySelector('[data-plan-destination="annual-plan"]');
+        const planLink = link.closest('.schedule-aside')?.querySelector('[data-plan-destination="annual-plan"]');
         if (typeof links.annualPlan !== 'function' && !planLink) return;
         event.preventDefault();
         if (!showing(context)) return;
@@ -356,10 +391,13 @@
       };
       draw();
       primary.append(filterTabs(context, draw), rows, legend());
-      const entries = context.result.plans.filter(entry => entry.date.startsWith(year + '-') && (year !== data().parts(now).year || entry.date >= now)).sort((a, b) => a.date.localeCompare(b.date));
-      const aside = planAside(context, { heading: '예정', entries, empty: '이 해의 남은 예정이 없어요.', year, label: year === data().parts(now).year ? '올해' : '이 해' });
-      aside.append(entrySlot(context, 'year', { year }, null));
-      wrap.append(primary, aside);
+      // A past year keeps all its dated plans; this year and later ones their remaining plans.
+      const entries = context.result.plans.filter(entry => entry.date.startsWith(year + '-') && (year < data().parts(now).year || entry.date >= now)).sort((a, b) => a.date.localeCompare(b.date));
+      // 목표·계획 of Y: the year's sentence, the goals in progress (moved here, 2026-11-08 S4), then the plan link line.
+      wrap.append(primary, side(context, year === data().parts(now).year ? '올해' : '이 해', [
+        plansPart(context, entries, '이 해의 남은 예정이 없어요.'), habitLinkPart(),
+        ['goals', [el('h2', '목표 · 계획', 'schedule-aside-title'), ...yearPlan(context, year), entrySlot(context, 'year', { year }, null), links.plan ? links.plan() : null]]
+      ]));
       return wrap;
     }
     function quarterView(context) {
@@ -390,9 +428,9 @@
       };
       draw();
       primary.append(filterTabs(context, draw), rows, legend());
-      const first = weeks[0][0], last = weeks.at(-1)[6];
-      const entries = context.result.plans.filter(entry => entry.date >= first && entry.date <= last && entry.date >= now).sort((a, b) => a.date.localeCompare(b.date));
-      wrap.append(primary, planAside(context, { heading: '예정', entries, empty: '이 분기의 남은 예정이 없어요.', label: '이 분기' }));
+      wrap.append(primary, side(context, '이 분기', [
+        plansPart(context, remaining(context, weeks[0][0], weeks.at(-1)[6]), '이 분기의 남은 예정이 없어요.'), habitLinkPart(), planLinksPart()
+      ]));
       return wrap;
     }
     function dayLabel(day, entry) {
@@ -404,41 +442,49 @@
     }
     function monthView(context) {
       const { year, month } = data().parts(context.date), now = data().today();
-      const wrap = el('div', null, 'schedule-month');
+      const wrap = el('div', null, 'schedule-layout schedule-month');
+      const primary = el('section', null, 'schedule-primary'); primary.setAttribute('aria-label', year + '년 ' + month + '월 기록');
       const grid = el('div', null, 'schedule-month-grid'); grid.setAttribute('role', 'group'); grid.setAttribute('aria-label', year + '년 ' + month + '월');
-      data().WEEKDAYS.forEach(name => { const head = el('span', name, 'schedule-weekday'); head.setAttribute('aria-hidden', 'true'); grid.append(head); });
-      for (const week of data().monthWeeks(context.date)) for (const day of week) {
-        const entry = context.result.days.get(day), inMonth = data().parts(day).month === month;
-        const cell = goButton(context, null, 'day', day, 'schedule-day-cell', 'schedule:day:' + day);
-        cell.setAttribute('aria-label', dayLabel(day, entry) + (day === context.date ? ', 선택' : '') + (day === now ? ', 오늘' : ''));
-        if (!inMonth) cell.dataset.outside = 'true';
-        if (day === now) cell.dataset.today = 'true';
-        if (day === context.date) cell.setAttribute('aria-current', 'date');
-        cell.append(el('span', data().parts(day).day, 'schedule-day-number'));
-        const leadPost = entry?.posts.at(-1);
-        if (leadPost) cell.append(el('span', postTitle(leadPost), 'schedule-cell-title'));
-        const photoPost = entry?.posts.filter(post => post.photos > 0).at(-1);
-        if (photoPost) cell.append(thumb(context, photoPost, '사진'));
-        for (const plan of (entry?.plans || []).slice(0, 2)) {
-          const line = el('span', null, 'schedule-cell-plan'); line.append(glyph('calendar'), el('span', snippet(plan.text, 40))); cell.append(line);
-        }
-        if (entry?.excerpts.length && !leadPost) {
-          const line = el('span', null, 'schedule-cell-plan'); line.append(glyph('quote'), el('span', '발췌 ' + entry.excerpts.length)); cell.append(line);
-        }
-        const mark = el('span', null, 'schedule-cell-dot'); mark.setAttribute('aria-hidden', 'true');
-        mark.dataset.level = String(data().level(data().count(entry)));
-        if (!data().count(entry) && entry?.plans.length && day >= now) mark.dataset.planned = 'true';
-        cell.append(mark);
-        grid.append(cell);
-      }
-      // Phone: the chosen day's records under the calendar (decision: iPhone 일정, 월 아래 예정).
+      // Phone: the chosen day's records under the calendar (decision: iPhone 일정).
       const chosen = el('section', null, 'schedule-month-chosen'); chosen.setAttribute('aria-label', data().dayTitle(context.date));
-      chosen.append(el('h2', data().dayTitle(context.date), 'schedule-chosen-title'), dayRows(context, context.date, { compact: true }));
-      const entries = context.result.plans.filter(entry => entry.date.startsWith(year + '-' + String(month).padStart(2, '0')) && entry.date >= now).sort((a, b) => a.date.localeCompare(b.date));
-      const plans = el('section', null, 'schedule-month-plans'); plans.setAttribute('aria-label', '예정');
-      plans.append(el('h2', '예정', 'schedule-aside-title'), planRows(context, entries, { empty: '이 달의 남은 예정이 없어요.' }));
-      // 습관 트래커 of this month: one compact read-only table (2026-11-08 S5), between the calendar and the remaining plans.
-      wrap.append(grid, chosen, entrySlot(context, 'month', {}, links.habits), plans);
+      const draw = () => {
+        grid.replaceChildren();
+        data().WEEKDAYS.forEach(name => { const head = el('span', name, 'schedule-weekday'); head.setAttribute('aria-hidden', 'true'); grid.append(head); });
+        for (const week of data().monthWeeks(context.date)) for (const day of week) {
+          const entry = context.result.days.get(day), inMonth = data().parts(day).month === month, shown = shownRecords(entry);
+          const cell = goButton(context, null, 'day', day, 'schedule-day-cell', 'schedule:day:' + day);
+          // The cell names the whole day (dayLabel), whatever the 거르기 shows.
+          cell.setAttribute('aria-label', dayLabel(day, entry) + (day === context.date ? ', 선택' : '') + (day === now ? ', 오늘' : ''));
+          if (!inMonth) cell.dataset.outside = 'true';
+          if (day === now) cell.dataset.today = 'true';
+          if (day === context.date) cell.setAttribute('aria-current', 'date');
+          cell.append(el('span', data().parts(day).day, 'schedule-day-number'));
+          const leadPost = shown.posts.at(-1);
+          if (leadPost) cell.append(el('span', postTitle(leadPost), 'schedule-cell-title'));
+          const photoPost = shown.posts.filter(post => post.photos > 0).at(-1);
+          if (photoPost) cell.append(thumb(context, photoPost, '사진'));
+          for (const plan of (entry?.plans || []).slice(0, 2)) {
+            const line = el('span', null, 'schedule-cell-plan'); line.append(glyph('calendar'), el('span', snippet(plan.text, 40))); cell.append(line);
+          }
+          if (shown.excerpts.length && !leadPost) {
+            const line = el('span', null, 'schedule-cell-plan'); line.append(glyph('quote'), el('span', '발췌 ' + shown.excerpts.length)); cell.append(line);
+          }
+          const mark = el('span', null, 'schedule-cell-dot'); mark.setAttribute('aria-hidden', 'true');
+          mark.dataset.level = String(data().level(data().count(entry, filter)));
+          if (!data().count(entry, filter) && entry?.plans.length && day >= now) mark.dataset.planned = 'true';
+          cell.append(mark);
+          grid.append(cell);
+        }
+        chosen.replaceChildren(el('h2', data().dayTitle(context.date), 'schedule-chosen-title'), dayRows(context, context.date, { compact: true, plans: context.date < now }));
+      };
+      draw();
+      primary.append(filterTabs(context, draw), grid, chosen);
+      const first = data().monthStart(context.date), last = data().monthDays(year, month).at(-1);
+      // 습관 of this month: one compact read-only tracker table (2026-11-08 S5; checked in D·W and on the habit screen).
+      wrap.append(primary, side(context, '이 달', [
+        plansPart(context, remaining(context, first, last), '이 달의 남은 예정이 없어요.'),
+        ['habits', [el('h2', '습관 · 행복도', 'schedule-aside-title'), entrySlot(context, 'month', {}, links.habits)]], planLinksPart()
+      ]));
       return wrap;
     }
     function itemRow(context, item, { compact = false } = {}) {
@@ -467,31 +513,44 @@
       }
       return row;
     }
+    const FILTER_EMPTY = Object.freeze({ posts: '이 날 쓴 글이 없어요.', excerpts: '이 날 발췌가 없어요.', photos: '이 날 사진이 있는 글이 없어요.' });
+    // A day's records under the 거르기. Its plans are listed only when `plans` (a past day: a remaining plan is in 예정).
     function dayRows(context, day, options = {}) {
-      const entry = context.result.days.get(day), list = el('div', null, 'schedule-day-rows');
-      const items = [...(entry?.plans || []), ...[...(entry?.excerpts || []), ...(entry?.posts || [])].sort((a, b) => (Date.parse(a.at) || 0) - (Date.parse(b.at) || 0))];
+      const entry = context.result.days.get(day), list = el('div', null, 'schedule-day-rows'), shown = shownRecords(entry);
+      const items = [...(options.plans ? entry?.plans || [] : []), ...[...shown.excerpts, ...shown.posts].sort((a, b) => (Date.parse(a.at) || 0) - (Date.parse(b.at) || 0))];
       // Said at body size, in D and under the phone month (2026-11-08 S7, review 2 m6).
-      if (!items.length && !options.quiet) list.append(el('p', day > data().today() ? '아직 오지 않은 날이에요.' : '이 날 기록이 없어요.', 'schedule-empty' + (options.compact ? '' : ' schedule-day-empty')));
+      if (!items.length && !options.quiet) list.append(el('p', day > data().today() ? '아직 오지 않은 날이에요.' : filter !== 'all' && entry && (entry.posts.length || entry.excerpts.length) ? FILTER_EMPTY[filter] : '이 날 기록이 없어요.',
+        'schedule-empty' + (options.compact ? '' : ' schedule-day-empty')));
       for (const item of items) list.append(itemRow(context, item, options));
       return list;
     }
     function weekView(context) {
       const week = data().weekOf(context.date), now = data().today();
-      const wrap = el('div', null, 'schedule-week');
-      wrap.append(entrySlot(context, 'week', { week }, links.habits));
+      const wrap = el('div', null, 'schedule-layout schedule-week');
+      const primary = el('section', null, 'schedule-primary'); primary.setAttribute('aria-label', data().title('week', context.date) + ' 기록');
       const grid = el('div', null, 'schedule-week-grid');
-      for (const day of week) {
-        const entry = context.result.days.get(day);
-        const column = el('section', null, 'schedule-week-day'); column.setAttribute('aria-label', data().dayTitle(day));
-        if (day === context.date) column.dataset.selected = 'true';
-        const head = goButton(context, null, 'day', day, 'schedule-week-head', 'schedule:day:' + day);
-        head.setAttribute('aria-label', dayLabel(day, entry) + (day === now ? ', 오늘' : ''));
-        if (day === now) head.dataset.today = 'true';
-        head.append(el('span', data().WEEKDAYS[data().weekday(day)], 'schedule-week-name'), el('span', data().parts(day).day, 'schedule-week-number'));
-        column.append(head, dayRows(context, day, { compact: true, quiet: true }));
-        grid.append(column);
-      }
-      wrap.append(grid);
+      // A day column holds its records; the week's remaining plans are in 예정 beside it (2026-11-16). A past day keeps its
+      // plans in its column, as D does (they are no longer remaining, so 예정 does not list them).
+      const draw = () => {
+        grid.replaceChildren();
+        for (const day of week) {
+          const entry = context.result.days.get(day);
+          const column = el('section', null, 'schedule-week-day'); column.setAttribute('aria-label', data().dayTitle(day));
+          if (day === context.date) column.dataset.selected = 'true';
+          const head = goButton(context, null, 'day', day, 'schedule-week-head', 'schedule:day:' + day);
+          head.setAttribute('aria-label', dayLabel(day, entry) + (day === now ? ', 오늘' : ''));
+          if (day === now) head.dataset.today = 'true';
+          head.append(el('span', data().WEEKDAYS[data().weekday(day)], 'schedule-week-name'), el('span', data().parts(day).day, 'schedule-week-number'));
+          column.append(head, dayRows(context, day, { compact: true, quiet: true, plans: day < now }));
+          grid.append(column);
+        }
+      };
+      draw();
+      primary.append(filterTabs(context, draw), grid);
+      wrap.append(primary, side(context, '이 주', [
+        plansPart(context, remaining(context, week[0], week[6]), '이 주의 남은 예정이 없어요.'),
+        ['habits', [el('h2', '습관 · 행복도', 'schedule-aside-title'), entrySlot(context, 'week', { week }, links.habits)]], planLinksPart()
+      ]));
       return wrap;
     }
     function weekStrip(context) {
@@ -510,36 +569,44 @@
       return strip;
     }
     function dayView(context) {
-      const wrap = el('div', null, 'schedule-layout schedule-day');
+      const wrap = el('div', null, 'schedule-layout schedule-day'), now = data().today();
       const primary = el('section', null, 'schedule-primary'); primary.setAttribute('aria-label', data().dayTitle(context.date) + ' 기록');
-      // 2026-11-08 S7: 체크 (그날 습관 + 행복도) → 그날 기록 → 다른 해 (the aside).
-      primary.append(weekStrip(context));
-      // Fallback when the slot cannot load: the habit screen only. 행복도 is entered here in D alone; the timeline
-      // shows it and is not offered as a second place for it (2026-11-08 S7, the former 연표에서 행복도 보기).
-      primary.append(entrySlot(context, 'day', {}, links.habits));
-      // 그날 기록 is an h2 like 습관 and 행복도 above it (review 3 n2); it is not shown (the records say what they are).
+      // 그날 기록 is an h2 like 다른 해 below it (review 3 n2); it is not shown (the records say what they are).
       const records = el('section', null, 'schedule-day-records'), recordsTitle = el('h2', '그날 기록', 'life-sr-only');
       recordsTitle.id = 'scheduleDayRecordsTitle'; records.setAttribute('aria-labelledby', recordsTitle.id);
-      records.append(recordsTitle, dayRows(context, context.date));
-      primary.append(records);
-      wrap.append(primary);
       const { month, day, year } = data().parts(context.date);
       const others = context.result.posts.filter(post => {
         const at = data().dayOf(post.at); if (!at) return false;
         const p = data().parts(at); return p.month === month && p.day === day && p.year !== year;
       }).sort((a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0));
-      if (others.length) {
-        const aside = el('aside', null, 'schedule-aside schedule-other-years'); aside.setAttribute('aria-label', '다른 해');
-        aside.append(el('h2', '다른 해', 'schedule-aside-title'));
-        for (const post of others.slice(0, 6)) {
+      // 다른 해: the same date of other years, after the day's own records (2026-11-08 S7 order), under the 거르기.
+      // Only a day that has some is given the section.
+      const otherYears = others.length ? el('section', null, 'schedule-other-years') : null;
+      otherYears?.setAttribute('aria-label', '다른 해');
+      const draw = () => {
+        records.replaceChildren(recordsTitle, dayRows(context, context.date, { plans: context.date < now }));
+        if (!otherYears) return;
+        const shown = others.filter(post => filter === 'all' || filter === 'posts' || filter === 'photos' && post.photos > 0).slice(0, 6);
+        otherYears.hidden = !shown.length;
+        otherYears.replaceChildren();
+        if (!shown.length) return;
+        otherYears.append(el('h2', '다른 해', 'schedule-aside-title'));
+        for (const post of shown) {
           const row = opener(context, post, plainButton(null, 'schedule-other-row'));
           if (post.photos > 0) row.append(thumb(context, post, data().parts(data().dayOf(post.at)).year + '년 사진'));
           const copy = el('span', null, 'schedule-other-copy');
           copy.append(el('span', data().parts(data().dayOf(post.at)).year, 'schedule-other-year'), el('span', postTitle(post), 'schedule-other-title'));
-          row.append(copy); aside.append(row);
+          row.append(copy); otherYears.append(row);
         }
-        wrap.append(aside);
-      }
+      };
+      draw();
+      primary.append(weekStrip(context), filterTabs(context, draw), records, ...(otherYears ? [otherYears] : []));
+      // 습관·행복도 of the day are checked in the side column; fallback when it cannot load: the habit screen only.
+      // 행복도 is entered here in D alone (2026-11-08 S7).
+      wrap.append(primary, side(context, '이 날', [
+        plansPart(context, context.date >= now ? (context.result.days.get(context.date)?.plans || []) : [], '이 날의 남은 예정이 없어요.'),
+        ['habits', [el('h2', '습관 · 행복도', 'schedule-aside-title'), entrySlot(context, 'day', {}, links.habits)]], planLinksPart()
+      ]));
       return wrap;
     }
     const views = { year: yearView, quarter: quarterView, month: monthView, week: weekView, day: dayView };
@@ -618,13 +685,13 @@
     if (code >= 0 && code < 11172) { const final = code % 28; return text + (final === 0 || final === 8 ? '로' : '으로'); }
     return text + ('036'.includes(last) ? '으로' : '로');
   }
-  // Header parts for 일정 (ui.js arranges them in its heading row).
+  // Header parts for 일정 (ui.js arranges them in its heading row). Only the calendar units have one.
   function headerParts({ mode, date, onView, onToday, onStep, onUp, onHelp }) {
-    const unit = UNIT_OF[mode] || null, D = data();
+    const unit = UNIT_OF[mode] || 'month', D = data();
     const views = el('nav', null, 'life-schedule-views'); views.setAttribute('aria-label', '보기 단위');
     for (const [view, text, label, key] of VIEWS) {
       const link = el('a', null, 'life-schedule-view');
-      link.href = view === 'home' ? 'index.html' : 'index.html?section=schedule&view=' + view + (view === 'tools' ? '' : '&date=' + date);
+      link.href = 'index.html?section=schedule&view=' + view + (view === 'tools' ? '' : '&date=' + date);
       link.dataset.scheduleView = view; link.dataset.focusKey = 'schedule:view:' + view;
       link.setAttribute('aria-label', label); link.title = label + ' (' + key + ')';
       if (view === 'tools') link.append(el('span', text, 'schedule-view-letter'), glyph('calendar', 'schedule-view-icon'));
@@ -638,30 +705,25 @@
     }
     const today = plainButton('오늘', 'life-button schedule-today'); today.dataset.focusKey = 'schedule:today';
     today.title = '오늘 (T)'; today.addEventListener('click', () => onToday());
-    // The list has no period: 오늘 and ‹ › are not shown there (2026-11-08 S2, not left disabled). schedule.css hides
-    // them; a wide screen keeps their place unseen so the 보기 단위 bar does not move. inert: never reached either.
-    const idle = node => { if (!unit) { node.dataset.scheduleIdle = 'true'; node.inert = true; } };
-    idle(today);
     const step = el('span', null, 'schedule-step');
-    const name = STEP_NAMES[unit] || '';
+    const name = STEP_NAMES[unit];
     for (const [direction, label, key] of [[-1, '이전 ' + name, '← 또는 P'], [1, '다음 ' + name, '→ 또는 N']]) {
       const control = plainButton(null, 'life-icon-button schedule-step-button');
       control.dataset.scheduleStep = String(direction); control.dataset.focusKey = 'schedule:step:' + direction;
-      control.setAttribute('aria-label', unit ? label : direction < 0 ? '이전' : '다음'); control.title = unit ? label + ' (' + key + ')' : '';
+      control.setAttribute('aria-label', label); control.title = label + ' (' + key + ')';
       control.append(glyph('back', direction > 0 ? 'schedule-glyph-next' : null));
       control.addEventListener('click', () => onStep(direction));
       step.append(control);
     }
-    idle(step);
     const help = plainButton('?', 'life-icon-button schedule-help'); help.setAttribute('aria-label', '단축키 (?)'); help.title = '단축키 (?)';
     help.dataset.focusKey = 'schedule:help'; help.setAttribute('aria-haspopup', 'dialog');
     help.addEventListener('click', () => onHelp(help));
-    // Phone: one level up (연 → 목록, 월 → 연, 일 → 월; 분기 → 연, 주 → 월).
+    // Phone: one level up (월 → 연, 일 → 월; 분기 → 연, 주 → 월). 연 is the top: the list it led to is 노트, in the menu.
     let up = null;
-    if (unit) {
-      const parent = unit === 'year' ? ['home', '목록'] : unit === 'month' || unit === 'quarter' ? ['tools', D.parts(date).year + ''] : ['month', D.parts(date).month + '월'];
+    if (unit !== 'year') {
+      const parent = unit === 'month' || unit === 'quarter' ? ['tools', D.parts(date).year + ''] : ['month', D.parts(date).month + '월'];
       up = el('a', null, 'schedule-up');
-      up.href = parent[0] === 'home' ? 'index.html' : 'index.html?section=schedule&view=' + parent[0] + (parent[0] === 'tools' ? '' : '&date=' + date);
+      up.href = 'index.html?section=schedule&view=' + parent[0] + (parent[0] === 'tools' ? '' : '&date=' + date);
       up.dataset.scheduleUp = parent[0]; up.dataset.focusKey = 'schedule:up';
       up.setAttribute('aria-label', withRo(unit === 'month' || unit === 'quarter' ? parent[1] + '년' : parent[1]) + ' 올라가기');
       up.append(glyph('back'), el('span', parent[1]));
@@ -670,15 +732,17 @@
         event.preventDefault(); onUp(parent[0]);
       });
     }
-    return { views, today, step, help, up, title: unit ? D.title(unit, date) : '일정' };
+    return { views, today, step, help, up, title: D.title(unit, date) };
   }
-  const SHORTCUTS = Object.freeze([['L', '목록'], ['Y · Q · M · W · D', '연 · 분기 · 월 · 주 · 일'], ['T', '오늘'], ['← 또는 P', '이전'], ['→ 또는 N', '다음'], ['/', '통합 검색'], ['?', '이 도움말']]);
-  function helpDialog(trigger) {
+  const SHORTCUTS = Object.freeze([['Y · Q · M · W · D', '연 · 분기 · 월 · 주 · 일'], ['T', '오늘'], ['← 또는 P', '이전'], ['→ 또는 N', '다음'], ['/', '통합 검색'], ['?', '이 도움말']]);
+  // 노트 lists only the shortcuts it takes (/ and ?); a calendar unit lists them all.
+  const NOTES_SHORTCUTS = Object.freeze(SHORTCUTS.filter(([key]) => key === '/' || key === '?'));
+  function helpDialog(trigger, { notes = false } = {}) {
     document.getElementById('scheduleShortcuts')?.remove();
     const dialog = el('dialog', null, 'schedule-shortcuts'); dialog.id = 'scheduleShortcuts'; dialog.setAttribute('aria-labelledby', 'scheduleShortcutsTitle');
-    const title = el('h2', '일정 단축키'); title.id = 'scheduleShortcutsTitle';
+    const title = el('h2', notes ? '노트 단축키' : '일정 단축키'); title.id = 'scheduleShortcutsTitle';
     const list = el('dl');
-    for (const [key, text] of SHORTCUTS) { const row = el('div'); row.append(el('dt', key), el('dd', text)); list.append(row); }
+    for (const [key, text] of notes ? NOTES_SHORTCUTS : SHORTCUTS) { const row = el('div'); row.append(el('dt', key), el('dd', text)); list.append(row); }
     const close = plainButton('닫기', 'life-button'); close.addEventListener('click', () => dialog.close());
     dialog.append(title, list, close);
     dialog.addEventListener('close', () => { dialog.remove(); if (trigger?.isConnected) trigger.focus({ preventScroll: true }); });
@@ -689,7 +753,7 @@
   }
   // Single-key shortcuts while a schedule screen is shown and no field has focus.
   // Under the Korean 2-set layout `key` is a jamo (e.g. ㅡ for M); the physical key decides then.
-  const CODES = Object.freeze({ KeyL: 'l', KeyY: 'y', KeyQ: 'q', KeyM: 'm', KeyW: 'w', KeyD: 'd', KeyT: 't', KeyP: 'p', KeyN: 'n', Slash: '/' });
+  const CODES = Object.freeze({ KeyY: 'y', KeyQ: 'q', KeyM: 'm', KeyW: 'w', KeyD: 'd', KeyT: 't', KeyP: 'p', KeyN: 'n', Slash: '/' });
   // Only a non-ASCII character (a Hangul jamo, …) falls back to the physical key: an ASCII key of
   // another layout (AZERTY `,` on KeyM, Dvorak `,` on KeyW) is that character, not a shortcut.
   function shortcutKey(event) {
@@ -698,16 +762,17 @@
     const latin = CODES[event.code];
     return latin === '/' && event.shiftKey ? '?' : latin || null;
   }
-  // Single-key shortcuts while a schedule screen is shown, no field has focus and no IME is composing.
+  // Single-key shortcuts while no field has focus and no IME is composing. `active(name)` says whether the named
+  // shortcut applies on the shown screen (the units, 오늘 and ‹ › on a calendar unit only; / and ? on 노트 too).
   function bindShortcuts({ active, onKey }) {
     const handler = event => {
-      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.isComposing || event.keyCode === 229 || !active()) return;
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.isComposing || event.keyCode === 229) return;
       const target = event.target;
       // isContentEditable covers every editable host (true, plaintext-only, inherited).
       if (target?.isContentEditable || target?.closest?.('input,textarea,select,dialog,[role=tablist],details[open]')) return;
       const key = shortcutKey(event);
-      const map = { l: 'home', y: 'tools', q: 'quarter', m: 'month', w: 'week', d: 'day', t: 'today', p: 'prev', n: 'next', ArrowLeft: 'prev', ArrowRight: 'next', '/': 'find', '?': 'help' };
-      if (!key || !Object.hasOwn(map, key) || event.shiftKey && key !== '?') return;
+      const map = { y: 'tools', q: 'quarter', m: 'month', w: 'week', d: 'day', t: 'today', p: 'prev', n: 'next', ArrowLeft: 'prev', ArrowRight: 'next', '/': 'find', '?': 'help' };
+      if (!key || !Object.hasOwn(map, key) || event.shiftKey && key !== '?' || !active(map[key])) return;
       event.preventDefault(); onKey(map[key]);
     };
     document.addEventListener('keydown', handler);

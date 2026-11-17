@@ -91,6 +91,7 @@
       }).catch(message);
     });
     const valid = () => !disposed && isCurrent();
+    const SAVED = "비공개 글을 저장했어요.";
     function message(value) {
       error = value;
       if (value?.code === "page_draft_conflict") draftConflict = true;
@@ -99,6 +100,8 @@
         if (n) {
           n.textContent = value?.code === "page_draft_conflict" ? "다른 탭이나 기기에서 초안이 바뀌었습니다. 내 입력을 유지했으니 최신 초안과 비교해 주세요." : value?.message || value || "";
           n.setAttribute("role", value && typeof value !== "string" ? "alert" : "status");
+          // 2026-11-16 owner: a save that went well is said to screen readers only.
+          n.classList.toggle("life-save-quiet", value === SAVED);
           if (draftConflict)
             n.append(button("최신 초안과 비교", openDraftRecovery));
         }
@@ -788,7 +791,7 @@
           if (standalone) { readId = result.id; committedId = result.id; }
           render();
           onCommitted({ id: result.id, previousId: d.replaces || null, status: "saved" });
-          if (standalone) message("비공개 글을 저장했어요.");
+          if (standalone) message(SAVED);
           if (!valid() || !host) return;
           const target = [...(standalone ? host : getFeedHost?.() || host).querySelectorAll("[data-post-id]")].find(
             (el) => el.dataset.postId === result.id,

@@ -119,8 +119,15 @@ async function main() {
       // Fixed schedule values (week start, first stage, happiness unit) are not offered as settings.
       assert.doesNotMatch(await page.locator('#settings-schedule').innerText(), /주 시작|처음 여는 단계|행복도 입력/);
       await capture(page, 'settings', width);
-      // Showing values never writes a key.
-      assert.deepEqual(await page.evaluate(() => Object.keys(localStorage).sort()), keysBefore);
+      // Showing values writes no value key. Rule change (2026-11-16, review M1 of timeline display sync): a signed-in
+      // pass records which account this browser's timeline copies belong to (caeyeon_life_display_sync with only the
+      // owner), so a later timeline-editor change is never taken by the next account to sign in. That key may appear
+      // here; it must name the owner only and hold no chosen value.
+      const RECORD = 'caeyeon_life_display_sync';
+      assert.deepEqual((await page.evaluate(() => Object.keys(localStorage).sort())).filter(key => key !== RECORD), keysBefore.filter(key => key !== RECORD));
+      const record = JSON.parse(await stored(page, RECORD) || 'null');
+      if (record) assert.deepEqual(Object.keys(record), ['owner'], 'the record names the owner only');
+      assert.equal(await stored(page, 'caeyeon_life_ma'), null); assert.equal(await stored(page, 'caeyeon_life_age'), null);
     }, width);
 
     await check('item moves and hash entry keep the app history entry', async ({ page }) => {

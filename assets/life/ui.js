@@ -166,8 +166,9 @@
     let renderGeneration = 0;
     let navigationRender = null, mainRenderPromise = Promise.resolve(), inputGeneration = 0;
     const sectionPositions = new Map();
-    // 일정's list (tab, search, scroll) while its plan view replaced it.
-    let scheduleListState = null;
+    // The calendar unit 일정 opens with from another section: the last one shown in this session (as 자료 keeps
+    // lastRecordMode), else 월 (2026-11-16 notes-menu: 일정 is the calendar only; its former list is 노트).
+    let lastScheduleMode = 'month';
     let homeRenderPromise = Promise.resolve();
     let homeRenderOptions = null, blogPageTask = false, blogMode = null, blogKind = null, blogCommitted = null, materialWritingTask = false;
     // Browser history (2026-11-02): one entry per screen change. `blogRoute`
@@ -212,8 +213,8 @@
     // The tab names the open section (2026-11-08 S2: 일정 · 해도). The page's own title (public home:
     // 해도 · 내 블로그) comes back when the private app closes.
     const pageTitle = document.title;
-    const sectionTitles = { news: '뉴스 · 해도', schedule: '일정 · 해도', records: '자료 · 해도', manage: '설정 · 해도' };
-    const findSections = new Set(['news', 'schedule', 'records', 'manage']);
+    const sectionTitles = { news: '뉴스 · 해도', schedule: '일정 · 해도', notes: '노트 · 해도', records: '자료 · 해도', manage: '설정 · 해도' };
+    const findSections = new Set(['news', 'schedule', 'notes', 'records', 'manage']);
     // 일정's calendar units (2026-11-02): Y is the former tools (계획) view; Q·M·W·D are new.
     const calendarModes = new Set(['tools', 'quarter', 'month', 'week', 'day']);
     // The date 일정 shows (2026-11-11 M1). `scheduleDay` is the today the shown schedule was drawn with: a
@@ -289,6 +290,10 @@
     error.hidden = true;
     const header = node('div', null, 'life-header');
     const toolbar = node('div', null, 'life-toolbar');
+    // 노트·일정 from 1101px keep their large title after the toolbar (renderHeader); the screen's title is found in either.
+    const wideHeading = global.matchMedia?.('(min-width: 1101px)') || null;
+    const pageHeading = () => toolbar.querySelector('h1') || root?.querySelector(':scope > .haedo-title-band h1') || null;
+    const pageHeadingWidth = () => { if (!disposed && state.bundle && (state.mode === 'home' || calendarModes.has(state.mode))) renderHeader(); };
     const planningNavigation = node('div', null, 'life-planning-navigation');
     planningNavigation.hidden = true;
     main = node('main', null, 'life-main');
@@ -377,7 +382,7 @@
       }) });
     const workbenchModes = ['activities', 'page', 'discover', 'related', 'reflection', 'books', 'workbench-backup', 'public-pages'];
     workbench = global.HaedoLife.WorkbenchUI?.create({
-      storage, core, host: main, getBundle: () => state.bundle, blogSync, compositionSync, libraryMetaSync, managed: managedLibrary,
+      storage, core, host: main, getBundle: () => state.bundle, blogSync, compositionSync, libraryMetaSync, sourceSync: sync, managed: managedLibrary,
       onManagePost: (postId, options) => openPostAction('blog', postId, options),
       onPreservePost: (postId, options) => openPostAction('preservation', postId, options),
       onOpenAccountBlog: options => navigate('account-blog', { originFocusKey: options?.originFocusKey }),
@@ -523,7 +528,7 @@
     });
 
     writer = global.HaedoLife.WritingUI?.create({
-      storage, core, writingSync, host: main, getBundle: () => state.bundle,
+      storage, core, writingSync, sourceSync: sync, host: main, getBundle: () => state.bundle,
       isDisposed: () => disposed, announce, parentNavigation: true,
       onClose: returnFromSubview,
       onSaved: async ({ sourceId, sourceVersionId }) => {
@@ -536,7 +541,8 @@
         const origin = viewOrigins.get('write');
         const returnContext = origin?.mode === 'home' && origin.workspaceId === workspaceId ? { ...origin, homeState: { ...origin.homeState, tab: 'posts' }, homeAnchor: { kind: 'source', id: sourceId, committed: true } } : null;
         await navigate('source', { sourceId, sourceVersionId, locator: null, ...(returnContext ? { returnContext } : {}) });
-        announce('비공개 글을 저장했습니다.');
+        // 2026-11-16 owner: a save that went well is said to screen readers only.
+        announce('비공개 글을 저장했습니다.', { quiet: true });
       }
     });
 
@@ -666,6 +672,10 @@
       state.status = saved.prefix + ' · ' + presentation.label;
       status.textContent = state.status;
       status.dataset.saveState = presentation.key;
+      // 2026-11-16 owner: 모음에 반영됨 · 저장됨 (· 계정에 올림 / an upload about to run) is said to screen
+      // readers only; a failure with its 다시 시도, and a paused sync, are shown. An older cached helper
+      // without the quiet flag: everything but a failure is quiet.
+      status.classList.toggle('life-sr-only', presentation.quiet ?? presentation.key !== 'error');
       if (presentation.key === 'error' && sync) status.append(button('다시 시도', guarded(async () => {
         await sync.syncNow(saved.workspaceId);
         if (sourceSaveNotice === saved) await refreshSync();
@@ -910,7 +920,7 @@
             state.savedTick = tick;
             state.stageFailed = false;
             markBatchStageSaved(saved);
-            if (!dirty()) announce('검토 중 보관됨 · 이 브라우저에 임시 보관했습니다.');
+            if (!dirty()) announce('검토 중 보관됨 · 이 브라우저에 임시 보관했습니다.', { quiet: true });
           }
         } catch (cause) {
           state.stageFailed = true;
@@ -987,7 +997,7 @@
 
     function batchKey(workspaceId, batchId) { return workspaceId + '|' + batchId; }
 
-    function invalidateBatchContext() { workspaceGeneration += 1; obsidianReaderOrigins.length = 0; naverMediaOrigin = null; naverMediaReturn = null; sectionPositions.clear(); scheduleListState = null; blogEntryScroll = null; pendingPostReturn = preservationOpenOptions = null; global.HaedoMotion?.cancel(main); stopBatchReading(); resetSearchContext(); }
+    function invalidateBatchContext() { workspaceGeneration += 1; obsidianReaderOrigins.length = 0; naverMediaOrigin = null; naverMediaReturn = null; sectionPositions.clear(); lastScheduleMode = 'month'; blogEntryScroll = null; pendingPostReturn = preservationOpenOptions = null; global.HaedoMotion?.cancel(main); stopBatchReading(); resetSearchContext(); }
 
     function validBatchStage(stage) {
       return typeof stage.batchId === 'string' && /^[a-f0-9-]{36}$/i.test(stage.batchId) &&
@@ -1244,7 +1254,7 @@
           actions.append(button('입력 확인', guarded(() => openBatchItem(item))), button('다시 초안 보관', guarded(async () => {
             const saved = await storage.saveStage(item.unsaved);
             item.stageId = saved.stageId; item.status = 'draft'; delete item.unsaved; item.message = '';
-            await refreshData(); updateBatchPanel(); announce('검토 중 보관됨 · 이 브라우저에 임시 보관했습니다.');
+            await refreshData(); updateBatchPanel(); announce('검토 중 보관됨 · 이 브라우저에 임시 보관했습니다.', { quiet: true });
           })));
         }
         if (!batch.reading && ['failed', 'unread'].includes(item.status) && !item.unsaved && !item.stageId) {
@@ -1286,6 +1296,9 @@
       libraryReview.hidden = presentation.key !== 'conflict';
       const materialView = ['sources', 'topics', 'sync', 'manage', 'activities', 'collection', 'page', 'reflection', 'books'].includes(state.mode);
       libraryStatus.hidden = state.mode === 'manage' || !materialView && !['error', 'conflict'].includes(presentation.key);
+      // 2026-11-16 owner: 계정 자료 확인 중…, 계정에 보관 중… and 계정에 보관됨 are said to screen readers
+      // only; 연결되면 보관합니다 (with its 다시 시도), a conflict and a failure are shown.
+      libraryStatus.classList.toggle('life-sr-only', ['checking', 'syncing', 'synced'].includes(presentation.key));
       const managementStatus = main.querySelector('#lifeManagementSyncStatus');
       if (managementStatus) managementStatus.textContent = presentation.label;
       const syncStatus = main.querySelector('#lifeSyncStatus');
@@ -1382,7 +1395,7 @@
         if (disposed || sequence !== syncRefreshSequence || state.bundle.workspaceId !== workspaceId) return;
         const accountKey = syncAccountKey(account);
         if (accountKey !== state.syncAccountKey) {
-          sectionPositions.clear(); scheduleListState = null;
+          sectionPositions.clear(); lastScheduleMode = 'month';
           blogEntryScroll = null;
           global.HaedoMotion?.cancel(main);
           state.remoteRows = null;
@@ -1698,7 +1711,7 @@
       writingOpenOptions = mode === 'write' ? writing || {} : null;
       if (mode === 'source-edit' && options.sourceEdit) sourceEditOpenOptions = options.sourceEdit;
       if (mode !== 'external-discovery' || !viewOptions.newsArticle) state.newsArticle = null;
-      // A pinned date belongs to the screen the address opened: leaving the calendar (records, the 일정 list, settings…)
+      // A pinned date belongs to the screen the address opened: leaving the calendar (records, 노트, settings…)
       // lets it go before the day change is applied, so the date kept for the next calendar screen follows today again.
       // Back to a pinned entry pins it again (schedulePinned below).
       const namesDate = Object.prototype.hasOwnProperty.call(viewOptions, 'scheduleDate');
@@ -1757,7 +1770,7 @@
         if (!changedTask || state.error || input !== inputGeneration) return;
         const kind = navigationMotion || (fromSection !== sectionFor(mode) ? 'tab' :
           mode === 'write' || mode === 'import' || mode === 'page' && (options.pageCompose || options.pageProfileEdit || options.pageDraftId) ? 'compose' : 'push');
-        const sections = global.HaedoNavigation?.sections || ['news', 'schedule', 'records', 'manage'];
+        const sections = global.HaedoNavigation?.sections || ['news', 'schedule', 'notes', 'records', 'manage'];
         const direction = kind === 'tab' && sections.indexOf(sectionFor(mode)) < sections.indexOf(fromSection) ? -1 : 1;
         const enter = () => {
           if (rendered() && !state.error && input === inputGeneration) global.HaedoMotion?.enter(main, { kind, direction });
@@ -1776,7 +1789,7 @@
       }
       if (mode === 'find') main.querySelector('#lifeFindQuery')?.focus();
       if (mode === 'sync' || mode === 'transfer') global.scrollTo({ top: 0, behavior: 'instant' });
-      const heading = (options?.chapterImport && (main.querySelector('#wbChapterImportHeading') || main.querySelector('#wbChapterNote'))) || (options?.book && main.querySelector(options.book.chapterId ? '#wbChapterNote' : '#wbBookHeading')) || main.querySelector('h1,h2') || toolbar.querySelector('h1');
+      const heading = (options?.chapterImport && (main.querySelector('#wbChapterImportHeading') || main.querySelector('#wbChapterNote'))) || (options?.book && main.querySelector(options.book.chapterId ? '#wbChapterNote' : '#wbBookHeading')) || main.querySelector('h1,h2') || pageHeading();
       // A return or back that puts focus on its origin control (restoreOriginView) does not pass through this heading first.
       if (heading && !restoresFocus && mode !== 'find' && mode !== 'write' && !(mode === 'page' && blogPageTask && blogMode === 'edit') && !options?.searchTarget && !options?.nineTarget && !options?.collectionItemId && !options?.groupId && !reimport) {
         heading.focus({ preventScroll: true });
@@ -1865,16 +1878,21 @@
       await navigate('import');
     }
 
-    // 2026-11-02: 뉴스·일정·자료·설정. The former home and tools modes are views of 일정 (schedule).
+    // 2026-11-16 (notes-menu): 뉴스·일정·노트·자료·설정. 노트 is the list (mode home, the former 일정 목록), its
+    // 글 메뉴 screens and the posts opened from it; 일정 is the calendar (Y = tools, Q·M·W·D) and its plan views.
+    // A post or a record opened from a calendar unit stays under 일정, as its return goes back there.
     function sectionFor(mode) {
       if (mode === 'find' || mode === 'source' && state.returnContext?.mode === 'find') return findSection || 'records';
-      if (mode === 'home' || mode === 'account-blog' || mode === 'page' && blogPageTask || mode === 'write' && viewOrigins.get('write')?.mode === 'home' || mode === 'source' && (state.returnContext?.mode === 'home' || calendarModes.has(state.returnContext?.mode) || state.returnContext?.mode === 'page' && blogPageTask)) return 'schedule';
+      if (mode === 'page' && blogPageTask) return calendarModes.has(viewOrigins.get('page')?.mode) ? 'schedule' : 'notes';
+      if (mode === 'source' && (calendarModes.has(state.returnContext?.mode) || state.returnContext?.mode === 'page' && blogPageTask && calendarModes.has(viewOrigins.get('page')?.mode))) return 'schedule';
+      if (mode === 'home' || mode === 'account-blog' || mode === 'write' && viewOrigins.get('write')?.mode === 'home' || mode === 'source' && (state.returnContext?.mode === 'home' || state.returnContext?.mode === 'page' && blogPageTask)) return 'notes';
       if (calendarModes.has(mode)) return 'schedule';
       return global.HaedoNavigation?.getSectionForView(mode) || (['tools', 'annual-plan'].includes(mode) ? 'schedule' : mode === 'manage' ? 'manage' : 'records');
     }
-    // The first screen of each section; 일정 opens its list (today: my posts and 글쓰기).
+    // The first screen of each section: 노트 its list, 일정 the month (the unit it opens with from another
+    // section is the last one shown, lastScheduleMode).
     function sectionRootMode(section) {
-      return section === 'news' ? 'external-discovery' : section === 'records' ? 'sources' : section === 'schedule' ? 'home' : section;
+      return section === 'news' ? 'external-discovery' : section === 'records' ? 'sources' : section === 'notes' ? 'home' : section === 'schedule' ? 'month' : section;
     }
 
     // The section an address names for 통합 검색 (`?section=schedule&view=find`); without one it is 자료.
@@ -1890,15 +1908,19 @@
       // A known destination survives an old section URL and is normalized on render.
       if (['annual-plan', 'source-trash', 'naver-blog', 'account-blog', 'blog', 'backup', 'transfer', 'sync', 'preservation', 'obsidian-update', 'public-cover', 'workbench-backup', 'public-pages', 'external-discovery', 'interests', 'discover', 'reflection', 'books', 'topics', 'sources', 'time', 'import', 'write', 'activities', 'page', 'collection', 'find'].includes(view)) return view;
       if (section === 'news') return 'external-discovery';
-      // 일정's calendar units keep their date in the address (a reload opens the same period).
-      if (calendarModes.has(view) || section === 'tools') {
+      // 일정's calendar units keep their date in the address (a reload opens the same period). `view=year` names Y
+      // as `tools` does; a date without a unit (`section=schedule&date=`) opens that date's month.
+      const unit = view === 'year' ? 'tools' : view;
+      const dated = !view && (section === 'home' || section === 'schedule') && global.HaedoLife.ScheduleData?.valid(params.get('date'));
+      if (calendarModes.has(unit) || section === 'tools' || dated) {
         const date = params.get('date');
         // A date the address names is pinned (2026-11-16 owner decision 11); an address without one follows today.
         if (global.HaedoLife.ScheduleData?.valid(date)) { state.scheduleDate = date; schedulePin = date; }
         else schedulePin = null;
-        return calendarModes.has(view) ? view : 'tools';
+        return calendarModes.has(unit) ? unit : dated ? 'month' : 'tools';
       }
-      if ((section === 'home' || section === 'schedule') && !view) return 'home';
+      // 노트, and the former list addresses (2026-11-16 address table): 일정 without a unit and the former home.
+      if ((section === 'notes' || section === 'home' || section === 'schedule') && !view) return 'home';
       // The former settings file groups now live on the 백업·복원 screen.
       if (section === 'manage' && /^#lifeBackup(?:Choices|Materials|Planning)$/.test(global.location.hash)) return 'backup';
       if (section === 'manage') return 'manage';
@@ -1960,7 +1982,7 @@
     }
     // 글쓰기 opened by the link of another page of the app (목표·습관·연표 목록·연표, 2026-11-11 m3): that page
     // is where 닫기 returns. Only these page names with the parameters their own return address may carry
-    // (HaedoAuth.safeNext) are kept; anything else means the 일정 list as before.
+    // (HaedoAuth.safeNext) are kept; anything else means 노트 (the former 일정 list) as before.
     const returnPagePattern = /^(?:goals|habits|workspace|timeline)\.html(?:\?[A-Za-z0-9_=&-]{1,200})?$/;
     function composeOriginPage() {
       try {
@@ -2094,8 +2116,9 @@
       for (const key of oauthKeys) url.searchParams.delete(key);
       url.searchParams.delete('blog');
       if (mode === 'page' && blogPageTask && !materialWritingTask && blogRoute) url.searchParams.set('blog', blogRoute);
-      // 일정's list keeps the plain index.html address; its plan and calendar views name the section.
-      if (section === 'schedule' && !['annual-plan', 'find', ...calendarModes].includes(mode) && !/\/life\.html$/.test(url.pathname)) url.searchParams.delete('section');
+      // 노트's list is `?section=notes`; its posts and 글 메뉴 screens, and posts opened from 일정, keep the plain
+      // index.html address with their view (as before 2026-11-16). 일정's plan and calendar views name the section.
+      if ((section === 'schedule' || section === 'notes') && !['home', 'annual-plan', 'find', ...calendarModes].includes(mode) && !/\/life\.html$/.test(url.pathname)) url.searchParams.delete('section');
       else url.searchParams.set('section', section);
       const view = mode === 'naver-capture' ? 'naver-blog' : mode === 'source' ? 'sources' : mode === 'batch' ? 'import' : mode;
       if (mode === 'external-discovery') url.searchParams.delete('view');
@@ -2158,7 +2181,7 @@
 
     async function navigateSection(requested, push = true) {
       if (requested === 'compose') return openCompose();
-      // Former IDs: home is 일정's list, tools its plan view.
+      // Former IDs: home is 노트 (the former 일정 list), tools is 일정's Y.
       const section = global.HaedoNavigation?.normalizeSection(requested) || requested;
       if (requested === 'tools' && sectionFor(state.mode) === 'schedule') return switchScheduleView('tools');
       if (!state.bundle) {
@@ -2175,7 +2198,7 @@
       const position = { mode: state.mode, scrollY: global.scrollY,
         ...(state.mode === 'home' ? { homeState: home?.captureState() } : {}) };
       if (previousSection === 'records') lastRecordMode = state.mode;
-      const next = section === previousSection ? sectionRoot : section === 'records' ? lastRecordMode : requested === 'tools' ? 'tools' : sectionRootMode(section);
+      const next = section === previousSection ? sectionRoot : section === 'records' ? lastRecordMode : requested === 'tools' ? 'tools' : section === 'schedule' ? lastScheduleMode : sectionRootMode(section);
       // Save before changing URL so a failed draft write keeps the current view.
       if (dirty()) await persistStage();
       await annualPlanUI?.flush();
@@ -2195,9 +2218,7 @@
       if (disposed || token !== navigationGeneration || workspace !== workspaceGeneration ||
           workspaceId !== state.bundle?.workspaceId || account !== state.syncAccountKey) return;
       if (section !== previousSection) sectionPositions.set(previousSection, position);
-      let saved = section !== previousSection ? sectionPositions.get(section) : null;
-      // 일정's list keeps its place while the plan view is open in between.
-      if (section === 'schedule' && next === 'home' && saved?.mode !== 'home' && scheduleListState?.workspaceId === workspaceId) saved = scheduleListState;
+      const saved = section !== previousSection ? sectionPositions.get(section) : null;
       const sectionPosition = saved?.mode === next ? saved : section !== previousSection && next !== 'source' ? { scrollY: 0 } : null;
       await navigate(next, { preserveContext: true, navigationMotion: section === previousSection ? 'back' : 'tab', historyAction: push ? 'push' : 'replace',
         // Another section ends the blog task; the records page never inherits it.
@@ -2205,8 +2226,8 @@
         ...(sectionPosition ? { sectionPosition, homeState: sectionPosition.homeState } : {}) });
     }
 
-    // 일정's header: 보기 단위 (목록·Y·Q·M·W·D), 오늘, ‹ ›, then 검색 and ? in the same toolbar.
-    // On a phone the units are replaced by one level up (연 → 목록, 월 → 연, 일 → 월).
+    // 일정's header: 보기 단위 (Y·Q·M·W·D), 오늘, ‹ ›, then 검색 and ? in the same toolbar.
+    // On a phone the units are replaced by one level up (월 → 연, 일 → 월; 연 is the top).
     function scheduleHeader() {
       return global.HaedoLife.ScheduleUI.headerParts({ mode: state.mode, date: scheduleDate(),
         onView: mode => guarded(() => switchScheduleView(mode))(),
@@ -2216,17 +2237,14 @@
         onHelp: trigger => global.HaedoLife.ScheduleUI.helpDialog(trigger) });
     }
     async function switchScheduleView(mode, { date, motion = 'tab' } = {}) {
-      if (!state.bundle || state.mode === mode && (!date || date === scheduleDate())) return;
-      const workspaceId = state.bundle.workspaceId;
-      if (state.mode === 'home') scheduleListState = { workspaceId, mode: 'home', scrollY: global.scrollY, homeState: home?.captureState() };
-      const listPosition = mode === 'home' && scheduleListState?.workspaceId === workspaceId ? scheduleListState : null;
+      if (!state.bundle || !calendarModes.has(mode) || state.mode === mode && (!date || date === scheduleDate())) return;
       // One level up returns to the parent's entry when it is the previous one (navigate pops it); otherwise a new entry.
       if (await navigate(mode, { preserveContext: true, navigationMotion: motion, ...(motion === 'back' ? {} : { historyAction: 'push' }), ...(date ? { scheduleDate: date } : {}),
-        ...(listPosition ? { sectionPosition: listPosition, homeState: listPosition.homeState } : mode !== 'home' ? { sectionPosition: { scrollY: 0 } } : {}) }) === false) return;
+        sectionPosition: { scrollY: 0 } }) === false) return;
       if (disposed || state.mode !== mode) return;
       const control = root.querySelector('[data-schedule-view="' + mode + '"]');
       if (control?.checkVisibility?.()) control.focus({ preventScroll: true });
-      else toolbar.querySelector('h1')?.focus({ preventScroll: true });
+      else pageHeading()?.focus({ preventScroll: true });
     }
     // A day, week or month opened from a calendar cell (a new screen, so it is pushed).
     async function openScheduleView(mode, date) {
@@ -2249,7 +2267,6 @@
       return scheduleMove(global.HaedoLife.ScheduleData.step(global.HaedoLife.ScheduleUI.UNIT_OF[state.mode], scheduleDate(), direction));
     }
     function scheduleToday() {
-      if (state.mode === 'home') { global.scrollTo({ top: 0, behavior: 'instant' }); return; }
       return scheduleMove(global.HaedoLife.ScheduleData.today());
     }
     // The app stayed open over midnight (2026-11-11 M1). Checked when the page is shown again, on focus and
@@ -2269,7 +2286,7 @@
       const to = scheduleDate(), moved = from && to && from !== to && focusKey.includes(from) ? focusKey.split(from).join(to) : null;
       const target = find(focusKey) || (moved && find(moved)) ||
         // 지우기 exists only on a day with a value; a habit not due on the new day has no box.
-        (moved && /^schedule:happiness:/.test(moved) ? find('schedule:happiness:' + to + ':0') : null) || toolbar.querySelector('h1');
+        (moved && /^schedule:happiness:/.test(moved) ? find('schedule:happiness:' + to + ':0') : null) || pageHeading();
       target?.focus({ preventScroll: true });
     }
     function scheduleDayCheck() {
@@ -2331,13 +2348,16 @@
       return nav;
     }
     unbindScheduleKeys = global.HaedoLife.ScheduleUI?.bindShortcuts({
-      active: () => !disposed && !!state.bundle && !state.busy && global.HaedoLife.ScheduleUI.scheduleMode(state.mode) && !document.querySelector('dialog[open]'),
+      // A calendar unit takes every shortcut; 노트 (the former list, 2026-11-16) keeps / (통합 검색) and ? (도움말).
+      active: name => !disposed && !!state.bundle && !state.busy && !document.querySelector('dialog[open]') &&
+        (global.HaedoLife.ScheduleUI.scheduleMode(state.mode) || state.mode === 'home' && (name === 'find' || name === 'help')),
       onKey: key => {
         if (key === 'today') return guarded(() => scheduleToday())();
         if (key === 'prev' || key === 'next') return guarded(() => scheduleStep(key === 'prev' ? -1 : 1))();
         if (key === 'find') return guarded(() => navigate('find'))();
-        if (key === 'help') return global.HaedoLife.ScheduleUI.helpDialog(toolbar.querySelector('.schedule-help'));
-        if (key === 'home' || calendarModes.has(key)) return guarded(() => switchScheduleView(key))();
+        // On 노트 there is no ? button: focus returns to where it was.
+        if (key === 'help') return global.HaedoLife.ScheduleUI.helpDialog(toolbar.querySelector('.schedule-help') || document.activeElement, { notes: state.mode === 'home' });
+        if (calendarModes.has(key)) return guarded(() => switchScheduleView(key))();
       }
     }) || (() => {});
     // 글쓰기 keeps one place on every screen and opens a new post in the blog editor.
@@ -2522,7 +2542,7 @@
     // The first heading that actually takes focus: on 일정 the first main heading (the author name) has no
     // tabindex, so the toolbar heading is tried next instead of leaving focus on <body>.
     function focusFirstHeading() {
-      for (const heading of [main.querySelector('h1,h2'), toolbar.querySelector('h1')]) {
+      for (const heading of [main.querySelector('h1,h2'), pageHeading()]) {
         heading?.focus({ preventScroll: true });
         if (document.activeElement && document.activeElement !== document.body) return;
       }
@@ -2547,7 +2567,7 @@
         const target = (origin.focusKey && controls.find(el => el.dataset.focusKey === origin.focusKey)) ||
           (receivedActions.length === 1 ? receivedActions[0] : null) ||
           (origin.focusId && controls.find(el => el.id === origin.focusId)) || controls.find(el =>
-          el.tagName === origin.focusTag && (el.getAttribute('aria-label') || el.textContent) === origin.focusName) || main.querySelector('#lifeFindQuery,#lifeSearch,h1,h2') || toolbar.querySelector('h1');
+          el.tagName === origin.focusTag && (el.getAttribute('aria-label') || el.textContent) === origin.focusName) || main.querySelector('#lifeFindQuery,#lifeSearch,h1,h2') || pageHeading();
         for (let parent = target?.parentElement; parent && parent !== main; parent = parent.parentElement) if (parent.tagName === 'DETAILS') parent.open = true;
         target?.focus({ preventScroll: true });
         // The return skipped the heading focus, so a target that could not take focus must not leave focus on <body>.
@@ -2595,6 +2615,7 @@
         { id: activeMenu.id, key: document.activeElement.dataset.focusKey, summary: document.activeElement.tagName === 'SUMMARY' } : null;
       toolbar.replaceChildren();
       root.querySelector('#lifePhotoScreenHeading')?.remove();
+      root.querySelector(':scope > .haedo-title-band')?.remove();
       planningNavigation.replaceChildren();
       planningNavigation.hidden = state.mode !== 'annual-plan';
       if (!planningNavigation.hidden) {
@@ -2634,12 +2655,13 @@
         const records = button('자료', guarded(() => navigate('sources')), 'life-title-button');
         records.setAttribute('aria-label', '자료 목록');
         heading.append(records);
-      } else heading.textContent = section === 'schedule' ? '일정' : '설정';
-      // 일정's list and calendar units share one heading row (period title, 보기 단위, 오늘, ‹ ›, 검색, ?).
-      const scheduleParts = (state.mode === 'home' || calendarModes.has(state.mode)) && global.HaedoLife.ScheduleUI ? scheduleHeader() : null;
-      if (scheduleParts && calendarModes.has(state.mode)) heading.textContent = scheduleParts.title;
+      } else heading.textContent = section === 'notes' ? '노트' : section === 'schedule' ? '일정' : '설정';
+      // 일정's calendar units share one heading row (period title, 보기 단위, 오늘, ‹ ›, 검색, ?). 노트 (the former
+      // list) has its own: 노트 · 통합 검색 · 글 메뉴 (2026-11-16 notes-menu).
+      const scheduleParts = calendarModes.has(state.mode) && global.HaedoLife.ScheduleUI ? scheduleHeader() : null;
+      if (scheduleParts) heading.textContent = scheduleParts.title;
       if (subviewTitles[state.mode] && state.mode !== 'external-discovery' && !(state.mode === 'page' && blogPageTask && blogMode === 'edit')) {
-        const labels = { 'naver-blog': '네이버 블로그 목록으로 돌아가기', 'naver-capture': '본문·사진 검토로 돌아가기', 'account-blog': '계정 보관 상태로 돌아가기', 'external-discovery': '새 글 찾기로 돌아가기', interests: '관심 주제 편집으로 돌아가기', blog: '글 공개·보관으로 돌아가기', find: '검색 결과로 돌아가기', reflection: '회고로 돌아가기', home: '일정으로 돌아가기', sources: '자료로 돌아가기', topics: '검색 결과로 돌아가기', tools: '일정으로 돌아가기', manage: '설정으로 돌아가기', backup: '백업·복원으로 돌아가기', collection: '컬렉션으로 돌아가기', activities: '묶음으로 돌아가기', page: '선택 자료 페이지로 돌아가기', books: '책으로 돌아가기', import: '가져오기로 돌아가기', write: '자료 작성으로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기' , quarter: '일정으로 돌아가기', month: '일정으로 돌아가기', week: '일정으로 돌아가기', day: '일정으로 돌아가기' };
+        const labels = { 'naver-blog': '네이버 블로그 목록으로 돌아가기', 'naver-capture': '본문·사진 검토로 돌아가기', 'account-blog': '계정 보관 상태로 돌아가기', 'external-discovery': '새 글 찾기로 돌아가기', interests: '관심 주제 편집으로 돌아가기', blog: '글 공개·보관으로 돌아가기', find: '검색 결과로 돌아가기', reflection: '회고로 돌아가기', home: '노트로 돌아가기', sources: '자료로 돌아가기', topics: '검색 결과로 돌아가기', tools: '일정으로 돌아가기', manage: '설정으로 돌아가기', backup: '백업·복원으로 돌아가기', collection: '컬렉션으로 돌아가기', activities: '묶음으로 돌아가기', page: '선택 자료 페이지로 돌아가기', books: '책으로 돌아가기', import: '가져오기로 돌아가기', write: '자료 작성으로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기' , quarter: '일정으로 돌아가기', month: '일정으로 돌아가기', week: '일정으로 돌아가기', day: '일정으로 돌아가기' };
         const origin = subviewOrigin();
         const back = iconButton(state.mode === 'naver-blog' && currentNaverMediaOrigin() ? '읽던 원문으로 돌아가기' : origin.postTarget ? '읽던 글로 돌아가기' : labels[origin.mode] || labels.sources, 'back', guarded(returnFromSubview));
         back.id = state.mode === 'write' ? 'lifeWritingClose' : 'lifeSubviewReturn';
@@ -2663,7 +2685,21 @@
         heading.classList.add('life-sr-only');
         toolbar.before(heading);
       } else headingGroup.append(heading);
-      if (state.mode !== 'source' && !postHeading) toolbar.append(headingGroup);
+      // 노트·일정 (2026-11-16 노션 방향): from 1101px the sticky 44px top row is the path and the actions, and the title
+      // is the large page title at the top of the body, after that row, so it scrolls away (home.css). The path repeats
+      // the menu's current item, so it is not read twice. Up to 1100px the one-row heading stays.
+      if (!postHeading && (state.mode === 'home' || scheduleParts) && wideHeading?.matches) {
+        const path = node('span', section === 'notes' ? '노트' : '일정', 'haedo-heading-path');
+        path.setAttribute('aria-hidden', 'true');
+        toolbar.dataset.pageHead = 'true';
+        toolbar.append(path);
+        const band = node('div', null, 'haedo-title-band');
+        band.append(headingGroup);
+        toolbar.after(band);
+      } else {
+        delete toolbar.dataset.pageHead;
+        if (state.mode !== 'source' && !postHeading) toolbar.append(headingGroup);
+      }
       const actions = node('div', null, 'haedo-heading-actions');
       actions.setAttribute('role', 'toolbar'); actions.setAttribute('aria-label', '화면 동작');
       if (scheduleParts) { toolbar.dataset.schedule = state.mode; actions.append(scheduleParts.views, scheduleParts.today, scheduleParts.step); }
@@ -2702,8 +2738,8 @@
       if (section === 'records' && (!focused || state.mode === 'collection') || state.mode === 'home') {
         const menu = featureMenu(state.mode === 'home');
         menu.open = menu.id === openMenuId;
-        // 일정's blog menu follows the title; the right toolbar stays the same across its units.
-        (state.mode === 'home' && scheduleParts ? headingGroup : actions).append(menu);
+        // 노트's 글 메뉴 follows 통합 검색 at the end of its heading row (2026-11-16 notes-menu).
+        actions.append(menu);
       }
       if (actions.childElementCount && !postHeading) toolbar.append(actions);
       if (postHeading && blogMode === 'read') {
@@ -3778,7 +3814,7 @@
     }
 
     function searchReturnButton() {
-      const labels = { 'naver-capture': '본문·사진 검토로 돌아가기', 'naver-blog': '네이버 블로그 목록으로 돌아가기', 'external-discovery': '새 글 찾기로 돌아가기', interests: '관심 주제 편집으로 돌아가기', blog: '글 공개·보관으로 돌아가기', home: '일정으로 돌아가기', activities: '묶음으로 돌아가기', page: '선택 자료 페이지로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기', reflection: '회고로 돌아가기', books: '책으로 돌아가기' };
+      const labels = { 'naver-capture': '본문·사진 검토로 돌아가기', 'naver-blog': '네이버 블로그 목록으로 돌아가기', 'external-discovery': '새 글 찾기로 돌아가기', interests: '관심 주제 편집으로 돌아가기', blog: '글 공개·보관으로 돌아가기', home: '노트로 돌아가기', activities: '묶음으로 돌아가기', page: '선택 자료 페이지로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기', reflection: '회고로 돌아가기', books: '책으로 돌아가기' };
       const back = iconButton(labels[state.returnContext?.mode] || '검색 결과로 돌아가기', 'back', guarded(returnToResults));
       back.id = 'lifeSearchReturn';
       return back;
@@ -5977,7 +6013,7 @@
       top.append(heading, iconButton('복원 안내 닫기', 'close', guarded(() => {
         state.restoreReturn = null;
         panel.remove();
-        (books ? main.querySelector('#wbBookList') : toolbar.querySelector('h1'))?.focus({ preventScroll: true });
+        (books ? main.querySelector('#wbBookList') : pageHeading())?.focus({ preventScroll: true });
       })));
       panel.append(top);
       const info = books ? node('details', null, 'life-details') : panel;
@@ -6010,11 +6046,11 @@
         connectSubscription();
         render();
         global.scrollTo({ top: 0, behavior: 'instant' });
-        toolbar.querySelector('h1')?.focus({ preventScroll: true });
+        pageHeading()?.focus({ preventScroll: true });
         announce('이전 작업공간을 열었습니다. 복원한 사본도 그대로 보관됩니다.');
         try { await refreshData(); render(); }
         catch (_) { throw new Error('이전 작업공간을 열었고 복원 사본도 보관돼 있습니다. 목록 갱신에 실패했으니 관리에서 다시 확인해 주세요.'); }
-        finally { toolbar.querySelector('h1')?.focus({ preventScroll: true }); }
+        finally { pageHeading()?.focus({ preventScroll: true }); }
       })));
       content.prepend(panel);
     }
@@ -6668,6 +6704,7 @@
       splitCleanup?.(); splitCleanup = null;
       readingResumeCleanup?.(); readingResumeCleanup = null;
       if (sectionFor(state.mode) === 'records') lastRecordMode = state.mode;
+      if (calendarModes.has(state.mode)) lastScheduleMode = state.mode;
       writeRoute(state.mode, false);
       renderHeader();
       main.dataset.mode = state.mode;
@@ -6888,6 +6925,7 @@
     }
     unbindNavigation = global.HaedoNavigation?.bind(section => guarded(() => navigateSection(section))());
     global.addEventListener('popstate', popstate);
+    wideHeading?.addEventListener?.('change', pageHeadingWidth);
     return { dispose, flushDraft, checkpoint };
 
     async function checkpoint() {
@@ -7006,6 +7044,7 @@
       cleanup(() => unifiedSearch?.dispose());
       cleanup(() => unbindNavigation?.());
       cleanup(() => global.removeEventListener('popstate', popstate));
+      cleanup(() => wideHeading?.removeEventListener?.('change', pageHeadingWidth));
       cleanup(() => document.removeEventListener('pointerdown', closeFeatureMenusOutside));
       cleanup(() => document.removeEventListener('focusin', closeFeatureMenusOnFocus));
       cleanup(() => root?.removeEventListener('focusin', keepFocusVisible));

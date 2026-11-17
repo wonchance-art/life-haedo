@@ -134,6 +134,8 @@ async function main() {
       await page.locator('#addItem').click(); await page.locator('#itemTitle').fill('긴 산책 열 번'); await page.locator('#itemForm [type=submit]').click();
       await page.waitForFunction(() => document.querySelector('.p-status-line').dataset.state === 'pending');
       assert.equal(await statusText(page), '계정에 올리기 대기');
+      // 2026-11-16 owner: online, an upload about to run is said to screen readers only.
+      assert.equal(await line.getAttribute('data-idle'), 'true', 'an online wait is not shown');
       // The status line is the one save sentence; no third phrase (review #1: 기기에 저장했습니다).
       assert.equal(await page.locator('#platformToast').isHidden(), true, 'no save toast');
       assert.doesNotMatch(await page.locator('body').innerText(), /기기에 저장했습니다/);
@@ -224,6 +226,7 @@ async function main() {
       await page.waitForTimeout(400);
       assert.equal(await line.getAttribute('data-state'), 'pending', 'the failed upload offline waits, it is not 계정에 올리지 못함');
       assert.equal(await statusText(page), '계정에 올리기 대기'); assert.equal(await page.locator('#syncRetry').isHidden(), true);
+      assert.equal(await line.getAttribute('data-idle'), 'false', '2026-11-16: an offline wait does not end by itself and is shown');
       offline = false;
       await page.evaluate(() => { window.__online = true; dispatchEvent(new Event('online')); });
       await page.waitForFunction(() => document.querySelector('.p-status-line').dataset.state === 'ok');
@@ -267,6 +270,7 @@ async function main() {
       const input = page.locator('[data-ap-annual]').first();
       await input.fill('천천히 오래 걷기');
       assert.equal(await text(), '저장 중…', 'unsaved input is never called saved');
+      assert.equal(await hidden(), true, '2026-11-16: 저장 중… is said to screen readers only');
       await page.waitForFunction(() => document.querySelector('.annual-plan').dataset.saveState === 'error');
       assert.equal((await page.locator('.ap-save-line').textContent()).replace(/\s+/g, ' ').trim(), '계정에 올리지 못함 · 다시 시도');
       assert.equal(await page.locator('#apRetry').isVisible(), true);
@@ -294,6 +298,7 @@ async function main() {
       await page.waitForTimeout(600);
       assert.equal(await page.locator('.annual-plan').getAttribute('data-save-state'), 'pending');
       assert.equal(await page.locator('#apSaveStatus').textContent(), '계정에 올리기 대기'); assert.equal(await page.locator('#apRetry').isHidden(), true);
+      assert.equal(await page.locator('.ap-save-line').getAttribute('data-idle'), 'false', '2026-11-16: an offline wait is shown');
       offline = false;
       await page.evaluate(() => { window.__online = true; dispatchEvent(new Event('online')); });
       await page.waitForFunction(() => document.querySelector('.annual-plan').dataset.saveState === 'ok');

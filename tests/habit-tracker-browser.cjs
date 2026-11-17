@@ -110,12 +110,13 @@ async function main() {
       assert.deepEqual(at('09'), ['09', 'future', true, 'false'], 'a scheduled day after today');
       assert.equal(cells.filter(c => !c[2]).length, 3, 'only 11-02, 11-04, 11-06 take a tap');
       assert.equal(await card.locator('[aria-current=date]').getAttribute('data-date'), '2026-11-07');
-      // Today: a short straight line under the bold number (not a shadow that bends with the corners).
+      // Today: a short straight line under the bold number (not a shadow that bends with the corners). Rule change
+      // 2026-11-16 노션 방향 W2 (틸 규칙: today is ink, weights 400/500/600/700): ink #37352f 600, was teal 750.
       const todayMark = await page.evaluate(() => [...document.querySelectorAll('#habitList [aria-current=date]')].map(n => {
         const line = getComputedStyle(n.querySelector('.habit-tracker-number'), '::after');
         return [n.dataset.state, getComputedStyle(n).boxShadow, getComputedStyle(n).fontWeight, line.width, line.height, line.backgroundColor];
       }));
-      assert.deepEqual(todayMark, [['off', 'none', '750', '16px', '2px', 'rgb(20, 91, 80)'], ['open', 'none', '750', '16px', '2px', 'rgb(20, 91, 80)'], ['open', 'none', '750', '16px', '2px', 'rgb(20, 91, 80)']]);
+      assert.deepEqual(todayMark, [['off', 'none', '600', '16px', '2px', 'rgb(55, 53, 47)'], ['open', 'none', '600', '16px', '2px', 'rgb(55, 53, 47)'], ['open', 'none', '600', '16px', '2px', 'rgb(55, 53, 47)']]);
       assert.equal(await card.getByRole('button', { name: '아침 산책 2026-11-02 완료 취소' }).count(), 1);
       assert.equal(await card.getByRole('button', { name: '아침 산책 2026-11-04 완료', exact: true }).count(), 1);
       // Created mid-month: days before 11-04 take no tap; 11-05 done.
@@ -128,11 +129,11 @@ async function main() {
       assert.deepEqual(await kept('h3', '2026-11-04'), ['done', true, '주말 정리 2026-11-04 완료(정한 요일 아님)']);
       assert.equal(await page.locator('.habit-tracker-card[data-habit="h3"] .habit-tracker-summary').textContent(), '이번 달 0/1회 · 연속 0회 · 토', 'the kept check is not counted');
       assert.equal(await second.locator(cell('habits', 'h2', '2026-11-07')).isDisabled(), false, 'today is open');
-      // Done is the ink fill with white (contrast on the real white surface).
+      // Done is the ink fill with white (contrast on the real white surface). Ink is #37352f since 2026-11-16 W1.
       // Styles and boxes are read in one page evaluation (a locator resolves first and runs later; a repaint
       // in between would hand over a detached cell).
       const look = await page.evaluate(sel => { const n = document.querySelector('#habitList ' + sel), s = getComputedStyle(n); return [s.backgroundColor, s.color, getComputedStyle(n.closest('main')).backgroundColor]; }, cell('habits', 'h1', '2026-11-02'));
-      assert.deepEqual(look, ['rgb(24, 37, 34)', 'rgb(255, 255, 255)', 'rgb(255, 255, 255)']);
+      assert.deepEqual(look, ['rgb(55, 53, 47)', 'rgb(255, 255, 255)', 'rgb(255, 255, 255)']);
       assert.match(await page.locator('.habit-note').textContent(), /정한 요일의 오늘까지 날짜를 체크하거나 취소할 수 있습니다\./);
       assert.doesNotMatch(await page.locator('#content').innerText(), /지난 7일/);
     });
@@ -295,7 +296,7 @@ async function main() {
       const doneToday = await page.evaluate(() => { const n = document.querySelector('#habitList [data-focus-key="habits:h3:2026-11-07"]');
         const line = getComputedStyle(n.querySelector('.habit-tracker-number'), '::after'), box = n.getBoundingClientRect(), mark = n.querySelector('.habit-tracker-number').getBoundingClientRect();
         return [n.dataset.state, n.getAttribute('aria-current'), getComputedStyle(n).backgroundColor, line.backgroundColor, line.width, mark.bottom + 4 <= box.bottom - 4]; });
-      assert.deepEqual(doneToday, ['done', 'date', 'rgb(24, 37, 34)', 'rgb(255, 255, 255)', '16px', true]);
+      assert.deepEqual(doneToday, ['done', 'date', 'rgb(55, 53, 47)', 'rgb(255, 255, 255)', '16px', true]);
       await layout(page, '#habitList', 'habits ' + width);
       const columns = await page.evaluate(() => new Set([...document.querySelectorAll('#habitList .habit-tracker-card')].map(c => Math.round(c.getBoundingClientRect().left))).size);
       if (width >= 1440) assert.equal(columns, 2, 'two columns in the 720px content column');
@@ -344,6 +345,8 @@ async function main() {
       assert.deepEqual(shapes, { done: { ring: false, fill: true, inner: false }, kept: { ring: true, fill: false, inner: true }, planned: { ring: true, fill: false, inner: false }, todayMark: 'none' });
       const legend = slot.locator('.habit-compact-legend');
       assert.deepEqual(await legend.locator('.habit-compact-legend-item').allInnerTexts(), ['완료', '할 날', '정한 요일이 아닌 날의 체크'], 'one legend line in text');
+      // Decision 13 (2026-11-16 노션 방향): the table says it only shows, and where the days are checked.
+      assert.equal(await slot.locator('.habit-compact-note').innerText(), '보기 전용 · 체크는 하루·주 보기에서');
       // Read as three separate list items, not one run of words (a11y re-check M1).
       assert.deepEqual(await legend.evaluate(node => [node.tagName, node.getAttribute('aria-label'), [...node.children].map(child => child.tagName)]), ['UL', '점 표시', ['LI', 'LI', 'LI']]);
       assert.equal(await legend.evaluate(n => !!n.closest('[aria-hidden="true"]') || getComputedStyle(n).display === 'none'), false, 'the legend is read');
@@ -394,13 +397,19 @@ async function main() {
         const dots = [...row.querySelectorAll('.habit-compact-dot')].map(dot => dot.getBoundingClientRect());
         return { tall: box.height >= 44, inside: days.right <= box.right + 1 && box.right <= innerWidth + 1 && dots.every(dot => dot.right <= days.right + 1 && dot.width > 0),
           nameAbove: name.bottom <= days.top + 1, nameWhole: row.querySelector('.habit-compact-name').scrollWidth <= row.querySelector('.habit-compact-name').clientWidth + 1,
-          ordered: dots.every((dot, i) => !i || dot.left > dots[i - 1].left) };
+          // Reading order: left to right on a line, then the next line (the 10px dots wrap where a line would shrink them).
+          ordered: dots.every((dot, i) => !i || dot.top > dots[i - 1].bottom - 1 || Math.abs(dot.top - dots[i - 1].top) < 1 && dot.left > dots[i - 1].left),
+          sizes: [...new Set(dots.map(dot => Math.round(dot.width) + 'x' + Math.round(dot.height)))] };
       }));
       for (const row of rows) {
         assert.deepEqual([row.tall, row.inside, row.nameWhole, row.ordered], [true, true, true, true], width + ': rows are 44px, the 30 dots stay inside in day order, the name is whole');
-        // Phone: the name has its own line and the dots are under it.
-        if (width <= 1100) assert.equal(row.nameAbove, true, width + ': the name is on its own line above the dots');
-        else assert.equal(row.nameAbove, false, width + ': name and dots share the row');
+        // Rule change 2026-11-16 노션 방향 (contract 월 보기 습관 표: dots 10px): every dot is 10px at every width (was 8px
+        // on a phone and about 8px in the 280px side column).
+        assert.deepEqual(row.sizes, ['10x10'], width + ': the dots are 10px');
+        // The name has its own line and the dots are under it: up to 1100px (review 2 m3), and from 1101px too since the
+        // table sits in M's 280px side column (rule change 2026-11-16 notes-menu; until then the wide table put the name
+        // and the dots on one row under the calendar).
+        assert.equal(row.nameAbove, true, width + ': the name is on its own line above the dots');
       }
       // Each row ends in a › (drawn only), at its right end beside the dots.
       const go = await page.evaluate(() => [...document.querySelectorAll('.schedule-entries-month .habit-compact-row')].map(row => {
@@ -408,11 +417,20 @@ async function main() {
         return { go: mark.classList.contains('habit-compact-go'), hidden: mark.getAttribute('aria-hidden'), glyph: !!mark.querySelector('svg'), end: r.right - box.right <= 16, after: box.left >= days.right - 1 };
       }));
       assert.deepEqual(go, go.map(() => ({ go: true, hidden: 'true', glyph: true, end: true, after: true })), width + ': a › ends each row');
-      // The day numbers stay over the dot columns: the last one (30) does not reach past the last dot's column.
-      const numbers = await page.evaluate(() => { const head = document.querySelector('.schedule-entries-month .habit-compact-head .habit-compact-days'), box = head.getBoundingClientRect();
-        const range = document.createRange(), last = [...head.children].filter(n => n.textContent).at(-1); range.selectNodeContents(last); const text = range.getBoundingClientRect();
-        return { last: last.textContent, inside: text.right <= box.right + 0.5 && text.left >= box.left - 0.5 }; });
-      assert.deepEqual(numbers, { last: '30', inside: true }, width + ': the last day number stays over the dots');
+      const wrapped = width >= 1101 || width <= 760;
+      if (!wrapped) {
+        // The day numbers stay over the dot columns: the last one (30) does not reach past the last dot's column.
+        const numbers = await page.evaluate(() => { const head = document.querySelector('.schedule-entries-month .habit-compact-head .habit-compact-days'), box = head.getBoundingClientRect();
+          const range = document.createRange(), last = [...head.children].filter(n => n.textContent).at(-1); range.selectNodeContents(last); const text = range.getBoundingClientRect();
+          return { last: last.textContent, inside: text.right <= box.right + 0.5 && text.left >= box.left - 0.5 }; });
+        assert.deepEqual(numbers, { last: '30', inside: true }, width + ': the last day number stays over the dots');
+      } else {
+        // Wrapped dots (the side column from 1101px, a phone): the number line is not drawn and today's dot has an ink ring.
+        const today = await page.evaluate(() => ({ head: getComputedStyle(document.querySelector('.schedule-entries-month .habit-compact-head')).display,
+          ring: getComputedStyle(document.querySelector('.schedule-entries-month .habit-compact-rows .habit-compact-dot[data-today]')).boxShadow,
+          other: getComputedStyle(document.querySelector('.schedule-entries-month .habit-compact-rows .habit-compact-dot:not([data-today])')).boxShadow }));
+        assert.deepEqual([today.head, today.ring.includes('rgb(55, 53, 47)'), today.other], ['none', true, 'none'], width + ': today is the ringed dot (' + JSON.stringify(today) + ')');
+      }
       await page.screenshot({ path: path.join(output, 'schedule-month-' + width + '.png'), fullPage: true });
     }, { width, height: width <= 390 ? 844 : 960 });
   } finally { await browser.close(); }

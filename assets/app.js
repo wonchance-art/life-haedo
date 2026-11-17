@@ -383,6 +383,18 @@ const SHOW_KEYS=['ev','name','tag','span','th','hap','lay','rec','era'];
 const SHOW_NAME={ev:'사건',name:'이름',tag:'핀색',span:'기간',th:'생각',hap:'값',lay:'분야',rec:'기록',era:'시대'};
 /* 나이 셈법 — 만(태어난 해 0세) / 한국식(태어난 해 1세) */
 let AGE_MODE=(()=>{try{return localStorage.getItem('caeyeon_life_age')==='kr'?'kr':'intl';}catch(e){return 'intl';}})();
+/* 곡선·나이는 해도 계정 문서(timelineDisplay)의 이 브라우저 사본이다(2026-11-16). 연표는 계정 저장소를 불러오지 않으므로
+   고친 값과 시각을 기록(caeyeon_life_display_sync)에 '계정에 아직 넣지 않음'(up:false)으로 남기고, 다음 해도 진입 때
+   해도가 계정 문서의 시각과 비교해 넣는다(storage.js absorbTimelineDisplay). 기록의 계정(owner)은 건드리지 않는다. */
+function markDisplay(field,v){
+  try{
+    let r=null;try{r=JSON.parse(localStorage.getItem('caeyeon_life_display_sync'));}catch(e){}
+    if(!r||typeof r!=='object'||Array.isArray(r))r={};
+    const prev=Date.parse(r[field]&&r[field].at||'');
+    r[field]={v,at:new Date(Math.max(Date.now(),isFinite(prev)?prev+1:0)).toISOString(),up:false};
+    localStorage.setItem('caeyeon_life_display_sync',JSON.stringify(r));
+  }catch(e){}
+}
 let SHOW=(()=>{
   const d={};SHOW_KEYS.forEach(k=>d[k]=true);
   try{const r=JSON.parse(localStorage.getItem('caeyeon_life_show'));
@@ -2083,7 +2095,7 @@ function openPopTrip(t,ax,ay){
     <textarea class="dt-edit" data-f="pts" rows="4" style="width:100%;font-size:12px"
       placeholder="장소명 | 메모 — 한 줄에 하나">${esc((t.points||[]).map(p=>p.label+(p.date?' | '+p.date:'')).join('\n'))}</textarea>
     <div class="pe-row" style="justify-content:space-between;align-items:center">
-      <span data-s="geo" style="font-size:11px;color:var(--ink-soft)"></span>
+      <span data-s="geo" role="status" style="font-size:11px;color:var(--ink-soft)"></span>
       <span style="display:flex;gap:6px">
         <button class="btn btn-xs btn-soft btn-primary" data-a="savepts">장소 저장</button>
         <button class="btn btn-xs btn-error btn-soft" data-a="del">✕ 삭제</button>
@@ -2097,6 +2109,7 @@ function openPopTrip(t,ax,ay){
   q('[data-f="note"]').onchange=e=>{t.note=e.target.value.trim();commit();};
   q('[data-a="savepts"]').onclick=async()=>{ /* 좌표는 새 장소만 검색 (Nominatim 1req/s) */
     const st=q('[data-s="geo"]'),docId=curDocId;
+    st.classList.remove('save-quiet'); /* 2026-11-16: only the 저장됨 below is for screen readers only */
     const lines=q('[data-f="pts"]').value.split('\n').map(l=>l.trim()).filter(Boolean);
     if(lines.length<2){st.textContent='장소가 2곳 이상 필요';return;}
     const old=t.points||[]; const pts=[];
@@ -2112,7 +2125,7 @@ function openPopTrip(t,ax,ay){
       await new Promise(r=>setTimeout(r,1100));
     }
     if(curDocId!==docId||!st.isConnected||!DATA.trips.includes(t))return;
-    t.points=pts; st.textContent='저장됨';
+    t.points=pts; st.textContent='저장됨'; st.classList.add('save-quiet'); /* keeps its box: the row's buttons stay put */
     commit();
   };
   q('[data-a="del"]').onclick=()=>{
@@ -2804,7 +2817,7 @@ function renderShowPanel(){
       ev.stopPropagation();
       if(AGE_MODE===m)return;
       AGE_MODE=m;
-      try{localStorage.setItem('caeyeon_life_age',m);}catch(e){}
+      try{localStorage.setItem('caeyeon_life_age',m);markDisplay('age',m);}catch(e){}
       syncShowPanel();render();
     };
     showPanel.appendChild(b);
@@ -2816,7 +2829,7 @@ function renderShowPanel(){
     b.onclick=ev=>{
       ev.stopPropagation();
       MA_SIGMA=+v;
-      try{localStorage.setItem('caeyeon_life_ma',MA_SIGMA);}catch(e){}
+      try{localStorage.setItem('caeyeon_life_ma',MA_SIGMA);markDisplay('curve',MA_SIGMA);}catch(e){}
       syncShowPanel();render();
     };
     showPanel.appendChild(b);

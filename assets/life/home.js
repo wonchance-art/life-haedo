@@ -200,11 +200,6 @@
       mediaGeneration += 1; mediaObserver?.disconnect(); mediaObserver = null;
       mediaUrls.forEach(url => URL.revokeObjectURL(url)); mediaUrls.clear();
     }
-    function initials(name) { return !name || name === '내 블로그' ? '나' : Array.from(String(name).replace(/\s+/g, '')).slice(0, 2).join(''); }
-    function avatar(context) {
-      const mark = el('span', initials(context.profile.name), 'home-avatar');
-      mark.setAttribute('aria-hidden', 'true'); return mark;
-    }
     const alive = () => !disposed && !isDisposed();
     const showing = context => alive() && visible && context.token === generation && getBundle()?.workspaceId === context.workspaceId && context.surface.parentNode === host;
     function action(context, label, task, className = '', { keepFocus = true } = {}) {
@@ -240,8 +235,10 @@
     function section(context, title, id) {
       const container = el('section', null, 'home-section'); container.id = id;
       const heading = el('div', null, 'home-section-heading');
+      // Names the section for screen readers only (it is visually hidden), so it takes no focus: a return that focuses
+      // the first focusable heading lands on the screen title (노트), not on this hidden line. Until 2026-11-16 the
+      // profile row's h2 came first in 노트 and the hidden 내 글 heading was never reached.
       const name = el('h2', title); name.id = id + 'Title';
-      name.tabIndex = -1;
       container.setAttribute('aria-labelledby', name.id);
       heading.append(name);
       container.append(heading);
@@ -266,15 +263,6 @@
       }
       await openSource(info.source.id, info.version.id);
     }
-    function profileHeader(context) {
-      const header = el('div', null, 'home-profile-bar');
-      const profile = el('div', null, 'home-profile-open');
-      profile.append(avatar(context), el('h2', context.profile.name, 'home-author-name'));
-      const copy = el('div', null, 'home-profile-copy');
-      const intro = el('p', '', 'home-blog-description'); intro.hidden = true;
-      copy.append(profile, intro);
-      header.append(copy); return header;
-    }
     function latestOwnPosts(bundle) {
       const rows = [];
       bundle.sources.filter(source => core.isSourceActive(bundle, source.id) && life.Writing?.isOwnSource(source, bundle)).forEach(source => {
@@ -284,12 +272,12 @@
       });
       return rows;
     }
-    function postCover(context, row, article, open) {
-      // `article` is the row's content column (2026-11-02 일정 목록: time · icon · content).
+    function postCover(context, row, article) {
+      // `article` is the row's content column (2026-11-02 list, 노트 since 2026-11-16: time · icon · content).
       if (row.kind !== 'photo' || !row.photos) return;
       const epoch = mediaGeneration;
-      const frame = action(context, '', open, 'home-post-media');
-      frame.setAttribute('aria-label', '사진이 있는 글 열기'); frame.dataset.focusKey = 'home:photo:' + row.id;
+      // Shown only (2026-11-16 노션 방향, Designer default 3): the row opens from its title, whose target covers the row.
+      const frame = el('div', null, 'home-post-media');
       frame.setAttribute('aria-busy', 'true');
       const image = el('img', null, 'home-post-cover'); image.alt = ''; image.loading = 'lazy'; image.decoding = 'async';
       const status = el('span', '사진 불러오는 중…', 'life-meta home-photo-loading');
@@ -340,13 +328,18 @@
       time.title = labels.title;
       return time;
     }
-    // 일정 목록 rows: a time column and an icon column before the content (decision 2026-11-02).
+    // The edit date of a row (2026-11-16 notes-menu, owner decision 8): only for a row changed on another day than
+    // it was first written. The row's time is when it was first written, under that day's heading.
+    function editedDate(row, prefix) {
+      const day = life.ScheduleData?.dayOf, written = day?.(writtenAt(row)), changed = day?.(row.updatedAt);
+      return written && changed && written === changed ? null : modifiedDate(row.updatedAt, prefix);
+    }
+    // 노트 rows: the time a row was first written opens its meta line (2026-11-16 노션 방향; was its own column).
     function rowTime(value) {
       const text = life.ScheduleData?.timeOf(value) || '';
       const time = el('span', text, 'home-row-time'); if (!text) time.setAttribute('aria-hidden', 'true');
       return time;
     }
-    function rowMark(glyph) { const mark = el('span', null, 'home-row-mark'); mark.setAttribute('aria-hidden', 'true'); mark.append(life.Icons.create(glyph)); return mark; }
     function dayHeading(value) {
       const day = life.ScheduleData?.dayOf(value);
       if (!day) return el('h2', '날짜 미확인', 'home-day-heading');
@@ -360,8 +353,11 @@
       else if (row.kind === 'source') { article.dataset.sourceId = row.id; article.dataset.versionId = row.versionId; }
       else article.dataset.postId = row.id;
       const open = () => row.kind === 'source' ? openVersion(context, row.versionId) : row.kind === 'photo' ? openPhoto(context, row) : navigate('page', { blogContext: true, pagePreview: false, searchTarget: target });
+      // One meta line (2026-11-16 노션 방향, decision 8): when it was first written · the edit date · visibility.
       const meta = el('p', null, 'life-meta home-post-meta');
-      const time = modifiedDate(row.updatedAt, row.kind === 'source' ? '저장 ' : '수정 ');
+      const written = rowTime(writtenAt(row));
+      if (written.textContent) meta.append(written, document.createTextNode(' · '));
+      const time = editedDate(row, row.kind === 'source' ? '저장 ' : '수정 ');
       if (time) meta.append(time, document.createTextNode(' · '));
       // A post's original always stays private; a public copy, when there is one, is named
       // next to it. An unanswered publish or withdrawal is said as not confirmed, never as private.
@@ -380,12 +376,12 @@
         content.append(attached);
       }
       const body = el('div', null, 'home-post-body');
-      body.append(content); postCover(context, row, body, open);
+      body.append(content); postCover(context, row, body);
+      // One way to open a row: its title button (Designer default 3, 2026-11-16; the 글 읽기 → button and the kind icon
+      // went with the photo button).
       const footer = el('div', null, 'home-post-footer');
-      const read = action(context, '글 읽기', open, 'home-post-read'); read.dataset.focusKey = 'home:read:' + row.kind + ':' + row.id;
-      read.append(life.Icons.create('arrow'));
-      footer.append(meta, read); body.append(footer);
-      article.append(rowTime(row.updatedAt), rowMark(row.kind === 'source' ? 'book' : 'edit'), body);
+      footer.append(meta); body.append(footer);
+      article.append(body);
       return article;
     }
     // One account, one blog: a post kept in another library of this account
@@ -408,12 +404,15 @@
       const open = action(context, '', () => openRow(context, row), 'home-draft-open');
       open.dataset.focusKey = 'home:draft:' + row.kind + ':' + row.id;
       const copy = el('span', null, 'home-draft-copy');
-      copy.append(el('span', row.editing === true ? '기존 글 수정 중' : row.editing === false ? '새 글 초안' : '작성 중인 글', 'life-meta'),
-        el('strong', String(row.title || '').trim() || snippet(row.body) || '내용을 기다리는 초안'));
+      copy.append(el('strong', String(row.title || '').trim() || snippet(row.body) || '내용을 기다리는 초안'));
       if (row.title?.trim() && row.body?.trim()) copy.append(el('span', snippet(row.body), 'home-draft-excerpt'));
-      const time = modifiedDate(row.updatedAt);
-      if (time) { time.className = 'life-meta'; copy.append(time); }
-      open.append(copy, el('span', '이어쓰기', 'home-draft-resume')); article.append(rowTime(row.updatedAt), rowMark('write'), open); return article;
+      // The same meta line as a post: first written · edit date · what kind of draft it is.
+      const meta = el('span', null, 'life-meta home-draft-meta'), written = rowTime(writtenAt(row)), time = editedDate(row, '수정 ');
+      if (written.textContent) meta.append(written, document.createTextNode(' · '));
+      if (time) meta.append(time, document.createTextNode(' · '));
+      meta.append(el('span', row.editing === true ? '기존 글 수정 중' : row.editing === false ? '새 글 초안' : '작성 중인 글'));
+      copy.append(meta);
+      open.append(copy, el('span', '이어쓰기', 'home-draft-resume')); article.append(open); return article;
     }
     function resultRows(context) {
       const rows = latestOwnPosts(getBundle()), errors = [];
@@ -428,13 +427,6 @@
         if (state.workspaceId !== context.workspaceId) throw new Error('workspace_mismatch');
         life.Workbench.validate(state); context.workbenchState = state;
         rows.push(...(state.page.posts || []).filter(post => post.status === 'saved').map(post => ({ ...post, kind: 'plain', tab: 'posts' })));
-        const title = String(state.page.title || '').trim();
-        context.profile.name = title && title !== '내 페이지' ? title : '내 블로그';
-        context.surface.querySelectorAll('.home-author-name').forEach(node => { node.textContent = context.profile.name; });
-        context.surface.querySelectorAll('.home-avatar').forEach(node => { node.textContent = initials(context.profile.name); });
-        const intro = context.surface.querySelector('.home-blog-description');
-        intro.textContent = state.page.showIntro ? snippet(state.page.intro) : '';
-        intro.hidden = !intro.textContent;
       });
       read('photo', '글·초안·숨긴 글', value => {
         if (!Array.isArray(value?.posts)) throw new Error('invalid_posts');
@@ -453,7 +445,6 @@
         rows.push(...stages.filter(stage => life.Writing?.isDraft(stage) && stage.state === 'draft').map(stage => ({ ...stage,
           id: stage.stageId, body: stage.text, kind: 'source-draft', tab: 'drafts', editing: !!stage.sourceId })));
       });
-      context.profileStatus.hidden = !!context.workbenchState;
       rows.forEach(row => { if (!row.tab) row.tab = 'posts'; });
       // Newest first by when each was first written; a row's own time line still says when it was last changed.
       const timestamp = row => Number.isFinite(Date.parse(writtenAt(row))) ? Date.parse(writtenAt(row)) : 0;
@@ -594,7 +585,9 @@
         seen.dataset.focusKey = 'home:delete-refused'; refused.append(seen); fragment.append(refused);
       }
       if (listState.tab === 'archive') fragment.append(el('p', '글을 열어 목록에 다시 보이게 할 수 있어요.', 'life-meta home-archive-note'));
-      const applicable = errors.filter(error => error.key === 'photo' || (listState.tab === 'posts' ? error.key === 'workbench' : listState.tab === 'drafts' ? ['plainDrafts', 'sourceDrafts'].includes(error.key) : false));
+      // The blog's own record (기존 글 and the profile) is said on every tab: since 2026-11-16 (Designer default 2) 노트 has
+      // no profile row, whose line said it before; the profile itself is seen and edited in 글 메뉴 → 프로필 편집.
+      const applicable = errors.filter(error => error.key === 'photo' || error.key === 'workbench' || (listState.tab === 'drafts' && ['plainDrafts', 'sourceDrafts'].includes(error.key)));
       if (applicable.length) {
         const error = el('div', null, 'home-posts-error home-load-error'); error.setAttribute('role', 'status');
         error.append(el('p', applicable.map(item => item.label).join(', ') + '을 불러오지 못했어요. 확인된 글만 표시합니다.', 'life-meta'),
@@ -667,24 +660,22 @@
       adoptState(bundle.workspaceId, options.homeState);
       clearMedia();
       const surface = el('div', null, 'life-home'); surface.id = 'lifeHome';
-      const context = { token: ++generation, workspaceId: bundle.workspaceId, surface, profile: { name: '내 블로그' },
+      const context = { token: ++generation, workspaceId: bundle.workspaceId, surface,
         results: {}, photoDrafts: new Map(), draftRead: 0, error: el('p', null, 'life-error home-error') };
       visible = true;
       context.error.hidden = true; context.error.setAttribute('role', 'alert');
-      const lead = el('div', null, 'home-blog-lead');
-      context.profileStatus = el('div', null, 'home-profile-status home-load-error'); context.profileStatus.hidden = true;
-      context.profileStatus.setAttribute('role', 'status');
-      context.profileStatus.append(el('p', '프로필과 기존 글 정보를 불러오지 못했어요.', 'life-meta'),
-        action(context, '프로필 다시 불러오기', () => load(context, ['workbench'])));
-      lead.append(profileHeader(context), context.profileStatus);
+      // Designer default 2 (2026-11-16 노션 방향): no blog profile row here. Name, intro, avatar and 소개 표시 are in
+      // 글 메뉴 → 프로필 편집; a failed read of them is the list's error line with its 다시 불러오기, on every tab.
       context.resume = action(context, '', () => context.resumeRow && openRow(context, context.resumeRow), 'home-resume');
       context.resume.dataset.focusKey = 'home:resume'; context.resume.hidden = true;
       context.resumeLabel = el('span', null, 'home-resume-title');
       context.resume.append(el('span', '작성하던 글', 'life-meta'), context.resumeLabel, el('span', '이어쓰기', 'home-draft-resume'));
-      lead.append(context.resume); surface.append(lead, context.error);
+      surface.append(context.error);
       const composition = el('div', null, 'home-composition'); composition.id = 'homeComposition'; composition.setAttribute('aria-busy', 'true');
       const posts = section(context, '내 글', 'homePosts'); posts.querySelector('.home-section-heading').classList.add('life-sr-only');
       context.area = posts; listControls(context, posts);
+      // 작성하던 글 sits under the tab row and 내 글 찾기 (2026-11-16 노션 방향, contract 노트), before the rows.
+      context.list.before(context.resume);
       const loading = el('p', '글과 초안을 불러오는 중…', 'life-meta home-loading'); loading.setAttribute('role', 'status'); context.list.append(loading);
       posts.setAttribute('aria-busy', 'true'); composition.append(posts);
       surface.append(composition); host.append(surface);

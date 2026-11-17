@@ -231,6 +231,12 @@ jobs:
       - name: Verify AI news picks send only typed topics and candidate metadata, keep picked numbers only and fall back to the latest list
         if: ${{ matrix.group == 7 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/news-pick-browser.cjs
+      - name: Verify the timeline curve and age sync to the account, keep the timeline editor's copies and never cross accounts
+        if: ${{ matrix.group == 7 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/timeline-display-sync-browser.cjs
+      - name: Verify the notes menu opens my posts first, the schedule keeps only the calendar and old addresses still open
+        if: ${{ matrix.group == 7 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/notes-menu-browser.cjs
       - name: Verify editing a stored post keeps one edit buffer, cancel and draft delete, and moved ids
         if: ${{ matrix.group == 7 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/writing-revision-browser.cjs

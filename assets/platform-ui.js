@@ -220,6 +220,7 @@
   // 저장됨 · 계정에 올림 / 계정에 올리기 대기 / 계정에 올리지 못함 · [다시 시도]. The conflict and
   // recovery-copy sentences stay as they were, after the state. 'unknown' says nothing: before the
   // first account check (or offline with nothing to send) 저장됨 · 계정에 올림 is not yet known.
+  // Since 2026-11-16 only a failure, an offline wait and the notes are shown (status(): data-idle).
   const STATE_TEXT = { ok: "저장됨 · 계정에 올림", pending: "계정에 올리기 대기", error: "계정에 올리지 못함 ·", unknown: "" };
   function saveState() {
     const states = store.items.map((item) => item.state);
@@ -288,7 +289,10 @@
     actions.hidden = !unseen;
     line.dataset.state = state;
     line.dataset.sync = syncing || !syncChecked && !syncWarning ? "busy" : "idle";
-    line.dataset.idle = String((state === "ok" || state === "unknown") && !notes.length);
+    // 2026-11-16 owner: 저장됨 · 계정에 올림 and an upload about to run (계정에 올리기 대기 while online)
+    // stay for screen readers only. Offline the wait does not end by itself: it is shown.
+    const waiting = state === "pending" && navigator.onLine !== false;
+    line.dataset.idle = String((state === "ok" || state === "unknown" || waiting) && !notes.length);
   }
   // The kept copies, newest first. Reviving adds a new item; the kept copy stays (and in backups).
   function openRecovery() {
