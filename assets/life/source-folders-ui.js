@@ -229,7 +229,15 @@
       const openManage = () => {
         if (mount.released || !live(token, owner, element)) return;
         owner.manageOpen = true; details.hidden = false;
-        details.scrollIntoView({ block: 'nearest' }); (edit.disabled ? manageClose : edit).focus({ preventScroll: true });
+        details.scrollIntoView({ block: 'nearest' });
+        // Focus goes in the next frame: the caller's own action may still hold every field disabled while it runs
+        // (ui.js guarded()), and a disabled field cannot take focus. 편집할 폴더 when there is a folder to choose,
+        // 이름 when there is none yet, 폴더 관리 닫기 while the folders are still being read or saved.
+        root.requestAnimationFrame(() => {
+          if (mount.released || details.hidden || !live(token, owner, element)) return;
+          const count = owner.snapshot && !owner.pending && !owner.writing ? owner.snapshot.sourceFolders.folders.length : null;
+          (count === null || edit.disabled ? manageClose : count ? edit : name).focus({ preventScroll: true });
+        });
       };
       edit.addEventListener('change', () => {
         if (!fieldLive(edit)) return;

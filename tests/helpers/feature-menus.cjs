@@ -50,7 +50,11 @@ async function recordsListMenuItem(page, selector) {
 }
 async function toggleRecordSelection(page) { await (await recordsListMenuItem(page, '#lifeSelectionToggle')).click(); }
 async function openFolderManage(page) {
-  if (await page.locator('#lifeFolderManage').isHidden()) await (await recordsListMenuItem(page, '#lifeFolderManageOpen')).click();
+  if (await page.locator('#lifeFolderManage').isHidden()) {
+    await (await recordsListMenuItem(page, '#lifeFolderManageOpen')).click();
+    // The panel takes focus in the frame after it opens; wait for that, so a field used next keeps its focus.
+    await page.waitForFunction(() => document.querySelector('#lifeFolderManage')?.contains(document.activeElement));
+  }
   await page.locator('#lifeFolderManage').waitFor({ state: 'visible' });
 }
 async function recordRowMenuItem(row, selector) {

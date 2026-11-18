@@ -80,7 +80,15 @@ async function expectSources(page, ids) { assert.deepEqual(await visibleSources(
 async function errorVisible(page) { await page.locator('#lifeFolderError:not([hidden])').waitFor(); await page.locator('#lifeFolderSave:enabled').waitFor(); }
 async function commonBackup(page) { await openBackupCenter(page); await byName(page, '자료·구성 백업'); await page.locator('#wbBackupDownload').waitFor(); const pending = page.waitForEvent('download'); await click(page, '#wbBackupDownload'); const download = await pending, chunks = []; for await (const chunk of await download.createReadStream()) chunks.push(chunk); return JSON.parse(Buffer.concat(chunks).toString('utf8')); }
 async function editReader(page) { await sourceOptions(page); await click(page, '#lifeSourceEdit'); await page.locator('#lifeSourceEditText').waitFor(); await page.locator('#lifeSourceEditText').fill(edited); await click(page, '#lifeSourceEditSave'); await page.locator('#lifeSourceInfoToggle').waitFor(); }
-async function prepareFolders(page, rich = false) { const f = await fixture(page, rich), parent = await saveFolder(page, { name: parentName }), child = await saveFolder(page, { name: childName, parentId: parent.id }); await assignCard(page, f.a.source.id, child.id); return { ...f, parent, child }; }
+// Where focus is a moment after 폴더 관리 opens (it is placed in the next frame, once the menu's own action has ended).
+async function manageFocus(page, id, label) {
+  await page.waitForFunction(id => document.activeElement?.id === id, id, { timeout: 5000 }).catch(() => {});
+  assert.equal(await page.evaluate(() => document.activeElement?.id || document.activeElement?.tagName), id, label);
+}
+async function prepareFolders(page, rich = false) { const f = await fixture(page, rich);
+  // 2026-11-18 (W4 검수 MINOR-1): with no folder yet there is nothing to choose in 편집할 폴더, so focus is on 이름.
+  assert.equal((await snapshot(page)).sourceFolders.folders.length, 0); await openFolderManage(page); await manageFocus(page, 'lifeFolderName', 'no folders: 폴더 관리 opens with focus on 이름');
+  const parent = await saveFolder(page, { name: parentName }), child = await saveFolder(page, { name: childName, parentId: parent.id }); await assignCard(page, f.a.source.id, child.id); return { ...f, parent, child }; }
 async function waitSnapshot(page, predicate) { const deadline = Date.now() + 15000; do { const value = await snapshot(page); if (predicate(value)) return value; await page.waitForTimeout(25); } while (Date.now() < deadline); throw Error('Expected committed folder state did not arrive'); }
 async function abortFolderWrite(page, enabled, workspaceId) {
   await page.evaluate(({ enabled, workspaceId }) => {
@@ -97,8 +105,8 @@ async function captureThree(page) {
   if (await panel.isVisible()) await page.locator('#lifeFolderManageClose').click();
   assert.equal(await panel.isHidden(), true); assert.equal(await summary.evaluate(el => document.activeElement === el), true, '닫기 returns focus to the 자료 메뉴 button');
   await summary.press('Enter'); await page.locator('#lifeFolderManageOpen').press('Enter'); assert.equal(await panel.isVisible(), true);
-  // Focus moves into the panel: its first field, or 닫기 while the folders are still being read or saved.
-  assert(['lifeFolderEdit', 'lifeFolderManageClose'].includes(await page.evaluate(() => document.activeElement?.id)), 'focus is in the folder panel'); assert.equal(await page.locator('#lifeRecordsMenu').evaluate(el => el.open), false);
+  // With folders, focus is on 편집할 폴더 (2026-11-18 W4 검수 MINOR-1: not on 폴더 관리 닫기).
+  await manageFocus(page, 'lifeFolderEdit', 'folders exist: 폴더 관리 opens with focus on 편집할 폴더'); assert.equal(await page.locator('#lifeRecordsMenu').evaluate(el => el.open), false);
   await page.keyboard.press('Escape'); assert.equal(await panel.isHidden(), true); assert.equal(await summary.evaluate(el => document.activeElement === el), true, 'Esc returns focus to the 자료 메뉴 button');
   await summary.press('Enter'); await page.locator('#lifeFolderManageOpen').press('Enter'); assert.equal(await panel.isVisible(), true);
   for (const width of [1440, 820, 390]) {
