@@ -30,7 +30,7 @@ body.haedo-shell:not(.haedo-timeline) {
      values and fall back to the old ones elsewhere (public pages stay as they are). */
   --ui-link-color:var(--haedo-link); --ui-label-weight:var(--haedo-weight-medium); --ui-strong-weight:var(--haedo-weight-semibold); --ui-title-weight:var(--haedo-weight-bold);
   --ui-icon-radius:var(--haedo-control-radius); --ui-pressed-color:var(--haedo-ink); --ui-pressed-weight:var(--haedo-weight-semibold); --ui-title-hover-color:var(--haedo-ink); --ui-title-hover-line:underline;
-  --ui-panel-radius:var(--haedo-radius); --ui-tile-radius:var(--haedo-control-radius); --ui-item-radius:var(--haedo-control-radius); --ui-pill-radius:var(--haedo-control-radius);
+  --ui-accent-text:var(--haedo-ink); --ui-accent-line:var(--haedo-ink); --ui-panel-radius:var(--haedo-radius); --ui-tile-radius:var(--haedo-control-radius); --ui-item-radius:var(--haedo-control-radius); --ui-pill-radius:var(--haedo-control-radius);
   --control-radius:var(--haedo-control-radius); --surface-radius:var(--haedo-radius);
 }
 .haedo-shell *, .haedo-shell *::before, .haedo-shell *::after{box-sizing:border-box}

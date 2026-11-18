@@ -108,7 +108,7 @@ html.auth-pending [data-private] { display: none !important; }
 .life-card > .life-meta,.life-tag { color: var(--ink-soft); font-size: var(--haedo-text-badge); line-height: 1.75; }
 .life-card .life-actions { margin-top: 4px; }
 .life-source-open { display: block; padding: 0; border: 0; border-radius: 0; min-height: 44px; background: none; color: var(--ink); font-size: var(--haedo-text-control); font-weight: 700; line-height: 1.65; text-align: left; }
-.life-source-open:hover { background: none; color: var(--color-primary); }
+.life-source-open:hover { background: none; color: var(--ui-accent-text, var(--color-primary)); }
 .life-search-context { width: 100%; color: #49454e; font-size: 16px; line-height: 1.9; white-space: normal; word-break: keep-all; overflow-wrap: anywhere; }
 .life-search-context mark { color: var(--ink); background: var(--soft); font-weight: 600; }
 .life-quote { width: 100%; max-height: 24rem; overflow: auto; white-space: pre-wrap; font-size: var(--haedo-text-body); line-height: 1.95; word-break: keep-all; overflow-wrap: anywhere; }
@@ -117,7 +117,7 @@ html.auth-pending [data-private] { display: none !important; }
 .life-excerpt-card .life-quote { line-height: 1.85; }
 .life-record-actions { display: flex; justify-content: flex-end; gap: 8px; max-width: 700px; margin: 0 auto; }
 .life-record-actions .life-button { border: 0; color: var(--ink-soft); }
-.life-record-actions [aria-current=page] { color: var(--color-primary); background: var(--soft); }
+.life-record-actions [aria-current=page] { color: var(--ui-pressed-color, var(--color-primary)); background: var(--soft); font-weight: var(--ui-pressed-weight, inherit); }
 .life-record-notes { min-width: 0; }
 .life-record-notes .life-excerpt-card { padding: 20px 0 0; border: 0; }
 .life-record-notes .life-excerpt-card + .life-excerpt-card { margin-top: 20px; border-top: 1px solid var(--line); }
@@ -150,7 +150,7 @@ html.auth-pending [data-private] { display: none !important; }
 .life-excerpt-sources .life-source-details,.life-result-details .life-source-details { margin: 0; padding: 12px 0; border: 0; }
 .life-source-refs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .life-source-refs > li { min-width: 0; }
-.life-source-refs .life-button { border-color: transparent; color: var(--color-primary); padding-inline: 0; font-size: var(--haedo-text-meta); text-align: left; justify-content: flex-start; word-break: keep-all; }
+.life-source-refs .life-button { border-color: transparent; color: var(--ui-accent-text, var(--color-primary)); padding-inline: 0; font-size: var(--haedo-text-meta); text-align: left; justify-content: flex-start; word-break: keep-all; }
 .life-source-refs .life-button:hover { background: transparent; text-decoration: underline; text-underline-offset: 4px; }
 .life-empty { padding: 40px 0; line-height: 1.9; color: var(--ink-soft); grid-column: 1/-1; overflow-wrap: anywhere; }
 .life-empty-state { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 12px; }
@@ -182,7 +182,7 @@ html.auth-pending [data-private] { display: none !important; }
 .life-reader-heading { font-size: 28px; font-weight: 700; line-height: 1.6; letter-spacing: -.03em; margin-bottom: 16px; }
 .life-reader-meta { color: var(--ink-soft); font-size: var(--haedo-text-badge); line-height: 1.8; margin-bottom: 8px; overflow-wrap: anywhere; }
 .life-reader-meta + .life-reader-meta { margin-bottom: 32px; }
-.life-reader-related { display: inline-flex; min-height: 44px; margin: -12px 0 24px; padding: 12px 16px; color: var(--color-primary); background: var(--soft); border-color: transparent; font-size: var(--haedo-text-control); }
+.life-reader-related { display: inline-flex; min-height: 44px; margin: -12px 0 24px; padding: 12px 16px; color: var(--ui-accent-text, var(--color-primary)); background: var(--soft); border-color: transparent; font-size: var(--haedo-text-control); }
 .life-reader-writing-actions { margin-bottom: 24px; }
 .life-version-field { max-width: 400px; margin: 0 0 28px; }
 .life-source-details { margin: 0 0 28px; padding: 20px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 76px; }
@@ -192,7 +192,7 @@ html.auth-pending [data-private] { display: none !important; }
 div.life-source-text { font-size: 18px; line-height: 1.95; white-space: pre-wrap; word-break: keep-all; overflow-wrap: anywhere; padding: 0; margin-bottom: 48px; scroll-margin-top: 80px; }
 textarea.life-source-text { min-height: 340px; max-height: 70vh; padding: 16px; font-size: var(--haedo-text-body); line-height: 1.95; word-break: keep-all; overflow-wrap: anywhere; }
 .life-excerpt-panel { border-top: 1px solid var(--line); padding: 24px 0; margin-top: 28px; scroll-margin-top: 76px; }
-.life-selection { padding: 0 0 0 20px; border-left: 1px solid var(--color-primary); margin: 20px 0; max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; line-height: 1.9; }
+.life-selection { padding: 0 0 0 20px; border-left: 1px solid var(--ui-accent-line, var(--color-primary)); margin: 20px 0; max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; line-height: 1.9; }
 .life-external { display: inline-block; min-height: 44px; padding: 12px 0; }
 .life-details { margin: 20px 0; padding: 12px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); min-width: 0; }
 .life-details summary { min-height: 44px; padding: 8px 0; font-size: var(--haedo-text-control); line-height: 1.7; }
@@ -237,7 +237,7 @@ textarea.life-source-text { min-height: 340px; max-height: 70vh; padding: 16px; 
 .life-sync-state-panel h3 { font-size: var(--haedo-text-body); }
 .life-sync-state-panel > .life-actions { margin-top: 8px; }
 .life-sync-status { display: flex; align-items: center; gap: 12px; padding: 12px 0 0; font-size: 16px; font-weight: var(--ui-label-weight, 550); word-break: keep-all; overflow-wrap: anywhere; }
-.life-sync-status svg { flex: 0 0 20px; width: 20px; height: 20px; color: var(--color-primary); }
+.life-sync-status svg { flex: 0 0 20px; width: 20px; height: 20px; color: var(--ui-accent-text, var(--color-primary)); }
 .life-sync-state-panel[data-sync-state=error] .life-sync-status svg,.life-sync-state-panel[data-sync-state=read_error] .life-sync-status svg { color: var(--color-error); }
 details.life-sync-account { display: block; width: 100%; margin: 12px 0 0; overflow-wrap: anywhere; }
 .life-sync-account > p { margin: 12px 0 0; }
@@ -262,7 +262,7 @@ details.life-sync-account { display: block; width: 100%; margin: 12px 0 0; overf
 .life-batch-next { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .life-batch-rows { display: grid; grid-template-columns: minmax(0,1fr); gap: 16px; width: 100%; min-width: 0; }
 .life-batch-row { padding: 20px 0; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 12px; min-width: 0; overflow-wrap: anywhere; }
-.life-batch-row[data-batch-state=applied] { border-color: var(--color-primary); }
+.life-batch-row[data-batch-state=applied] { border-color: var(--ui-accent-line, var(--color-primary)); }
 .life-batch-row[data-batch-state=failed] { border-color: var(--color-error); }
 .life-batch-row .life-help { margin: 0; }
 .life-batch-row .life-actions { margin-top: auto; padding-top: 8px; }
@@ -313,11 +313,11 @@ body.haedo-shell[data-haedo-section=manage] .life-toolbar.haedo-page-heading { p
 .life-main[data-mode=topics] > .life-details { margin-top: 0; }
 .life-destinations { margin: 0; }
 .life-destination { display: flex; align-items: center; gap: 16px; min-height: 88px; padding: 20px 0; border-bottom: 1px solid var(--line); text-decoration: none; color: var(--ink); transition: color var(--motion-quick) ease; }
-.life-destination:hover { color: var(--color-primary); }
+.life-destination:hover { color: var(--ui-accent-text, var(--color-primary)); }
 .life-destination-copy { display: flex; flex: 1; flex-direction: column; gap: 4px; min-width: 0; }
 .life-destination-copy strong { font-size: var(--haedo-text-control); font-weight: 600; word-break: keep-all; overflow-wrap: anywhere; }
 .life-destination > .life-glyph { color: var(--ink-soft); }
-.life-destination > .life-glyph:first-child { box-sizing: content-box; padding: 12px; border-radius: var(--ui-tile-radius, 14px); background: var(--soft); color: var(--color-primary); }
+.life-destination > .life-glyph:first-child { box-sizing: content-box; padding: 12px; border-radius: var(--ui-tile-radius, 14px); background: var(--soft); color: var(--ui-accent-text, var(--color-primary)); }
 .life-destinations > .life-destination:nth-child(2) > .life-glyph:first-child { background: var(--mint); color: var(--mint-ink); }
 .life-destinations > .life-destination:nth-child(3) > .life-glyph:first-child { background: var(--sky); color: var(--sky-ink); }
 .life-destination > .life-glyph:last-child { transform: rotate(-90deg); }
