@@ -110,13 +110,14 @@ async function assertOneLine(row, names, where) {
     where + ': 44px controls on one line: ' + JSON.stringify(row));
   assert.ok(row.items.at(-1).right <= row.composeLeft && row.items[0].left >= 0 && row.overflow <= 0, where + ': beside 글쓰기, nothing off screen: ' + JSON.stringify(row));
 }
-// Publication is read from BlogSync; window.__minorForcePublic makes that read say the post is public.
+// Publication and the account state are read from BlogSync: window.__minorForcePublic makes that read say the
+// post is public, window.__minorForceStatus gives it an account state (error: 계정에 올리지 못함 + 다시 시도).
 async function configurePublication(context) {
   await context.route(base + '/assets/life/blog-sync.js', async route => {
     const response = await route.fetch(), source = await response.text();
     await route.fulfill({ response, contentType: 'application/javascript', body: source + `
       ;(()=>{const B=HaedoLife.BlogSync;if(!B)return;HaedoLife.BlogSync=Object.freeze({...B,create(...args){const s=B.create(...args);
-      return Object.freeze({...s,async getState(...a){const state=await s.getState(...a);return window.__minorForcePublic?{...state,publication:{active:true}}:state;}});}});})();` });
+      return Object.freeze({...s,async getState(...a){const state=await s.getState(...a);return {...state,...(window.__minorForcePublic?{publication:{active:true}}:{}),...(window.__minorForceStatus?{status:window.__minorForceStatus}:{})};}});}});})();` });
   });
 }
 async function header(page, width) {
@@ -389,6 +390,8 @@ async function reader(page, width) {
   });
   await page.reload(); await ready(page);
   await page.locator('#homePosts[aria-busy="false"]').waitFor();
+  // Re-review n1: the post opens with an account upload problem, so the end of the post shows 다시 시도.
+  await page.evaluate(() => { window.__minorForceStatus = 'error'; });
   await page.getByRole('button', { name: '링크가 있는 합성 글', exact: true }).click();
   await page.locator('.photo-read-heading').waitFor(); await paint(page);
   const underline = selector => page.locator(selector).evaluate(link => {
@@ -410,6 +413,13 @@ async function reader(page, width) {
     return link;
   };
   const read = await checkLink('.photo-article a[href]', 'reader');
+  // 다시 시도 is a text action: 600 ink with an underline that reaches 3:1 as well.
+  await page.locator('#photoServerStatus[data-state="error"]').waitFor();
+  const retry = await underline('#photoServerRetry');
+  assert.equal(await page.locator('#photoServerRetry').textContent(), '다시 시도');
+  assert.equal(retry.line, 'underline', '다시 시도 is underlined: ' + JSON.stringify(retry));
+  assert.ok(retry.contrast >= 3, 'the 다시 시도 underline reaches 3:1: ' + JSON.stringify(retry));
+  await page.evaluate(() => { window.__minorForceStatus = null; });
   await capture(page, 'reader-link-' + width);
   await page.getByRole('button', { name: '글 수정', exact: true }).click();
   await page.locator('.ql-editor a[href]').waitFor(); await paint(page);
@@ -485,7 +495,7 @@ async function main() {
         if (selected && selected !== name) continue;
         const context = await makeContext(browser, new FakeCloud(), 'minor-e-' + name + width, accounts.a, { viewport: { width, height: 1000 } });
         if (name==='source') await configureSourceSync(context);
-        if (name==='header') await configurePublication(context);
+        if (name==='header' || name==='reader') await configurePublication(context);
         const page = await context.newPage(); page.setDefaultTimeout(12000);
         page.on('pageerror', e => report.errors.push(e.message));
         page.on('console', m => { if (m.type() === 'error') report.consoleErrors.push(m.text()); });
