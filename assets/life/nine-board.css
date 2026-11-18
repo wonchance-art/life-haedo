@@ -11,7 +11,7 @@
 .nb-details > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; }
 .nb-details[open] > summary { margin-bottom: 12px; }
 .nb-grid,.nb-areas { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; padding: 0; margin: 20px 0 32px; list-style: none; }
-.nb-cell { min-width: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); padding: 12px; overflow-wrap: anywhere; }
+.nb-cell { min-width: 0; border: 1px solid var(--line); border-radius: var(--haedo-radius, 8px); background: var(--paper); padding: 12px; overflow-wrap: anywhere; }
 .nb-grid .pp-attachments { display: block; margin: 0; }
 .nb-grid .pp-attachment { display: block; border: 0; background: transparent; border-radius: 0; padding: 0; }
 .nb-grid .pp-visual { height: 80px; min-height: 0; }
@@ -23,7 +23,7 @@
 .nb-cell > button { min-height: 44px; }
 .nb-empty { width: 100%; min-height: 164px !important; border: 0; background: transparent; }
 .nb-empty-read { min-height: 164px; display: flex; align-items: center; justify-content: center; background: transparent; }
-.nb-area-summary { padding: 16px; border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
+.nb-area-summary { padding: 16px; border: 1px solid var(--line); border-radius: var(--haedo-radius, 8px); min-width: 0; }
 .nb-area-open { font-size: 20px; text-align: left; overflow-wrap: anywhere; max-width: 100%; }
 .nb-area-summary ul { padding-left: 20px; font-size: 15px; overflow-wrap: anywhere; }
 .nb-area-summary li { margin: 8px 0; }
@@ -40,7 +40,7 @@
 .nb-grid a { text-underline-offset: .2em; }
 .nb-image-export { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 20px; }
 .nb-image-export > label { width: 100%; }
-.nb-image-export > select { flex: 1 1 180px; min-width: 0; padding: 8px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); color: var(--ink); }
+.nb-image-export > select { flex: 1 1 180px; min-width: 0; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--haedo-control-radius, 6px); background: var(--paper); color: var(--ink); }
 .nb-image-export > p { width: 100%; margin: 4px 0 0; }
 @media (max-width: 700px) {
   .nb-grid,.nb-areas { gap: 6px; }

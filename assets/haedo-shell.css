@@ -26,6 +26,11 @@ body.haedo-shell:not(.haedo-timeline) {
   --mint:var(--haedo-soft); --mint-ink:var(--haedo-muted); --sky:var(--haedo-soft); --sky-ink:var(--haedo-muted);
   /* ui.css's own :root keeps the old values for the public pages, which do not load this file. */
   --canvas:var(--haedo-canvas); --soft:var(--haedo-selected); --field-line:#8a8984;
+  /* W5 (2026-11-16): ui.css also serves the public pages, so its old weights and radii read these app-only
+     values and fall back to the old ones elsewhere (public pages stay as they are). */
+  --ui-link-color:var(--haedo-link); --ui-label-weight:var(--haedo-weight-medium); --ui-strong-weight:var(--haedo-weight-semibold); --ui-title-weight:var(--haedo-weight-bold);
+  --ui-icon-radius:var(--haedo-control-radius); --ui-pressed-color:var(--haedo-ink); --ui-pressed-weight:var(--haedo-weight-semibold); --ui-title-hover-color:var(--haedo-ink); --ui-title-hover-line:underline;
+  --ui-accent-text:var(--haedo-ink); --ui-accent-line:var(--haedo-ink); --ui-panel-radius:var(--haedo-radius); --ui-tile-radius:var(--haedo-control-radius); --ui-item-radius:var(--haedo-control-radius); --ui-pill-radius:var(--haedo-control-radius);
   --control-radius:var(--haedo-control-radius); --surface-radius:var(--haedo-radius);
 }
 .haedo-shell *, .haedo-shell *::before, .haedo-shell *::after{box-sizing:border-box}
@@ -101,13 +106,18 @@ body.haedo-shell::before{display:none}
 .haedo-nav .haedo-nav-link>.haedo-tooltip{display:none}
 @media(hover:hover) and (pointer:fine){
  /* Hover is lighter than the current item's surface, so the two never read alike; the current item keeps its own. */
- .haedo-shell .haedo-icon-button:hover:not([aria-current=page],[aria-expanded=true]){background:var(--haedo-hover);color:var(--haedo-ink)}
+ .haedo-shell .haedo-icon-button:hover:not([aria-current=page],[aria-current=true],[aria-expanded=true],[aria-pressed=true],details[open]>summary){background:var(--haedo-hover);color:var(--haedo-ink)}
  .haedo-icon-button:hover>.haedo-tooltip{display:block}
  .haedo-brand:hover{opacity:.72}
  .haedo-nav .haedo-nav-link>.haedo-tooltip{display:none}
 }
 .haedo-icon-button:active:not(:disabled){background:var(--haedo-selected);transform:scale(.96)}
 .haedo-shell .haedo-icon-button:is([aria-current=page],[aria-expanded=true]){color:var(--haedo-ink);background:var(--haedo-selected)}
+/* W5 (2026-11-18): an icon button or menu that is open, pressed or current — in any header or screen — takes the selected
+   surface, ink and a 1.5px ink ring (the second cue; W2·W4 had one copy per screen). The global menu's current link keeps
+   its own cue (600 + indicator) and gets no ring. */
+.haedo-shell :is(.haedo-icon-button:not(.haedo-nav-link),.life-icon-button):is([aria-current=page],[aria-current=true],[aria-expanded=true],[aria-pressed=true]),
+.haedo-shell :is(.haedo-account,.life-account,.life-feature-menu)[open]>summary{background:var(--haedo-selected);color:var(--haedo-ink);box-shadow:inset 0 0 0 1.5px var(--haedo-ink)}
 .haedo-page-heading{display:flex;align-items:center;justify-content:space-between;min-height:64px;gap:16px;margin:0 0 24px;padding:0;border:0}
 .haedo-heading-title,.haedo-heading-actions{display:flex;align-items:center;gap:8px;min-width:0}
 .haedo-heading-title{flex:1}.haedo-heading-actions{flex:none}
@@ -138,6 +148,12 @@ body.haedo-shell::before{display:none}
 .haedo-account-panel .p-account{margin:0;color:var(--haedo-muted);font-size:var(--haedo-text-meta)}
 .haedo-account-host{position:absolute;z-index:45;top:12px;right:max(48px,calc((100% - var(--haedo-nav-width) - 720px)/2));width:44px}
 body.haedo-shell:not([data-haedo-section=manage]) #lifeAccountHost{display:none}
+/* A link drawn as a bordered button (로그인 and the like) is a button: its border is the cue, not an underline (W5). */
+.haedo-shell a.life-button{text-decoration:none}
+/* Links inside text take the body ink, so the underline is their only cue: it uses the field-line token (3.50:1 on white,
+   ≥3:1 on the soft surface; 총괄 결정 11-18, same value as the W3 reader). Hover draws it in ink. */
+.haedo-shell a:not([class]){text-decoration-color:var(--field-line,#8a8984)}
+@media(hover:hover) and (pointer:fine){.haedo-shell a:not([class]):hover{text-decoration-color:currentColor}}
 .haedo-shell .life-primary,.haedo-shell .p-button.primary{background:var(--haedo-accent);color:#fff;border-color:var(--haedo-accent);border-radius:var(--haedo-control-radius);font-weight:600}
 .haedo-shell .life-primary:hover:not(:disabled),.haedo-shell .p-button.primary:hover:not(:disabled){background:var(--haedo-accent-hover);border-color:var(--haedo-accent-hover);color:#fff}
 .haedo-shell .life-primary:active:not(:disabled),.haedo-shell .p-button.primary:active:not(:disabled){background:var(--haedo-accent-active);color:#fff}
@@ -170,7 +186,16 @@ body.haedo-shell:not([data-haedo-section=manage]) #lifeAccountHost{display:none}
    The page is white now, so they take the soft surface or a field ring. Kept here, under .haedo-shell, so the
    public pages (ui.css without this file) keep their current look. */
 .haedo-shell .life-search-bar{background:var(--haedo-paper);box-shadow:inset 0 0 0 1px var(--field-line);border-radius:var(--haedo-control-radius)}
-.haedo-shell :is(.life-selection-bar,.life-import-methods,.wb-share-confirm){background:var(--haedo-soft)}
+.haedo-shell :is(.life-selection-bar,.wb-share-confirm){background:var(--haedo-soft)}
+/* 가져오기 방식 (본문 붙여넣기 · 텍스트 파일 · 링크 보관): letter tabs, not a grey segmented box (contract 탭, W5).
+   They stay aria-pressed buttons; the pressed one is ink 600 with a 2px ink line under it (two cues). */
+.haedo-shell .life-import-methods{display:flex;flex-wrap:wrap;gap:0;padding:0;background:transparent;border-radius:0;box-shadow:inset 0 -1px 0 var(--haedo-line)}
+.haedo-shell .life-import-methods .life-button{position:relative;flex:none;min-height:44px;padding:0 12px;border:0;border-radius:0;background:transparent;color:var(--haedo-muted);font-weight:var(--haedo-weight-regular)}
+.haedo-shell .life-import-methods .life-button:first-child{padding-left:0}
+.haedo-shell .life-import-methods .life-button:hover{background:transparent;color:var(--haedo-ink)}
+.haedo-shell .life-import-methods .life-button[aria-pressed=true]{background:transparent;color:var(--haedo-ink);font-weight:var(--haedo-weight-semibold)}
+.haedo-shell .life-import-methods .life-button[aria-pressed=true]::after{content:"";position:absolute;left:12px;right:12px;bottom:0;height:2px;background:var(--haedo-ink)}
+.haedo-shell .life-import-methods .life-button[aria-pressed=true]:first-child::after{left:0}
 .haedo-shell .home-post-media{background:var(--haedo-soft)}
 /* blog-manager.css (read-only 공개 이름·소개 fields) and collection.css (candidate card) also filled with the canvas. */
 .haedo-shell :is(.blog-manager-profile-editor input[readonly],.blog-manager-profile-editor textarea[readonly],.cl-candidate){background:var(--haedo-soft)}
@@ -180,6 +205,23 @@ body.haedo-shell:not([data-haedo-section=manage]) #lifeAccountHost{display:none}
 /* States that showed only by the selected surface also change weight or draw a ring (two cues). */
 .haedo-shell .life-source-select[aria-pressed=true]{box-shadow:inset 0 0 0 1.5px var(--haedo-ink)}
 .haedo-shell .life-feature-menu-panel .life-destination[aria-current=page],.haedo-shell .life-find-tabs button[aria-pressed=true]{font-weight:600}
+/* 2026-11-16 노션 방향 W2 머리 (notion-visual-contract.md 머리줄), shared by 노트·일정·자료·뉴스·설정 (moved from home.css, W5): from 1101px. The sticky top row is 44px:
+ * the path (14px muted, the menu's current item, aria-hidden) and the actions. The title is the large page title
+ * (34px 700) in its own band after that row, so it scrolls with the body (ui.js renderHeader). Up to 1100px the one-row
+ * heading stays as it was. */
+.haedo-heading-path { display: none; }
+@media (min-width: 1101px) {
+  .haedo-shell .life-toolbar.haedo-page-heading[data-page-head] { min-height: 44px; margin-bottom: 0; }
+  .life-toolbar[data-page-head] > .haedo-heading-path { display: flex; flex: 1; align-items: center; min-width: 0; min-height: 44px; color: var(--haedo-muted); font-size: 14px; line-height: 1.5; }
+  /* 최신 내용 확인 joins the 44px row at its end instead of taking a whole second line of the sticky header (W5).
+     It is last in the DOM too, so the Tab order matches. Up to 1100px it keeps its own line as before. */
+  .haedo-shell .life-toolbar[data-page-head] > .life-refresh { flex: none; flex-basis: auto; margin-left: 4px; }
+  .haedo-title-band { max-width: none; margin: 24px 0 8px; }
+  .haedo-title-band > .haedo-heading-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .haedo-title-band h1.life-page-title { margin: 0; color: var(--haedo-ink); font: var(--haedo-weight-bold) var(--haedo-text-page-title) / 1.25 var(--haedo-font); letter-spacing: -.01em; overflow-wrap: anywhere; word-break: keep-all; }
+  .haedo-title-band h1.life-page-title:focus { outline: none; }
+  .haedo-title-band h1.life-page-title:focus-visible { outline: 2px solid var(--haedo-focus); outline-offset: 4px; border-radius: 4px; }
+}
 @media(max-width:1100px) and (min-width:761px){
  :root{--haedo-nav-width:88px}
  .haedo-nav{width:var(--haedo-nav-width);left:0;padding:12px;align-items:center}.haedo-nav .haedo-nav-link{width:64px;height:60px;flex-basis:60px;flex-direction:column;justify-content:center;gap:4px;padding:8px 4px;font-size:var(--haedo-text-badge)}
@@ -245,8 +287,11 @@ body.haedo-shell:not([data-haedo-section=manage]) #lifeAccountHost{display:none}
  body.haedo-shell,.haedo-nav,.haedo-account-panel{background:Canvas;color:CanvasText}
  .haedo-account-panel{border-color:CanvasText}.haedo-shell .haedo-icon-button{color:ButtonText}
  .haedo-shell :is(.haedo-nav-link,a.haedo-nav-compose)[aria-current=page]{color:Highlight;outline:2px solid Highlight;outline-offset:-2px}
+ .haedo-shell :is(.haedo-icon-button:not(.haedo-nav-link),.life-icon-button):is([aria-current=page],[aria-current=true],[aria-expanded=true],[aria-pressed=true]),
+ .haedo-shell :is(.haedo-account,.life-account,.life-feature-menu)[open]>summary{outline:2px solid Highlight;outline-offset:-2px}
  .haedo-shell :is(a,button,summary,input,select,textarea):focus-visible{outline-color:Highlight}
  .haedo-tooltip{background:CanvasText;color:Canvas;border:1px solid CanvasText}
+ .haedo-shell .life-import-methods .life-button[aria-pressed=true]::after{background:CanvasText}
 }
 .haedo-brand-mark { filter:grayscale(1); }
 body.haedo-shell:has(> #lifeWelcome:not([hidden])) { padding-left:0; }

@@ -6,9 +6,8 @@
 /* 머리: 큰 제목 줄(1101px 이상)의 자료 단추와, 열렸거나 켜진 아이콘 단추의 두 번째 표시(선택 면 + 1.5px 먹색 테). */
 .haedo-title-band .life-title-button { display: inline-flex; align-items: center; min-width: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 0; background: none; color: var(--haedo-ink); font: inherit; }
 body.haedo-shell[data-haedo-section=records] .life-toolbar :is(.haedo-icon-button, .life-icon-button):is([aria-current=page], [aria-current=true], [aria-expanded=true], [aria-pressed=true]),
-body.haedo-shell[data-haedo-section=records] .life-toolbar .life-feature-menu[open] > summary,
-#lifeMain[data-mode=sources] :is(.life-icon-button:is([aria-expanded=true], [aria-pressed=true]), .life-feature-menu[open] > summary, .source-folder-assignment[open] > .sf-assignment-toggle),
-.records-pane .life-icon-button[aria-expanded=true] { background: var(--haedo-selected); color: var(--haedo-ink); box-shadow: inset 0 0 0 1.5px var(--haedo-ink); }
+/* Icon buttons and ⋯ menus take the common second cue (haedo-shell.css, W5); the folder toggle is a summary of its own. */
+#lifeMain[data-mode=sources] .source-folder-assignment[open] > .sf-assignment-toggle { background: var(--haedo-selected); color: var(--haedo-ink); box-shadow: inset 0 0 0 1.5px var(--haedo-ink); }
 /* 자료 메뉴 (⋯)와 행 메뉴: 떠 있는 흰 면, 정한 그림자, 8px 모서리, 항목 44px. */
 .haedo-shell :is(#lifeRecordsMenu, .records-row-more) > .life-feature-menu-panel { border-radius: var(--haedo-radius); box-shadow: 0 0 0 1px rgba(15, 15, 15, .05), 0 3px 6px rgba(15, 15, 15, .1), 0 9px 24px rgba(15, 15, 15, .2); }
 .haedo-shell :is(#lifeRecordsMenu, .records-row-more) .life-destination { border-radius: var(--haedo-control-radius); color: var(--haedo-ink); }
@@ -126,16 +125,16 @@ body.haedo-shell[data-haedo-section=records] .life-toolbar .life-feature-menu[op
 
 /* 검색 칸: 44px, --field-line 테두리, 흰 바탕(haedo-shell.css). 칸 안 오른쪽 끝에 지우기(글자가 있을 때)와 검색 필터. */
 .life-search-tools { display: flex; flex: none; align-items: center; gap: 0; }
-.haedo-shell #lifeMain[data-mode=sources] .life-search-bar, .haedo-shell .records-pane .life-search-bar { min-height: 44px; margin-bottom: 8px; padding: 0 0 0 12px; }
-#lifeMain[data-mode=sources] .life-search-bar input, .records-pane .life-search-bar input { min-height: 44px; padding-block: 0; background: transparent; }
-#lifeMain[data-mode=sources] .life-search-bar:has(input:placeholder-shown) [id$=SearchClear], .records-pane .life-search-bar:has(input:placeholder-shown) [id$=SearchClear] { display: none; }
+.haedo-shell #lifeMain:is([data-mode=sources], [data-mode=topics]) .life-search-bar, .haedo-shell .records-pane .life-search-bar { min-height: 44px; margin-bottom: 8px; padding: 0 0 0 12px; }
+#lifeMain:is([data-mode=sources], [data-mode=topics]) .life-search-bar input, .records-pane .life-search-bar input { min-height: 44px; padding-block: 0; background: transparent; }
+#lifeMain:is([data-mode=sources], [data-mode=topics]) .life-search-bar:has(input:placeholder-shown) [id$=SearchClear], .records-pane .life-search-bar:has(input:placeholder-shown) [id$=SearchClear] { display: none; }
 /* 입력에 초점이 있으면 칸 전체에 초점 링 하나만 보인다(입력의 링과 겹치지 않게). 칸 안 단추는 자기 링을 쓴다.
  * 브라우저의 검색 지우기 표시는 숨긴다. 같은 일을 하는 검색어 지우기 단추가 옆에 있다. */
-#lifeMain[data-mode=sources] .life-search-bar:focus-within, .records-pane .life-search-bar:focus-within { outline: none; }
-#lifeMain[data-mode=sources] .life-search-bar:has(input:focus-visible), .records-pane .life-search-bar:has(input:focus-visible) { outline: 3px solid var(--haedo-focus); outline-offset: 2px; }
-#lifeMain[data-mode=sources] .life-search-bar input:focus-visible, .records-pane .life-search-bar input:focus-visible { outline: none; }
-#lifeMain[data-mode=sources] .life-search-bar input[type=search]::-webkit-search-cancel-button, .records-pane .life-search-bar input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
-#lifeMain[data-mode=sources] .life-filter-panel { margin: 8px 0 16px; }
+#lifeMain:is([data-mode=sources], [data-mode=topics]) .life-search-bar:focus-within, .records-pane .life-search-bar:focus-within { outline: none; }
+#lifeMain:is([data-mode=sources], [data-mode=topics]) .life-search-bar:has(input:focus-visible), .records-pane .life-search-bar:has(input:focus-visible) { outline: 3px solid var(--haedo-focus); outline-offset: 2px; }
+#lifeMain:is([data-mode=sources], [data-mode=topics]) .life-search-bar input:focus-visible, .records-pane .life-search-bar input:focus-visible { outline: none; }
+#lifeMain:is([data-mode=sources], [data-mode=topics]) .life-search-bar input[type=search]::-webkit-search-cancel-button, .records-pane .life-search-bar input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+#lifeMain:is([data-mode=sources], [data-mode=topics]) .life-filter-panel { margin: 8px 0 16px; }
 /* 기록 선택 중 행 왼쪽 끝의 선택 단추: 도움말이 화면 왼쪽으로 잘리지 않게 단추의 왼쪽 선에서 시작한다. */
 .records-row .life-source-select > .life-tooltip { left: 0; transform: none; width: max-content; max-width: min(280px, calc(100vw - 48px)); white-space: normal; word-break: keep-all; overflow-wrap: anywhere; }
 .records-row-tools { display: flex; flex: none; align-items: center; }

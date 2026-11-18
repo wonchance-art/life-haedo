@@ -419,11 +419,12 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
  *   still named by the whole date: the short text is aria-hidden and the whole one is hidden from sight only.
  * - To 350px the title's size follows that column. 6.3em holds the widest title measured for this year (6.04em), so it
  *   is one line at 23px on a 320px screen and 28px again from 351px (27.9px at 350px). A date of another year still
- *   takes two lines there. */
+ *   takes two lines there. W5 (Designer 판정): the size does not go under 24px, where the widest title (6.04em = 145px)
+ *   still fits the 146px column at 320px. */
 @media (max-width: 374px) {
   .life-toolbar[data-schedule] .schedule-title-full { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .life-toolbar[data-schedule] .schedule-title-short { display: inline; }
-  .life-toolbar[data-schedule] .haedo-heading-title > h1 { font-size: clamp(22px, calc((100vw - 174px) / 6.3), 28px); }
+  .life-toolbar[data-schedule] .haedo-heading-title > h1 { font-size: clamp(24px, calc((100vw - 174px) / 6.3), 28px); }
 }
 @media (prefers-reduced-motion: reduce) { .life-schedule[aria-busy=true] .schedule-body { transition: none; } }
 @media (forced-colors: active) {

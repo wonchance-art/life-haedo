@@ -22,7 +22,7 @@
 .mw-compare{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px;align-items:start}
 .mw-material{min-width:0;border-top:1px solid var(--line,#e3e9e6);padding-top:16px}
 .mw-material-title{margin-top:0!important;font-size:18px!important;line-height:1.65!important}
-.mw-material-body{display:block;box-sizing:border-box;width:100%;min-height:260px;max-height:520px;padding:14px;border:1px solid var(--field-line,#86968d);border-radius:12px;background:var(--paper,#fff);color:var(--ink,#182522);font:inherit;font-size:16px;line-height:1.85;white-space:pre-wrap;overflow-wrap:anywhere;cursor:text}
+.mw-material-body{display:block;box-sizing:border-box;width:100%;min-height:260px;max-height:520px;padding:14px;border:1px solid var(--field-line,#86968d);border-radius:var(--haedo-radius, 8px);background:var(--paper,#fff);color:var(--ink,#182522);font:inherit;font-size:16px;line-height:1.85;white-space:pre-wrap;overflow-wrap:anywhere;cursor:text}
 .mw-material-quote,.mw-block blockquote{margin:16px 0;padding:8px 16px;border:0;border-left:1px solid var(--field-line,#86968d);line-height:1.85;white-space:pre-wrap;overflow-wrap:anywhere}
 .mw-quote-actions{display:flex;flex-wrap:wrap;gap:8px;margin-block:12px 20px}
 .mw-material-note{box-sizing:border-box;width:100%;font:inherit;font-size:16px;line-height:1.8}

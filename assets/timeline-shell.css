@@ -2,12 +2,18 @@
 html:has(> body.haedo-timeline) { scroll-behavior: auto; }
 body.haedo-timeline { padding-left: var(--haedo-nav-width, 72px); }
 @media (min-width: 1101px) {
-  body.haedo-timeline { padding-left: max(var(--haedo-nav-width, 216px), calc((100vw - 1000px) / 2 + 208px)); }
+  /* The editor's content (inside .wrap's 48px padding) starts where the 768px app frame starts on every other
+     screen (목표·습관·연표 목록·노트: nav + (100% − 768px)/2 + 24px), whatever the menu width (W5, 2026-11-18). */
+  body.haedo-timeline { padding-left: calc(var(--haedo-nav-width, 240px) + max(16px, (100% - var(--haedo-nav-width, 240px) - 768px) / 2) - 24px); }
 }
 .haedo-timeline > header { overflow: visible; padding: 0; border: 0; z-index: 30; }
 .haedo-timeline > header::after { display: none; }
 .haedo-timeline .wrap, .haedo-timeline #sec-canvas .wrap {
   width: 100%; max-width: 1216px; margin-inline: auto; padding-inline: 48px;
+}
+@media (min-width: 1101px) {
+  /* Left-aligned in the wide frame, so on very wide windows the content does not drift right of the other screens. */
+  .haedo-timeline .wrap, .haedo-timeline #sec-canvas .wrap { margin-inline: 0 auto; }
 }
 .haedo-timeline header .wrap { padding-top: 24px; padding-bottom: 0; }
 .haedo-timeline .haedo-page-heading { margin-bottom: 20px; }
@@ -23,21 +29,21 @@ body.haedo-timeline { padding-left: var(--haedo-nav-width, 72px); }
 .haedo-timeline .timeline-summary-panel {
   position: absolute; z-index: 50; top: 54px; right: 0; width: 300px;
   max-width: calc(100vw - 48px); padding: 20px; border: 1px solid var(--haedo-line);
-  border-radius: 12px; background: var(--haedo-paper); color: var(--haedo-ink);
+  border-radius: var(--haedo-radius, 8px); background: var(--haedo-paper); color: var(--haedo-ink);
 }
 .haedo-timeline .app-bar { position: static; inset: auto; display: flex; flex-direction: column; align-items: stretch; gap: 8px; pointer-events: auto; }
 .haedo-timeline .app-bar label { color: var(--haedo-muted); font-size: 13px; }
-.haedo-timeline #docSel { min-height: 44px; height: auto; max-width: 100%; width: 100%; padding: 8px 30px 8px 12px; border: 1px solid var(--field-line); border-radius: 8px; background-color: var(--haedo-paper); color: var(--haedo-ink); font-size: 16px; }
+.haedo-timeline #docSel { min-height: 44px; height: auto; max-width: 100%; width: 100%; padding: 8px 30px 8px 12px; border: 1px solid var(--field-line); border-radius: var(--haedo-control-radius, 6px); background-color: var(--haedo-paper); color: var(--haedo-ink); font-size: 16px; }
 .haedo-timeline .head-right { display: flex; flex-direction: column; align-items: stretch; min-width: 0; gap: 12px; margin-top: 20px; }
 .haedo-timeline .hero { display: flex; align-items: stretch; gap: 0; }
 .haedo-timeline .hero-fig { min-height: 72px; padding: 8px 0; text-align: left; color: var(--haedo-ink); }
 .haedo-timeline .hero-fig:hover { opacity: 1; background: var(--haedo-soft); }
 .haedo-timeline .hero-k { color: var(--haedo-muted); font: 400 13px/1.7 var(--haedo-font); letter-spacing: 0; }
-.haedo-timeline .hero-v { margin-top: 4px; color: var(--haedo-ink); font: 650 28px/1.3 var(--haedo-font); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.haedo-timeline .hero-v { margin-top: 4px; color: var(--haedo-ink); font: 700 28px/1.3 var(--haedo-font); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
 .haedo-timeline .hero-dots { justify-content: flex-start; gap: 0; }
 .haedo-timeline .hero-dots button { position: relative; width: 44px; height: 44px; border-radius: 50%; background: transparent; }
 .haedo-timeline .hero-dots button::after { content: ''; position: absolute; top: 19px; left: 19px; width: 6px; height: 6px; border-radius: 50%; background: var(--haedo-muted); }
-.haedo-timeline .hero-dots button.on::after { background: var(--haedo-accent); width: 16px; left: 14px; border-radius: 4px; }
+.haedo-timeline .hero-dots button.on::after { background: var(--haedo-ink); width: 16px; left: 14px; border-radius: 4px; }
 .haedo-timeline .hero-dots button:hover { background: var(--haedo-soft); }
 .haedo-timeline .head-right .stat-cards { display: grid; grid-template-columns: 1fr 1fr; width: 100%; padding-top: 16px; border-top: 1px solid var(--haedo-line); gap: 16px; }
 .haedo-timeline .head-right .stat { min-width: 0; padding: 0; border: 0; background: transparent; }
@@ -49,19 +55,19 @@ body.haedo-timeline { padding-left: var(--haedo-nav-width, 72px); }
 /* Icon controls reserve the same 44px area in every view. The selected time range stays explicit. */
 .haedo-timeline .workspace-toolbar { gap: 12px; margin: 0 0 16px; padding-bottom: 12px; border-bottom: 1px solid var(--haedo-line); }
 .haedo-timeline .view-switch { padding: 0; gap: 0; }
-.haedo-timeline .view-switch button { display: inline-flex; width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 12px; border: 0; border-radius: 50%; color: var(--haedo-muted); }
-.haedo-timeline .view-switch button.on { color: var(--haedo-accent); background: var(--haedo-soft); }
+.haedo-timeline .view-switch button { display: inline-flex; width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 12px; border: 0; border-radius: var(--haedo-control-radius, 6px); color: var(--haedo-muted); }
+.haedo-timeline .view-switch button.on { color: var(--haedo-ink); background: var(--haedo-selected); box-shadow: inset 0 0 0 1.5px var(--haedo-ink); }
 .haedo-timeline .tool-actions, .haedo-timeline .workspace-actions, .haedo-timeline .edit-tools { gap: 0; }
 .haedo-timeline .edit-tools { padding-right: 8px; margin-right: 8px; border-color: var(--haedo-line); }
-.haedo-timeline .tool-button { width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 12px; border-radius: 50%; color: var(--haedo-muted); background: transparent; }
+.haedo-timeline .tool-button { width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 12px; border-radius: var(--haedo-control-radius, 6px); color: var(--haedo-muted); background: transparent; }
 .haedo-timeline .ui-icon { width: 20px; height: 20px; stroke-width: 2; }
 .haedo-timeline :is(.tool-button, .view-switch button):hover:not(:disabled), .haedo-timeline .tool-select summary:hover { background: var(--haedo-soft); color: var(--haedo-ink); }
-.haedo-timeline :is(.tool-button.on, #btnMap.on, #btnGrid.on) { color: var(--haedo-accent); background: var(--haedo-soft); }
+.haedo-timeline :is(.tool-button.on, #btnMap.on, #btnGrid.on) { color: var(--haedo-ink); background: var(--haedo-selected); box-shadow: inset 0 0 0 1.5px var(--haedo-ink); }
 .haedo-timeline :is(#btnMap, #btnGrid, #btnSearch) { color: var(--haedo-muted); }
 .haedo-timeline #btnAdd { background: var(--haedo-ink); color: var(--haedo-paper); }
 .haedo-timeline #btnAdd:hover { background: #343439; }
 .haedo-timeline :is(button, select):disabled { opacity: .4; }
-.haedo-timeline .tool-select summary { min-height: 44px; padding-inline: 8px; border-radius: 8px; color: var(--haedo-ink); font-size: 14px; gap: 6px; }
+.haedo-timeline .tool-select summary { min-height: 44px; padding-inline: 8px; border-radius: var(--haedo-control-radius, 6px); color: var(--haedo-ink); font-size: 14px; gap: 6px; }
 .haedo-timeline .tool-select summary > .ui-icon:first-child { width: 20px; height: 20px; }
 .haedo-timeline .tool-select summary > .ui-icon:last-child { width: 12px; height: 12px; opacity: 1; color: var(--haedo-muted); }
 .haedo-timeline .tool-select summary > span { max-width: 70px; }
@@ -69,7 +75,7 @@ body.haedo-timeline { padding-left: var(--haedo-nav-width, 72px); }
 .haedo-timeline .tool-popover { color: var(--haedo-ink); border-color: var(--haedo-line); background: var(--haedo-paper); box-shadow: none; }
 .haedo-timeline :is(.lay-chip, .bar-button, .trip-btn, .guide-link) { min-height: 44px; min-width: 44px; font-size: 14px; color: var(--haedo-muted); background: transparent; letter-spacing: 0; opacity: 1; transform: none; }
 .haedo-timeline :is(.lay-chip, .bar-button, .trip-btn, .guide-link):hover { color: var(--haedo-ink); background: var(--haedo-soft); transform: none; }
-.haedo-timeline :is(.lay-chip.on, .tool-popover .lay-chip.on) { background: var(--haedo-soft); color: var(--haedo-accent); }
+.haedo-timeline :is(.lay-chip.on, .tool-popover .lay-chip.on) { background: var(--haedo-selected); color: var(--haedo-ink); font-weight: var(--haedo-weight-semibold, 600); }
 .haedo-timeline .tool-popover #btnToday { border-color: var(--haedo-line); }
 
 /* Preserve graph palette and coordinates. Only the surrounding paper loses its decorative frame. */
@@ -85,11 +91,11 @@ body.haedo-timeline { padding-left: var(--haedo-nav-width, 72px); }
 .haedo-timeline #tl > text[font-size="10"][text-anchor="end"][font-weight="400"] { fill: var(--haedo-muted); }
 .haedo-timeline #tl g.c-main > text[font-size="11.5"][font-weight="600"] { fill: #a3243d; }
 .haedo-timeline .scrubber { opacity: 1; gap: 16px; padding: 16px 0 0; }
-.haedo-timeline .scrub-track { height: 44px; background: var(--haedo-soft); border-radius: 8px; }
-.haedo-timeline .scrub-win { border-radius: 6px; }
+.haedo-timeline .scrub-track { height: 44px; background: var(--haedo-soft); border-radius: var(--haedo-control-radius, 6px); }
+.haedo-timeline .scrub-win { border-radius: var(--haedo-control-radius, 6px); }
 .haedo-timeline .scrub-year { min-width: 112px; color: var(--haedo-muted); font: 12px/1.6 var(--haedo-font); letter-spacing: 0; font-variant-numeric: tabular-nums; }
 .haedo-timeline .chart-help { padding: 12px 0 0; color: var(--haedo-muted); font-size: 12px; }
-.haedo-timeline .start-guide { padding: 20px; border: 1px solid var(--haedo-line); border-radius: 12px; background: var(--haedo-paper); color: var(--haedo-ink); box-shadow: none; backdrop-filter: none; }
+.haedo-timeline .start-guide { padding: 20px; border: 1px solid var(--haedo-line); border-radius: var(--haedo-radius, 8px); background: var(--haedo-paper); color: var(--haedo-ink); box-shadow: none; backdrop-filter: none; }
 .haedo-timeline .start-guide strong { padding-right: 28px; }
 .haedo-timeline .start-guide p { color: var(--haedo-muted); font-size: 14px; line-height: 1.7; }
 .haedo-timeline .start-close { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; right: 8px; top: 8px; color: var(--haedo-muted); }
@@ -102,10 +108,10 @@ body.haedo-timeline { padding-left: var(--haedo-nav-width, 72px); }
 /* Reading view: complete Korean titles and descriptions, with quiet dates and values. */
 .haedo-timeline .records-view { max-width: 700px; margin-inline: auto; padding: 8px 0 0; }
 .haedo-timeline .records-head { align-items: flex-end; gap: 16px; padding: 0 0 24px; border-color: var(--haedo-line); }
-.haedo-timeline .records-head h2 { margin: 0; color: var(--haedo-ink); font: 650 20px/1.5 var(--haedo-font); letter-spacing: -.025em; }
+.haedo-timeline .records-head h2 { margin: 0; color: var(--haedo-ink); font: 600 20px/1.5 var(--haedo-font); letter-spacing: -.025em; }
 .haedo-timeline .records-head p { margin-top: 4px; color: var(--haedo-muted); font-size: 13px; }
 .haedo-timeline .record-filters { flex: 1; justify-content: flex-end; gap: 8px; min-width: 0; }
-.haedo-timeline .record-filters :is(input, select) { min-height: 44px; padding: 8px 12px; background: var(--haedo-paper); border: 1px solid var(--field-line); border-radius: 8px; color: var(--haedo-ink); font-size: 16px; }
+.haedo-timeline .record-filters :is(input, select) { min-height: 44px; padding: 8px 12px; background: var(--haedo-paper); border: 1px solid var(--field-line); border-radius: var(--haedo-control-radius, 6px); color: var(--haedo-ink); font-size: 16px; }
 .haedo-timeline .record-filters input { min-width: 0; width: 240px; }
 .haedo-timeline .record-year { padding: 28px 0 10px; color: var(--haedo-muted); font: 500 14px/1.7 var(--haedo-font); }
 .haedo-timeline .record-row { grid-template-columns: 84px 40px minmax(0, 1fr) 40px; gap: 16px; padding: 22px 0; border-color: var(--haedo-line); color: var(--haedo-ink); }
@@ -113,30 +119,30 @@ body.haedo-timeline { padding-left: var(--haedo-nav-width, 72px); }
 .haedo-timeline .record-date { align-self: start; padding-top: 4px; color: var(--haedo-muted); font: 400 12px/1.7 var(--haedo-font); font-variant-numeric: tabular-nums; }
 .haedo-timeline .record-date small { font-size: 11px; margin-top: 3px; }
 .haedo-timeline .record-badge { align-self: start; padding-top: 4px; font-size: 12px; color: var(--haedo-muted); }
-.haedo-timeline .record-copy strong { white-space: normal; overflow: visible; color: var(--haedo-ink); font-size: 17px; font-weight: 550; line-height: 1.8; word-break: keep-all; overflow-wrap: anywhere; }
+.haedo-timeline .record-copy strong { white-space: normal; overflow: visible; color: var(--haedo-ink); font-size: 17px; font-weight: var(--haedo-weight-semibold, 600); line-height: 1.8; word-break: keep-all; overflow-wrap: anywhere; }
 .haedo-timeline .record-copy > span { white-space: normal; overflow: visible; color: var(--haedo-muted); font-size: 14px; line-height: 1.8; word-break: keep-all; overflow-wrap: anywhere; }
 .haedo-timeline .record-value { align-self: start; padding-top: 4px; color: var(--haedo-muted); font-size: 13px; }
 .haedo-timeline .record-arrow { display: none; }
 .haedo-timeline .record-empty { padding: 64px 24px; color: var(--haedo-muted); font-size: 15px; line-height: 1.8; }
 
 /* Existing editors, menus and dialogs use the same paper, text and controls as the feed. */
-.haedo-timeline :is(.pop-ed, .hover-card, .ctx, .search-panel) { background: var(--haedo-paper); color: var(--haedo-ink); border: 1px solid var(--haedo-line); border-radius: 12px; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.haedo-timeline :is(.pop-ed, .hover-card, .ctx, .search-panel) { background: var(--haedo-paper); color: var(--haedo-ink); border: 1px solid var(--haedo-line); border-radius: var(--haedo-radius, 8px); box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
 .haedo-timeline .pop-ed { width: 360px; padding: 20px; gap: 16px; }
-.haedo-timeline :is(.dt-edit, .pe-title, .pe-desc, .pe-month, .pe-num, #fillText, #nbName, #nbBirth) { min-height: 44px; padding: 9px 10px; border: 1px solid var(--field-line); border-radius: 8px; background: var(--haedo-paper); color: var(--haedo-ink); font: 400 16px/1.65 var(--haedo-font) !important; }
+.haedo-timeline :is(.dt-edit, .pe-title, .pe-desc, .pe-month, .pe-num, #fillText, #nbName, #nbBirth) { min-height: 44px; padding: 9px 10px; border: 1px solid var(--field-line); border-radius: var(--haedo-control-radius, 6px); background: var(--haedo-paper); color: var(--haedo-ink); font: 400 16px/1.65 var(--haedo-font) !important; }
 .haedo-timeline .dt-edit:hover { background: var(--haedo-paper); border-color: var(--field-line); }
 .haedo-timeline .dt-edit:focus { outline: 3px solid var(--haedo-focus, #3156d3); outline-offset: 2px; background: var(--haedo-paper); }
 .haedo-timeline .dt-edit.bad { border-color: #a3243d; }
-.haedo-timeline .pe-title { font-weight: 650 !important; }
+.haedo-timeline .pe-title { font-weight: var(--haedo-weight-semibold, 600) !important; }
 .haedo-timeline .pe-desc { min-height: 100px; }
 .haedo-timeline .pe-month { width: 144px; }
 .haedo-timeline .pe-num { width: 76px; }
 .haedo-timeline .pe-row { gap: 8px; }
 .haedo-timeline :is(.dt-lab, .lay-tag) { min-height: 44px; gap: 8px; color: var(--haedo-muted); font-size: 14px; }
-.haedo-timeline :is(.dt-lab, .lay-tag) input[type=checkbox] { appearance: none; position: relative; flex: 0 0 44px; width: 44px; height: 44px; margin: 0; border: 0; border-radius: 8px; background: transparent; cursor: pointer; font-size: 16px; }
+.haedo-timeline :is(.dt-lab, .lay-tag) input[type=checkbox] { appearance: none; position: relative; flex: 0 0 44px; width: 44px; height: 44px; margin: 0; border: 0; border-radius: var(--haedo-control-radius, 6px); background: transparent; cursor: pointer; font-size: 16px; }
 .haedo-timeline :is(.dt-lab, .lay-tag) input[type=checkbox]::before { content: ''; position: absolute; inset: 12px; border: 1px solid var(--field-line); border-radius: 4px; background: var(--haedo-paper); }
 .haedo-timeline :is(.dt-lab, .lay-tag) input[type=checkbox]:checked::before { background: var(--haedo-accent); border-color: var(--haedo-accent); }
 .haedo-timeline :is(.dt-lab, .lay-tag) input[type=checkbox]:checked::after { content: ''; position: absolute; left: 18px; top: 16px; width: 6px; height: 10px; border: solid white; border-width: 0 2px 2px 0; transform: rotate(45deg); }
-.haedo-timeline :is(.btn, .pe-done, .pe-btn) { min-height: 44px; min-width: 44px; height: auto; padding: 9px 16px; background: var(--haedo-soft); color: var(--haedo-ink); border: 0; border-radius: 999px; box-shadow: none; text-shadow: none; font-size: 14px; }
+.haedo-timeline :is(.btn, .pe-done, .pe-btn) { min-height: 44px; min-width: 44px; height: auto; padding: 9px 16px; background: var(--haedo-soft); color: var(--haedo-ink); border: 0; border-radius: var(--haedo-control-radius, 6px); box-shadow: none; text-shadow: none; font-size: 14px; }
 .haedo-timeline :is(.btn-primary, .pe-done) { background: var(--haedo-ink); color: var(--haedo-paper); }
 .haedo-timeline :is(.btn-error, .danger) { color: #a3243d; background: #fff3f5; }
 .haedo-timeline .pe-actions, .haedo-timeline .pe-footer { border-color: var(--haedo-line); color: var(--haedo-muted); font-size: 12px; gap: 8px; }
@@ -206,3 +212,8 @@ body.haedo-timeline { padding-left: var(--haedo-nav-width, 72px); }
 /* Shared neutral browser surfaces; plot paints and user-selected colors remain untouched. */
 .haedo-timeline :is(.pop-ed,.ctx,.search-panel,.timeline-summary-panel) :focus-visible { outline: 3px solid var(--haedo-focus, #3156d3); outline-offset: 3px; }
 .haedo-timeline :is(input,textarea)::placeholder { color: var(--haedo-muted); opacity: 1; }
+/* W5 (2026-11-18): the pressed view, tool and scale controls show the selected surface with ink and a ring or 600 (the
+ * contract's second cue, not teal). In forced colours the surface and ring are dropped, so a Highlight outline says it. */
+@media (forced-colors: active) {
+  .haedo-timeline :is(.view-switch button.on, .tool-button.on, #btnMap.on, #btnGrid.on, .lay-chip.on) { outline: 2px solid Highlight; outline-offset: -2px; }
+}

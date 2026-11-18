@@ -286,7 +286,7 @@
 .discovery-news .discovery-filter > summary { position: relative; list-style: none; }
 .discovery-news .discovery-filter > summary::-webkit-details-marker { display: none; }
 .discovery-news .discovery-filter[open] > summary, .discovery-news .discovery-more[open] > summary { color: var(--haedo-ink, #37352f); background: var(--haedo-selected, #eaf1ed); box-shadow: inset 0 0 0 1.5px var(--haedo-ink, #37352f); }
-body.haedo-shell[data-haedo-section=news] .life-toolbar :is(.haedo-icon-button, .life-icon-button):is([aria-current=page], [aria-current=true], [aria-expanded=true], [aria-pressed=true]) { background: var(--haedo-selected); color: var(--haedo-ink); box-shadow: inset 0 0 0 1.5px var(--haedo-ink); }
+/* 머리줄 아이콘 단추의 두 번째 표시는 haedo-shell.css 공통 규칙(W5). */
 /* 정렬·필터와 글 옵션(⋯) 안의 항목은 메뉴 항목이다(밑줄 없음, 44px, 호버 면). */
 .discovery-news :is(.discovery-filter-body, .discovery-more-body) > .life-button { border-radius: var(--haedo-control-radius, 6px); text-decoration: none; }
 @media (hover: hover) and (pointer: fine) { .discovery-news .discovery-filter-body > .life-button:hover { background: var(--haedo-hover, rgba(55, 53, 47, .04)); } }
