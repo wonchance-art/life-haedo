@@ -16,6 +16,8 @@
 .schedule-glyph-next { transform: rotate(180deg); }
 .schedule-help { font-size: 16px; font-weight: var(--haedo-weight-semibold); color: var(--ink-soft); }
 .schedule-up { display: none; }
+/* D's title with the weekday short ("11월 3일 (화)") is shown on a narrow phone only (below). */
+.schedule-title-short { display: none; }
 
 /* 일정 uses the width beside the label menu, so its heading row (and the 보기 단위 switch) stays in one
  * place across the calendar units. 노트 (mode home, the former 일정 목록) keeps the same frame and its 720px
@@ -408,6 +410,18 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
   /* Same columns as the 일정 list rows (time 44 · icon 20, 8px gaps), so content shares the list's line. */
   .schedule-row { grid-template-columns: 44px 20px minmax(0, 1fr); column-gap: 8px; }
   .schedule-post-media > .schedule-thumb { height: 180px; }
+}
+/* Narrow phones (2026-11-18, W2 review m-5; contract: the title and 오늘 ‹ › share one row). The title's column is the
+ * screen less 174px (the 16px gutter, 오늘, ‹ › and their gaps): 146px on a 320px screen, where D's "11월 3일 화요일" (175px
+ * at 28px) and W's "12.21 – 12.27" (162px) took two lines.
+ * - To 374px D shows its weekday short, "12월 25일 (금)" (169px at 28px; the whole title needs 195px). The heading is
+ *   still named by the whole date: the short text is aria-hidden and the whole one is hidden from sight only.
+ * - Under 350px the title's size follows that column. 6.3em holds the widest title of this year (6.04em), so it is one
+ *   line at 23px on a 320px screen and 28px again from 350px. A date of another year still takes two lines there. */
+@media (max-width: 374px) {
+  .life-toolbar[data-schedule] .schedule-title-full { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .life-toolbar[data-schedule] .schedule-title-short { display: inline; }
+  .life-toolbar[data-schedule] .haedo-heading-title > h1 { font-size: clamp(22px, calc((100vw - 174px) / 6.3), 28px); }
 }
 @media (prefers-reduced-motion: reduce) { .life-schedule[aria-busy=true] .schedule-body { transition: none; } }
 @media (forced-colors: active) {

@@ -2669,6 +2669,13 @@
       // list) has its own: 노트 · 통합 검색 · 글 메뉴 (2026-11-16 notes-menu).
       const scheduleParts = calendarModes.has(state.mode) && global.HaedoLife.ScheduleUI ? scheduleHeader() : null;
       if (scheduleParts) heading.textContent = scheduleParts.title;
+      // D on a narrow phone shows its weekday short so the title stays one line beside 오늘 ‹ › (schedule.css, to 374px).
+      // The heading is still named by the whole date: the short text is not read out.
+      if (scheduleParts?.titleShort) {
+        const short = node('span', scheduleParts.titleShort, 'schedule-title-short');
+        short.setAttribute('aria-hidden', 'true');
+        heading.replaceChildren(node('span', scheduleParts.title, 'schedule-title-full'), short);
+      }
       if (subviewTitles[state.mode] && state.mode !== 'external-discovery' && !(state.mode === 'page' && blogPageTask && blogMode === 'edit')) {
         const labels = { 'naver-blog': '네이버 블로그 목록으로 돌아가기', 'naver-capture': '본문·사진 검토로 돌아가기', 'account-blog': '계정 보관 상태로 돌아가기', 'external-discovery': '새 글 찾기로 돌아가기', interests: '관심 주제 편집으로 돌아가기', blog: '글 공개·보관으로 돌아가기', find: '검색 결과로 돌아가기', reflection: '회고로 돌아가기', home: '노트로 돌아가기', sources: '자료로 돌아가기', topics: '검색 결과로 돌아가기', tools: '일정으로 돌아가기', manage: '설정으로 돌아가기', backup: '백업·복원으로 돌아가기', collection: '컬렉션으로 돌아가기', activities: '묶음으로 돌아가기', page: '선택 자료 페이지로 돌아가기', books: '책으로 돌아가기', import: '가져오기로 돌아가기', write: '자료 작성으로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기' , quarter: '일정으로 돌아가기', month: '일정으로 돌아가기', week: '일정으로 돌아가기', day: '일정으로 돌아가기' };
         const origin = subviewOrigin();
