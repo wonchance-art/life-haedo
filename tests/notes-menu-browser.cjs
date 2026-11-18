@@ -545,7 +545,7 @@ async function main() {
           assert.equal(head.seen, short && width <= 374 ? short : title, scene + ': the title shown');
           assert.equal(head.lines, 1, scene + ': one line (' + JSON.stringify(head) + ')');
           assert.deepEqual([head.inside, head.row, head.overflow], [true, true, 0], scene + ': whole, on the row of 오늘 ‹ ›, no horizontal overflow');
-          assert.ok(head.size >= 22 && head.size <= 28 && (width <= 350 ? head.size < 28 : head.size === 28), scene + ': 28px from 351px, smaller to 350px, never under 22px (' + head.size + ')');
+          assert.ok(head.size >= 24 && head.size <= 28 && (width <= 350 ? head.size < 28 : head.size === 28), scene + ': 28px from 351px, smaller to 350px, never under 24px (W5) (' + head.size + ')');
           assert.equal(await page.getByRole('heading', { level: 1, name: title, exact: true }).count(), 1, scene + ': the heading is named ' + title);
           if (width === 320 && (unit === 'day' || unit === 'week')) { const file = 'schedule-title-' + unit + '-' + date + '-320.png'; await page.screenshot({ path: path.join(output, file) }); report.screenshots.push(file); }
         }
