@@ -2752,7 +2752,7 @@
           if (disposed || headingToken !== headingGeneration || state.mode !== 'page' || blogKind !== 'photo' || blogMode !== 'read') return;
           const row = main.querySelector('.photo-posts[data-mode="read"] > .photo-read-actions');
           if (back && row && !row.querySelector(':scope > button[aria-label*="돌아가기"], :scope > button[aria-label="사진 글 목록"]')) row.prepend(back);
-          if (find && row && !row.querySelector('#lifeFindOpen')) row.querySelector('.photo-read-tools')?.append(find);
+          if (find && row && !row.querySelector('#lifeFindOpen')) row.querySelector('.photo-read-tools > .photo-more')?.before(find); // W3: 통합 검색 before ⋯
         });
       }
       if (state.remoteChanged && state.mode !== 'find') {

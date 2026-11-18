@@ -14,7 +14,9 @@ const report = { scope: 'Synthetic Auth and real IndexedDB, Linux Chromium at 14
 async function paint(page) {
   await page.evaluate(async () => {
     await document.fonts.ready;
-    await Promise.all(document.getAnimations().filter(a => Number.isFinite(a.effect?.getComputedTiming().endTime)).map(a => a.finished.catch(() => {})));
+    // A press transition of an item inside a closed ⋯ (사진 포함 백업 since 2026-11-18) does not advance while the
+    // menu is closed, so its `finished` never settles: only transitions of rendered elements are awaited.
+    await Promise.all(document.getAnimations().filter(a => Number.isFinite(a.effect?.getComputedTiming().endTime) && a.effect.target?.checkVisibility?.() !== false).map(a => a.finished.catch(() => {})));
     await new Promise(requestAnimationFrame);
   });
 }
@@ -118,16 +120,45 @@ async function header(page, width) {
   report.geometry.push({ width, edit, read, editBar, readBar });
   const commonVisible = await page.locator('.life-app > .life-toolbar').isVisible();
   assert.equal(commonVisible, false, 'PhotoPost reader uses its own single command row, with no duplicate common heading');
-  // The approved phone layout may wrap the labelled controls once. The title
-  // follows that actual row height; no extra common heading or spacer returns.
+  // 2026-11-18 노션 방향 W3: the reading row is one line at every width (the phone no longer wraps its
+  // tools). The title follows that row; no extra common heading or spacer returns.
   assert.ok(Math.abs(readBar.top - editBar.top) <= 2, 'reading and editing command rows start at the same top');
   assert.ok(Math.abs((read.top - readBar.top - readBar.height) - (edit.top - editBar.top - editBar.height)) <= 2,
     'title follows its command row without extra space: ' + JSON.stringify({ read, edit, readBar, editBar }));
-  assert.ok(readBar.height >= editBar.height - 2 && readBar.height <= editBar.height + (width === 390 ? 48 : 2), 'phone controls wrap at most once; desktop keeps one row');
+  assert.ok(Math.abs(readBar.height - editBar.height) <= 2, 'the reading row is one line, as high as the editing row: ' + JSON.stringify({ readBar, editBar }));
   assert.equal(await page.getByRole('button', { name: '글 수정', exact: true }).isVisible(), true);
-  assert.equal(await page.getByRole('button', { name: '사진 포함 백업', exact: true }).isVisible(), true);
   const search = page.locator('.photo-read-actions').getByRole('button', { name: '통합 검색', exact: true });
   assert.equal(await search.isVisible(), true, 'reader has its own named search entry');
+  // W3 order: 뒤로 · 공개 알약 · 수정 · 통합 검색 · ⋯, in the document (keyboard) and on one visual line.
+  await page.locator('.photo-read-actions .photo-privacy[data-state="private"]').waitFor();
+  const row = await page.locator('.photo-read-actions').evaluate(bar => [...bar.querySelectorAll('button, summary')]
+    .filter(el => el.getClientRects().length && !el.closest('.photo-more-menu'))
+    .map(el => { const r = el.getBoundingClientRect(); return { name: el.getAttribute('aria-label') || el.textContent.trim(), left: r.left, middle: r.top + r.height / 2 }; }));
+  assert.deepEqual(row.map(item => item.name), ['노트로 돌아가기', '비공개 · 글 정보', '글 수정', '통합 검색', '더 보기']);
+  assert.ok(row.every((item, index) => !index || item.left > row[index - 1].left && Math.abs(item.middle - row[0].middle) <= 1), 'one line, left to right: ' + JSON.stringify(row));
+  // 사진 포함 백업 moved into ⋯: first item, 삭제 last. Esc closes the menu and returns focus to ⋯.
+  const backup = page.getByRole('button', { name: '사진 포함 백업', exact: true });
+  assert.equal(await backup.isVisible(), false, '사진 포함 백업 is not a separate control of the row');
+  const more = page.locator('.photo-read-actions .photo-more > summary');
+  await more.focus(); await page.keyboard.press('Enter');
+  assert.equal(await backup.isVisible(), true);
+  assert.deepEqual(await page.locator('.photo-read-actions .photo-more-menu > button').allTextContents(),
+    ['사진 포함 백업', '이 글 공개·보관', '근거 포함 파일', 'HTML 읽기 파일 받기', '사본으로 이어 쓰기', '목록에서 숨기기', '삭제']);
+  const menuBox = await page.locator('.photo-read-actions .photo-more-menu').boundingBox();
+  assert.ok(menuBox.x >= 0 && menuBox.x + menuBox.width <= width, 'the menu stays on screen: ' + JSON.stringify(menuBox));
+  assert.deepEqual(await page.locator('.photo-read-actions .photo-more-menu > button').evaluateAll(nodes => nodes.filter(el => el.getBoundingClientRect().height < 44).map(el => el.textContent)), [], 'menu items are 44px or taller');
+  await page.keyboard.press('Tab');
+  assert.equal(await backup.evaluate(el => el === document.activeElement), true, '사진 포함 백업 is the first stop inside ⋯');
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('.photo-read-actions .photo-more').evaluate(el => el.open), false);
+  assert.equal(await more.evaluate(el => el === document.activeElement), true, 'Esc returns focus to ⋯');
+  // Running it downloads the same ZIP and returns focus to ⋯ as well.
+  await more.click();
+  const download = page.waitForEvent('download'); await backup.click();
+  assert.equal((await download).suggestedFilename(), 'haedo-photo-post.zip');
+  await page.locator('.photo-posts[aria-busy="false"]').waitFor();
+  assert.equal(await page.locator('.photo-read-actions .photo-more').evaluate(el => el.open), false);
+  assert.equal(await more.evaluate(el => el === document.activeElement), true, 'after 사진 포함 백업 focus is on ⋯');
   const editLabel = await page.locator('.photo-read-edit > span').evaluate(el => {
     const box=el.getBoundingClientRect(), css=getComputedStyle(el);
     return {text:el.textContent,width:box.width,height:box.height,clipPath:css.clipPath};
@@ -155,6 +186,7 @@ async function header(page, width) {
   // A failed export remains visible above the reader; only a success notice moves below it.
   await page.evaluate(() => {window.originalCreateObjectURL=URL.createObjectURL;URL.createObjectURL=()=>{throw new Error('합성 백업 파일 생성 실패');};});
   try {
+    await page.locator('.photo-read-actions .photo-more > summary').click();
     await page.getByRole('button',{name:'사진 포함 백업',exact:true}).click();
     await page.locator('.photo-status[role=alert]').waitFor();
     assert.match(await page.locator('.photo-status[role=alert]').textContent(),/합성 백업 파일 생성 실패/);

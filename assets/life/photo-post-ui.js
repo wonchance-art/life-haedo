@@ -3692,9 +3692,10 @@
           });
       } else if (mode === "edit") renderEditor();
       else {
-        // D1 (soft redesign): one line above the title — the privacy pill that
-        // opens 글 정보, then edit, backup and more. Date and save state move
-        // to the end of the post.
+        // D1 (soft redesign) and 노션 방향 W3 (2026-11-18, notion-visual-contract.md 글 읽기): one line above the
+        // title — 뒤로 · the privacy pill that opens 글 정보 · 수정 (목록에 다시 보이기 for a hidden post) · 통합 검색
+        // (ui.js puts it before ⋯) · ⋯. 사진 포함 백업 is the first item of ⋯ and 삭제 its last. Date and save
+        // state end the post.
         const actions = el("div", null, "life-actions photo-read-actions");
         actions.classList.toggle("photo-read-standalone", standalone);
         if (readBackAction)
@@ -3704,10 +3705,19 @@
           }), "back", readBackText));
         else if (!standalone)
           actions.append(iconControl(button("사진 글 목록", list), "back", "사진 글 목록"));
-        actions.append(privacyPill());
+        const shownTitle = doc.title || (doc.photos.length ? "사진 " + doc.photos.length + "장" : "내 글");
+        // From 1101px the path follows 뒤로: the menu's current item, then this post. It repeats the menu and
+        // the title under it, so it is not read twice (the same rule as 노트·일정's path, home.css).
+        const path = el("span", null, "photo-read-path"),
+          section = document.querySelector('[data-haedo-navigation] a[data-haedo-section="' + (document.body.dataset.haedoSection || "") + '"]')?.getAttribute("aria-label");
+        path.setAttribute("aria-hidden", "true");
+        if (section) path.append(el("span", section), glyph("forward", 14));
+        path.append(el("span", shownTitle, "photo-read-path-title"));
+        actions.append(path, privacyPill());
         const tools = el("div", null, "photo-read-tools");
         if (doc.archived) tools.append(button("목록에 다시 보이기", () => archive(false)));
         else {
+          // 수정 is its word from 360px and its picture below that; the name stays 글 수정.
           const edit = button("글 수정", () => open(doc.id, true));
           edit.classList.add("photo-read-edit");
           edit.replaceChildren(glyph("edit"), el("span", "수정"));
@@ -3715,10 +3725,10 @@
           edit.title = "글 수정";
           tools.append(edit);
         }
-        tools.append(iconControl(button("사진 포함 백업", backup), "download", "사진 포함 백업"));
         const more = el("details", null, "photo-more life-details"),
           menu = el("div", null, "photo-more-menu");
         more.append(iconControl(el("summary"), "more", "더 보기"), menu);
+        menu.append(button("사진 포함 백업", backup));
         if (doc.status === "saved") {
           for (const [label, callback, action] of [["이 글 공개·보관", onManageServer, "manage"], ["근거 포함 파일", onPreservePost, "preserve"]]) {
             if (typeof callback !== "function") continue;
@@ -3743,7 +3753,7 @@
         actions.append(tools);
         host.append(actions);
         const article = el("article", null, "photo-article"),
-          heading = el("h2", doc.title || (doc.photos.length ? "사진 " + doc.photos.length + "장" : "내 글"), "photo-read-heading");
+          heading = el("h2", shownTitle, "photo-read-heading");
         if (!doc.title.trim()) heading.classList.add("life-sr-only");
         heading.tabIndex = -1;
         article.append(heading);
