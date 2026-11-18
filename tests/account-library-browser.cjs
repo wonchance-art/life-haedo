@@ -2,7 +2,7 @@
  * HTTP. Every device starts signed out. No enable/download/syncNow shortcuts.
  * BASE_URL=http://127.0.0.1:4173 node tests/account-library-browser.cjs */
 'use strict';
-const { openRecordsMenu } = require('./helpers/feature-menus.cjs');
+const { openRecordsMenu, openFolderManage, openRowFolderMove } = require('./helpers/feature-menus.cjs');
 process.env.BASE_URL ||= 'http://127.0.0.1:4173';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -58,7 +58,7 @@ async function richProfile(page, f) {
   await page.locator('#lifeSourceText').evaluate((el, range) => { if (el.firstChild?.nodeType !== Node.TEXT_NODE) throw Error('Exact raw Text node absent'); el.focus(); const r = document.createRange(); r.setStart(el.firstChild, range.start); r.setEnd(el.firstChild, range.end); const selection = getSelection(); selection.removeAllRanges(); selection.addRange(r); el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true })); }, { start, end });
   await page.locator('#lifeSourceTopic').fill('익명 언어와 독서'); await page.locator('#lifeSourceNote').fill('두 기기에서 보존할 익명 발췌'); await click(page, '#lifeSourceExcerptSave');
   await records(page); const parent = await folder(page, '익명 읽기'), child = await folder(page, '익명 언어', parent.id);
-  const assignment = page.locator('.life-source-card[data-source-id="' + f.source.id + '"] [data-source-folder-assignment]').first(); await assignment.locator(':scope > summary').click(); await assignment.locator('[data-source-folder-destination]').selectOption(child.id); await assignment.locator('[data-source-folder-apply]').click();
+  const assignment = await openRowFolderMove(page.locator('.life-source-card[data-source-id="' + f.source.id + '"]')); await assignment.locator('[data-source-folder-destination]:enabled').waitFor(); await assignment.locator('[data-source-folder-destination]').selectOption(child.id); await assignment.locator('[data-source-folder-apply]').click();
   await waitFor(() => snapshot(page), value => value.sourceFolders.assignments.some(item => item.sourceId === f.source.id && item.folderId === child.id), 'Folder assignment');
   // Explicit fixture: use actual saved-domain models/storage; no wire seeding or
   // manager replacement. All automatic replication remains production code.
@@ -73,7 +73,7 @@ async function richProfile(page, f) {
   return { parent, child, saved };
 }
 async function folder(page, name, parentId = '', id = '') {
-  const details = page.locator('#lifeFolderManage'); if (!await details.evaluate(el => el.open)) await details.locator(':scope > summary').click();
+  await openFolderManage(page); // 2026-11-18 (노션 방향 W4): from the 자료 메뉴 (⋯)
   await page.locator('#lifeFolderEdit').selectOption(id || 'new'); await page.locator('#lifeFolderName').fill(name); await page.locator('#lifeFolderParent').selectOption(parentId);
   const before = (await snapshot(page)).sourceFolders.revision; await click(page, '#lifeFolderSave');
   const saved = await waitFor(() => snapshot(page), value => value.sourceFolders.revision > before, 'Explicit folder save'); const result = saved.sourceFolders.folders.find(item => id ? item.id === id : item.name === name); assert(result); return result;
@@ -89,7 +89,7 @@ async function edit(page, f) {
 }
 async function collectionNote(page, id, note) { await page.evaluate(async ({ id, note }) => { const s = HaedoLife.Shell.storage, value = await s.readCollection(id); value.items[0].note = note; await s.saveCollection(id, value, value.revision); }, { id, note }); }
 async function freshFolderView(page) {
-  await records(page); const before = await snapshot(page), details = page.locator('#lifeFolderManage'); if (!await details.evaluate(el => el.open)) await details.locator(':scope > summary').click();
+  await records(page); const before = await snapshot(page), details = page.locator('#lifeFolderManage'); await openFolderManage(page);
   assert(before.sourceFolders.assignments.length > 0); assert(before.sourceFolders.assignments.every(item => before.bundle.sources.some(source => source.id === item.sourceId)), 'Every real assigned source is available');
   await page.locator('#lifeFolderUnavailable[hidden]').waitFor({ state: 'attached' }); assert.equal(await page.locator('#lifeFolderUnavailable').textContent(), ''); assert.doesNotMatch(await details.innerText(), /이\s*브라우저/);
   const editId = await page.locator('#lifeFolderEdit').inputValue(), saved = before.sourceFolders.folders.find(item => item.id === editId);
@@ -120,8 +120,10 @@ async function missingFolderReferenceFixture(page) {
   exactGraph(await snapshot(page), before); report.folderAvailabilityComponentFixture = observed;
 }
 async function captureThree(page) {
-  await freshFolderView(page); const details = page.locator('#lifeFolderManage'), summary = details.locator(':scope > summary'); if (!await details.evaluate(el => el.open)) await summary.click();
-  await summary.focus(); await summary.press('Space'); assert.equal(await details.evaluate(el => el.open), false); await summary.press('Enter'); assert.equal(await details.evaluate(el => el.open), true);
+  // Keyboard: ⋯ → 폴더 관리 opens the panel; Esc closes it and returns focus to ⋯ (2026-11-18 노션 방향 W4).
+  await freshFolderView(page); const details = page.locator('#lifeFolderManage'), summary = page.locator('#lifeRecordsMenu > summary'); await openFolderManage(page);
+  await page.locator('#lifeFolderEdit').focus(); await page.keyboard.press('Escape'); assert.equal(await details.isHidden(), true); assert.equal(await summary.evaluate(el => document.activeElement === el), true);
+  await summary.press('Enter'); await page.locator('#lifeFolderManageOpen').press('Enter'); assert.equal(await details.isVisible(), true);
   const before = await snapshot(page);
   for (const width of [1440, 820, 390]) {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 }); await page.evaluate(async () => { await document.fonts.ready; scrollTo(0, 0); }); await summary.focus();

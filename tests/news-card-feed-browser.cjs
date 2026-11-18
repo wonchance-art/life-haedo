@@ -345,7 +345,7 @@ async function main() {
         await setImages(page, true); await page.waitForLoadState('networkidle'); await frames(page);
         assert.deepEqual(await targets(), [], 'image cards');
         const media = await page.locator('#discoveryList .discovery-card-media').first().evaluate(node => { const rect = node.getBoundingClientRect(), card = node.closest('.discovery-article').getBoundingClientRect(); return { ratio: rect.width / rect.height, width: Math.round(rect.width), card: Math.round(card.width), radius: getComputedStyle(node).borderRadius, fit: getComputedStyle(node.firstElementChild).objectFit }; });
-        assert(Math.abs(media.ratio - 16 / 9) < 0.02, '16:9 box'); assert.equal(media.width, media.card); assert.equal(media.radius, '14px'); assert.equal(media.fit, 'cover');
+        assert(Math.abs(media.ratio - 16 / 9) < 0.02, '16:9 box'); assert.equal(media.width, media.card); assert.equal(media.radius, '8px', '--haedo-radius (노션 방향 W4, 2026-11-18)'); assert.equal(media.fit, 'cover');
         await capture(page, 'cards-on-' + width);
         await cards(page).nth(1).locator('.discovery-card-more > summary').click(); await frames(page); await capture(page, 'card-menu-' + width); await page.keyboard.press('Escape');
         await cards(page).first().locator('[data-discovery-select]').click(); await idle(page); await page.locator('#discoveryReader').waitFor(); await frames(page);

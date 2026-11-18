@@ -84,15 +84,20 @@ async function main() {
     } finally { await context.close(); }
   }
   try {
-    await check('records rows put date and time left, newest first, with stored-fact badges only', async ({ page }) => {
+    // 2026-11-18 (노션 방향 W4): the date and time moved from a left column to the end of the badge line.
+    await check('records rows end the badge line with date and time, newest first, with stored-fact badges only', async ({ page }) => {
       const ids = await seedRecords(page); await nav(page, 'records'); await page.locator('#lifeSearch').fill('도서관'); await frames(page);
       const rows = await page.locator('#lifeSearchResults > .records-row').evaluateAll(nodes => nodes.map(row => {
-        const when = row.querySelector(':scope > .records-when'), title = row.querySelector('.life-source-open');
-        return { version: row.dataset.versionId, iso: when?.dateTime, whenRight: when?.getBoundingClientRect().right, titleLeft: title?.getBoundingClientRect().left, titleHeight: title?.getBoundingClientRect().height,
+        const when = row.querySelector(':scope > .records-badges > .records-when:last-child'), title = row.querySelector('.life-source-open'), lastBadge = [...row.querySelectorAll('.records-badge')].at(-1);
+        return { version: row.dataset.versionId, iso: when?.dateTime, whenText: when?.textContent, whenLeft: when?.getBoundingClientRect().left, whenTop: when?.getBoundingClientRect().top, badgeRight: lastBadge?.getBoundingClientRect().right, titleBottom: title?.getBoundingClientRect().bottom, rowLeft: row.getBoundingClientRect().left, titleLeft: title?.getBoundingClientRect().left, titleHeight: title?.getBoundingClientRect().height,
           badges: [...row.querySelectorAll('.records-badge')].map(badge => badge.textContent) };
       }));
       assert(rows.length >= 3);
-      for (const row of rows) { assert(row.iso && row.whenRight < row.titleLeft, 'date column sits left of the title'); assert(row.titleHeight >= 44, 'row target at least 44px'); }
+      for (const row of rows) {
+        assert(row.iso && /^(\d{4}\.)?\d{1,2}\.\d{1,2} \d{2}:\d{2}$/.test(row.whenText), 'date and time as before: ' + row.whenText);
+        assert(row.whenTop >= row.titleBottom - 1 && row.whenLeft >= row.badgeRight, 'date and time end the badge line, after the last badge');
+        assert(Math.abs(row.titleLeft - row.rowLeft) <= 1, 'no date column: the title starts at the row edge'); assert(row.titleHeight >= 44, 'row target at least 44px');
+      }
       const times = rows.map(row => Date.parse(row.iso)); assert.deepEqual([...times].sort((a, b) => b - a), times, 'newest stored version first');
       const old = rows.find(row => row.version === ids.oldVersion); assert(old.badges.includes('버전 1/2') && old.badges.includes('이전 버전'));
       assert.equal(rows.find(row => row.version === ids.newVersion).badges.includes('이전 버전'), false);
