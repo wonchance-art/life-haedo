@@ -50,6 +50,7 @@
 | `assets/life/schedule.css` | 좁은 iPhone 제목 `clamp(24px, …, 28px)` |
 | `assets/life/discovery.css` | 760px 이하 탭 사이 16px |
 | `tests/notes-menu-browser.cjs:548` | 좁은 제목의 아래 한계를 새 규칙(24px)으로 바꿨다. 규칙 변경이며 단언 약화가 아니다 |
+| `tests/subview-navigation-browser.cjs:14` | 화면 제목 찾기를 한 줄 머리(`.haedo-page-heading`)와 1101px 이상 큰 제목 줄(`.haedo-title-band`) 두 곳으로 넓혔다. 앱의 `pageHeading()`과 같은 두 자리이고 제목 글자 단언은 그대로다. 가져오기·다시 찾기가 큰 제목 줄로 옮긴 데 따른 규칙 변경이다(CI run 44355081229 묶음 4에서 처음 드러남) |
 | `docs/design-review/notion-visual-contract.md`, `DESIGN.md` | 아래 "계약 갱신" |
 
 ## 계약 갱신과 남은 판정
@@ -163,7 +164,12 @@
 
 ### 브라우저 검사 결과
 
-(로컬 전체 실행이 끝나면 채운다.)
+- **GitHub CI run 44355081229**(`345cb75`):
+  - `check`, `browser_suites` 묶음 1·2·3·5·6·7, `blog`(도커 전용 3개 포함)는 모두 성공했다.
+  - 묶음 4에서는 `subview-navigation-browser` 한 단계만 실패했다(27개 중 25 통과). 1440px에서 가져오기·다시 찾기의 화면 제목을 옛 자리(`.haedo-page-heading h1`)에서 찾다가 12초 제한에 걸렸다.
+  - 원인은 W5에서 두 화면의 제목을 큰 제목 줄로 옮긴 것이다. 위 표처럼 검사의 제목 찾기를 새 자리까지 넓혔다. 로컬에서 고치기 전 같은 2건이 재현됐고, 고친 뒤 27/27 통과(종료 코드 0)했다.
+- **최종 head의 CI:** 이 보고서를 담은 커밋의 run에서 확인한다(PR #263).
+- **로컬 `pages.yml` 묶음:** 하나씩 돌린 66단계는 모두 0이었다. 진행 중에 실행 환경(컨테이너)이 다시 시작되어 나머지는 끊겼다. 그 66단계 일부는 W5 E–G 이전 판에서 돌았으므로, 최종 판의 전체 결과는 CI를 기준으로 한다.
 
 ## 남은 것·후속 후보
 

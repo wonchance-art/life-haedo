@@ -11,7 +11,9 @@ const { fixture, current, seedComposition, abortWorkbenchWrites } = require('./l
 const { instrumentStorage, inspectHome } = require('./home-entry-browser.cjs');
 const out = path.resolve('.local/subview-navigation');
 const report = { createdAt: new Date().toISOString(), scope: 'Actual app/SDK/IDB, intercepted Auth; viewport/keyboard/touch simulation only', checks: [], visual: [], consoleErrors: [], pageErrors: [], expectedErrors: 0 };
-const heading = page => page.locator('#lifeApp .haedo-page-heading h1');
+// The screen's title: in the one-row heading, or (from 1101px, W2/W4/W5 screens) in the large title band after it — the
+// same two places as the app's own pageHeading().
+const heading = page => page.locator('#lifeApp :is(.haedo-page-heading, .haedo-title-band) h1');
 async function mode(page, name) { await settle(page); await page.waitForFunction(name => document.querySelector('#lifeMain')?.dataset.mode === name, name); }
 async function back(page, target) {
   const contextualReturn = page.locator('[data-subview-return]:visible');
