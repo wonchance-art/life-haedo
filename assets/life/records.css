@@ -13,6 +13,16 @@ body.haedo-shell[data-haedo-section=records] .life-toolbar .life-feature-menu[op
 .haedo-shell :is(#lifeRecordsMenu, .records-row-more) > .life-feature-menu-panel { border-radius: var(--haedo-radius); box-shadow: 0 0 0 1px rgba(15, 15, 15, .05), 0 3px 6px rgba(15, 15, 15, .1), 0 9px 24px rgba(15, 15, 15, .2); }
 .haedo-shell :is(#lifeRecordsMenu, .records-row-more) .life-destination { border-radius: var(--haedo-control-radius); color: var(--haedo-ink); }
 .haedo-shell :is(#lifeRecordsMenu, .records-row-more) .life-destination:hover { background: var(--haedo-hover); color: var(--haedo-ink); }
+/* 자료 메뉴는 항목이 13개다. 묶음 사이를 줄이고 칸 높이를 화면에 맞춰 1440×900·820×1000·390×844에서 모두 보인다.
+ * 더 낮은 화면에서는 칸 안에서 밀어 보고, 아래에 항목이 남아 있는 동안 끝을 흐리게 한다(ui.js가 data-more를 적는다).
+ * 760px 이하에서는 ⋯ 오른쪽에 글쓰기 단추 자리(52px)가 있어 칸을 그만큼 오른쪽으로 옮긴다(320px에서 왼쪽이 잘리지 않게). */
+#lifeRecordsMenu > .life-feature-menu-panel { max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 5rem); }
+#lifeRecordsMenu > .life-feature-menu-panel h2 { margin: 4px 12px 0; }
+#lifeRecordsMenu > .life-feature-menu-panel section + section { margin-top: 4px; padding-top: 4px; }
+#lifeRecordsMenu > .life-feature-menu-panel[data-more=true]::after { content: ""; position: sticky; bottom: -8px; display: block; height: 40px; margin: -40px -8px -8px; background: linear-gradient(to bottom, rgba(255, 255, 255, 0), var(--haedo-paper, #fff)); pointer-events: none; }
+@media (max-width: 760px) {
+  #lifeRecordsMenu > .life-feature-menu-panel { inset-inline-end: -36px; max-height: calc(100dvh - env(safe-area-inset-top, 0px) - var(--haedo-dock-clearance, 0px) - 3rem); }
+}
 /* 기록 선택이 켜져 있으면 선택 면 + 600 + 1.5px 먹색 테(바탕만으로 나타내지 않는다). */
 .haedo-shell #lifeRecordsMenu .life-destination[aria-pressed=true] { background: var(--haedo-selected); box-shadow: inset 0 0 0 1.5px var(--haedo-ink); }
 .haedo-shell #lifeRecordsMenu .life-destination[aria-pressed=true] .life-destination-copy strong { font-weight: var(--haedo-weight-semibold); }
@@ -74,6 +84,11 @@ body.haedo-shell[data-haedo-section=records] .life-toolbar .life-feature-menu[op
 @media (hover: hover) and (pointer: fine) {
   .records-row :is(.life-source-open, .records-row-open, .records-excerpt-open):hover::after { inset: 0 -12px; border-radius: var(--haedo-radius); background: var(--haedo-hover); }
 }
+/* 누르는 범위는 행 전체다. 공통 단추의 누름 축소(haedo-motion.css의 transform)는 이 단추에 쓰지 않는다: transform이 걸리면
+ * 행 전체로 늘린 ::after가 단추 크기로 줄어, 꼬리표 줄·발췌·여백을 누른 손을 뗄 때 다른 요소가 받아 원문이 열리지 않는다.
+ * 누름 반응은 행 면으로 보인다. */
+.haedo-shell .records-row :is(.life-source-open, .records-row-open, .records-excerpt-open):active:not(:disabled):not([aria-busy=true]) { transform: none; }
+.records-row :is(.life-source-open, .records-row-open, .records-excerpt-open):active::after { inset: 0 -12px; border-radius: var(--haedo-radius); background: var(--haedo-selected); }
 .records-row .life-source-open:focus-visible, .records-row-open:focus-visible, .records-excerpt-open:focus-visible { outline: 3px solid var(--haedo-focus); outline-offset: 3px; }
 .records-row .life-search-context, .records-row-context, .records-note {
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
@@ -171,8 +186,8 @@ body.haedo-shell[data-haedo-section=records] .life-toolbar .life-feature-menu[op
   .haedo-split-handle:is(:focus-visible, [data-dragging=true]) > .haedo-split-grip { background: var(--haedo-accent); }
   .haedo-split-handle:focus-visible > .haedo-split-grip { outline: 3px solid var(--haedo-focus); outline-offset: 3px; }
   @media (hover: hover) and (pointer: fine) {
-    .haedo-split-handle:hover::before { width: 2px; background: var(--haedo-focus); }
-    .haedo-split-handle:hover > .haedo-split-grip { background: var(--haedo-accent); }
+    .haedo-split-handle:hover::before { width: 2px; background: var(--haedo-muted); }
+    .haedo-split-handle:hover > .haedo-split-grip { background: var(--haedo-ink); }
   }
 }
 /* While dragging: no text selection, the resize cursor everywhere, and frames cannot take the pointer. */
@@ -180,6 +195,15 @@ html[data-haedo-split-dragging] { cursor: col-resize; -webkit-user-select: none;
 html[data-haedo-split-dragging] body { cursor: col-resize; }
 html[data-haedo-split-dragging] iframe { pointer-events: none; }
 @media (forced-colors: active) {
+  /* box-shadow로 그린 표시는 강제 색 모드에서 사라진다. 같은 자리에 outline을 둔다. */
+  body.haedo-shell[data-haedo-section=records] .life-toolbar :is(.haedo-icon-button, .life-icon-button):is([aria-current=page], [aria-current=true], [aria-expanded=true], [aria-pressed=true]),
+  body.haedo-shell[data-haedo-section=records] .life-toolbar .life-feature-menu[open] > summary,
+  #lifeMain[data-mode=sources] :is(.life-icon-button:is([aria-expanded=true], [aria-pressed=true]), .life-feature-menu[open] > summary, .source-folder-assignment[open] > .sf-assignment-toggle),
+  .records-pane .life-icon-button[aria-expanded=true],
+  #lifeRecordsMenu .life-destination[aria-pressed=true] { outline: 2px solid Highlight; outline-offset: -2px; }
+  .records-pane-row[data-current=true]::before, .records-pane .records-excerpt-row[data-current=true]::before { outline: 2px solid Highlight; outline-offset: -2px; }
+  .records-tab-row { border-bottom: 1px solid CanvasText; }
+  #lifeRecordsMenu > .life-feature-menu-panel[data-more=true]::after { background: none; border-bottom: 2px dashed CanvasText; }
   .records-tab[aria-selected=true] { box-shadow: none; text-decoration: underline 2px; }
   .haedo-split-handle::before, .haedo-split-grip { background: CanvasText; }
   .haedo-split-handle:is(:focus-visible, [data-dragging=true])::before, .haedo-split-handle:is(:focus-visible, [data-dragging=true]) > .haedo-split-grip { background: Highlight; }

@@ -2928,6 +2928,12 @@
         if (event.key !== 'Escape' || !menu.open) return;
         event.preventDefault(); event.stopPropagation(); menu.open = false; summary.focus({ preventScroll: true });
       });
+      // On a low screen the menu scrolls inside its panel. `data-more` says items remain below, and the panel draws
+      // its end fade while it does (records.css), the same cue as the news tab row.
+      const more = () => { panel.dataset.more = String(panel.scrollTop + panel.clientHeight < panel.scrollHeight - 1); };
+      panel.addEventListener('scroll', more, { passive: true });
+      menu.addEventListener('toggle', () => { if (menu.open) more(); });
+      if (typeof global.ResizeObserver === 'function') new global.ResizeObserver(more).observe(panel);
       return menu;
     }
 

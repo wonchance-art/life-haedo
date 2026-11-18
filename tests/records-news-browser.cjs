@@ -60,8 +60,10 @@ async function capture(page, name) {
 async function main() {
   await fs.mkdir(out, { recursive: true });
   const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', headless: true, args: ['--no-sandbox'] });
-  async function check(name, run, viewport = { width: 1440, height: 960 }) {
-    const server = new FakeCloud(), context = await makeContext(browser, server, 'records-news-' + report.checks.length, accounts.a, { viewport });
+  // RECORDS_NEWS_ONLY=<part of a check name> runs just those checks (used for mutation checks while developing).
+  async function check(name, run, viewport = { width: 1440, height: 960 }, contextOptions = {}) {
+    if (process.env.RECORDS_NEWS_ONLY && !name.includes(process.env.RECORDS_NEWS_ONLY)) return;
+    const server = new FakeCloud(), context = await makeContext(browser, server, 'records-news-' + report.checks.length, accounts.a, { viewport, ...contextOptions });
     let currentFeed = feed(), hold = null;
     await context.route('**/*', route => {
       const url = new URL(route.request().url());
@@ -108,6 +110,113 @@ async function main() {
       await page.locator(`#lifeSearchResults .life-source-card[data-version-id="${ids.rainVersion}"] .life-source-open`).click(); await settle(page);
       assert.equal(await page.locator('#lifeRecordsPane').isVisible(), false); assert.equal(await page.locator('#lifeSourceText').isVisible(), true);
     });
+    // ---- 2026-11-18 노션 방향 W4 검수 (MINOR-2·3·5·6) ------------------------------------------------------------
+    // MINOR-3: the row's press target is the whole row. A real press (pointer down, held, up at the same point) on
+    // the badge line, the excerpt and the row's bottom padding opens that exact version. Before the fix the shared
+    // press shrink (transform on :active) collapsed the stretched target to the title button while the button was held.
+    const listUrl = base + '/index.html?section=records&view=sources';
+    const rowPoints = (page, version) => page.locator(`#lifeSearchResults .records-row[data-version-id="${version}"]`).evaluate(row => {
+      row.scrollIntoView({ block: 'center' });
+      const box = el => el.getBoundingClientRect(), r = box(row), badge = box(row.querySelector('.records-badge')), when = box(row.querySelector('.records-when')), context = box(row.querySelector('.life-search-context')), title = box(row.querySelector('.life-source-open'));
+      return { 'badge': [badge.left + badge.width / 2, badge.top + badge.height / 2], 'date and time': [when.left + when.width / 2, when.top + when.height / 2], 'excerpt': [context.left + context.width / 2, context.top + context.height / 2],
+        'bottom padding': [r.left + 120, r.bottom - 5], 'beside the title': [title.right - 8, title.top + title.height / 2], 'empty space after the badges': [Math.min(r.right - 80, when.right + 160), when.top + when.height / 2] };
+    });
+    const rainText = '비가 굵어져서 도서관 2층 창가에 앉았다.';
+    const opened = async (page, version, label) => {
+      await page.locator('#lifeMain[data-mode="source"] #lifeSourceText').waitFor({ timeout: 5000 }).catch(() => { throw new Error(label + ': the original did not open'); });
+      assert.equal(await page.locator('#lifeSourceText').textContent(), rainText, label + ': the pressed row\'s original');
+    };
+    const backToList = async page => { await page.goto(listUrl); await ready(page); await settle(page); await page.locator('#lifeMain[data-mode="sources"] #lifeSearchResults .records-row').first().waitFor(); };
+    await check('a real mouse press anywhere on a records row opens its original; the row ⋯ and the select button do not', async ({ page }) => {
+      const ids = await seedRecords(page); await backToList(page);
+      for (const where of ['badge', 'date and time', 'excerpt', 'bottom padding', 'beside the title', 'empty space after the badges']) {
+        const [x, y] = (await rowPoints(page, ids.rainVersion))[where];
+        await page.mouse.move(x, y); await page.mouse.down(); await page.waitForTimeout(160); await page.mouse.up();
+        await opened(page, ids.rainVersion, 'press on the ' + where); await backToList(page);
+      }
+      // The row's own controls are not the row target.
+      const row = page.locator(`#lifeSearchResults .records-row[data-version-id="${ids.rainVersion}"]`), more = await row.locator('.records-row-more > summary').boundingBox();
+      await page.mouse.move(more.x + more.width / 2, more.y + more.height / 2); await page.mouse.down(); await page.waitForTimeout(160); await page.mouse.up(); await frames(page);
+      assert.deepEqual(await page.evaluate(() => ({ mode: document.querySelector('#lifeMain').dataset.mode, menus: document.querySelectorAll('.records-row-more[open]').length })), { mode: 'sources', menus: 1 }, '⋯ opens its menu, not the original');
+      await page.keyboard.press('Escape');
+      await page.locator('#lifeRecordsMenu > summary').click(); await page.locator('#lifeSelectionToggle').click(); const select = page.locator(`.life-source-select[data-version-id="${ids.rainVersion}"]`); await select.waitFor();
+      const box = await select.boundingBox(); await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down(); await page.waitForTimeout(160); await page.mouse.up(); await frames(page);
+      assert.deepEqual({ mode: await page.locator('#lifeMain').getAttribute('data-mode'), pressed: await page.locator(`.life-source-select[data-version-id="${ids.rainVersion}"]`).getAttribute('aria-pressed') }, { mode: 'sources', pressed: 'true' }, 'the select button selects, it does not open');
+    });
+    await check('a touch on the badge line, the excerpt and the padding of a records row opens its original', async ({ page }) => {
+      const ids = await seedRecords(page); await backToList(page);
+      for (const where of ['badge', 'date and time', 'excerpt', 'bottom padding']) {
+        const [x, y] = (await rowPoints(page, ids.rainVersion))[where];
+        // A finger held briefly, as a tap is: touch down, 120ms, up (CDP touch events; the browser makes the click).
+        const session = await page.context().newCDPSession(page);
+        await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] }); await page.waitForTimeout(120); await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await session.detach();
+        await opened(page, ids.rainVersion, 'touch on the ' + where); await backToList(page);
+      }
+    }, { width: 390, height: 844 }, { hasTouch: true, isMobile: true });
+    // MINOR-5: 검색어 지우기 is shown only while there is text (also during a 한글 composition), and puts focus back in the field.
+    await check('검색어 지우기 hides on an empty field, shows while typing and composing, and returns focus to the field', async ({ page }) => {
+      await seedRecords(page); await backToList(page);
+      const clear = page.locator('#lifeSearchClear'), field = page.locator('#lifeSearch');
+      assert.equal(await clear.isVisible(), false, 'empty field: no clear button'); assert.equal(await page.locator('#lifeFilterToggle').isVisible(), true);
+      await field.focus(); await page.keyboard.type('a'); assert.equal(await clear.isVisible(), true, 'typed text: clear button shown');
+      await page.keyboard.press('Backspace'); assert.equal(await clear.isVisible(), false, 'emptied by hand: hidden again');
+      // 한글 조합 중: the field holds the syllable being composed (events as an IME sends them; not an Apple IME check).
+      await field.evaluate(el => { el.focus(); el.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true })); el.value = '도'; el.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: true, inputType: 'insertCompositionText', data: '도' })); });
+      assert.equal(await clear.isVisible(), true, 'composing: clear button shown');
+      await field.evaluate(el => { el.value = '도서관'; el.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: true, inputType: 'insertCompositionText', data: '도서관' })); el.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '도서관' })); });
+      await frames(page); assert.equal(await field.inputValue(), '도서관'); assert.match(await page.locator('#lifeSearchCount').textContent(), /일치한 버전별 결과/);
+      const box = await clear.boundingBox(); assert(box.width >= 44 && box.height >= 44, '44px target');
+      await clear.click(); await frames(page);
+      assert.deepEqual({ value: await field.inputValue(), focus: await field.evaluate(el => document.activeElement === el), clear: await clear.isVisible() }, { value: '', focus: true, clear: false }, 'after 검색어 지우기: empty, focus in the field, button hidden');
+      assert.match(await page.locator('#lifeSearchCount').textContent(), /최신 버전/);
+    });
+    // MINOR-2: every item of the 자료 메뉴 is on screen at the three working sizes; on a lower screen the panel scrolls,
+    // shows its end fade while items remain below, and stays inside the screen (it ran 20px off the left at 320px).
+    await check('자료 메뉴 shows every item at 1440×900, 820×1000 and 390×844; lower screens scroll with an end fade, inside the screen', async ({ page }) => {
+      await seedRecords(page);
+      const measure = () => page.locator('#lifeRecordsMenu .life-feature-menu-panel').evaluate(panel => {
+        const b = panel.getBoundingClientRect(), items = [...panel.querySelectorAll('button, a')], nav = document.querySelector('[data-haedo-navigation]').getBoundingClientRect();
+        const dockTop = nav.width >= innerWidth - 1 ? nav.top : innerHeight; // the bottom tabs (760px and below) cover what is under them
+        return { names: items.map(item => item.getAttribute('aria-label')), hidden: items.filter(item => { const c = item.getBoundingClientRect(); return c.top < b.top - 1 || c.bottom > Math.min(b.bottom, dockTop) + 1; }).map(item => item.getAttribute('aria-label')),
+          left: Math.round(b.left), right: Math.round(b.right), bottom: Math.round(b.bottom), dockTop: Math.round(dockTop), width: innerWidth, more: panel.dataset.more, fade: getComputedStyle(panel, '::after').content !== 'none', scrollable: panel.scrollHeight > panel.clientHeight + 1, itemHeights: Math.min(...items.map(item => Math.round(item.getBoundingClientRect().height))) };
+      });
+      const all = ['기록 선택', '폴더 관리', '컬렉션', '묶음', '선택 자료 페이지', '다시 찾기', '회고', '책 만들기', '자료 작성', '네이버 블로그 연결', 'Obsidian 갱신', '원본 첨부 보관', '자료 휴지통'];
+      for (const [width, height] of [[1440, 900], [820, 1000], [390, 844], [390, 664], [320, 568]]) {
+        await page.setViewportSize({ width, height }); await backToList(page); await page.locator('#lifeRecordsMenu > summary').click(); await frames(page);
+        const shown = await measure(), label = width + '×' + height;
+        assert.deepEqual(shown.names, all, label + ': the menu items'); assert(shown.itemHeights >= 44, label + ': 44px items');
+        assert(shown.left >= 0 && shown.right <= shown.width && shown.bottom <= shown.dockTop, label + ': the panel is inside the screen and above the bottom tabs ' + JSON.stringify(shown));
+        if (height >= 844) assert.deepEqual({ hidden: shown.hidden, more: shown.more, fade: shown.fade, scrollable: shown.scrollable }, { hidden: [], more: 'false', fade: false, scrollable: false }, label + ': every item is visible without scrolling');
+        else {
+          assert.deepEqual({ more: shown.more, fade: shown.fade, scrollable: shown.scrollable }, { more: 'true', fade: true, scrollable: true }, label + ': scrolls, with the end fade');
+          assert(shown.hidden.includes('자료 휴지통'), label + ': the last item is below the fold');
+          // Wheel to the end as a person does: the last item arrives and the fade goes.
+          const box = await page.locator('#lifeRecordsMenu .life-feature-menu-panel').boundingBox(); await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.wheel(0, 2000);
+          await until(page, () => document.querySelector('#lifeRecordsMenu .life-feature-menu-panel').dataset.more === 'false', null, label + ': end of the menu reached');
+          const end = await measure(); assert.equal(end.fade, false, label + ': no fade at the end'); assert(!end.hidden.includes('자료 휴지통'), label + ': 자료 휴지통 is visible at the end');
+          await capture(page, 'records-menu-end-' + width + 'x' + height);
+        }
+        await page.keyboard.press('Escape');
+      }
+    });
+    // MINOR-6: with forced colours (box-shadow is not drawn) the open/on marks, the folder panel edge and the settings
+    // row lines are drawn with outline or border instead.
+    await check('forced colours keep the open and on marks, the folder panel edge and the settings row lines', async ({ page }) => {
+      await seedRecords(page); await backToList(page);
+      const outline = locator => locator.evaluate(el => { const s = getComputedStyle(el); return { style: s.outlineStyle, width: parseFloat(s.outlineWidth), shadow: s.boxShadow }; });
+      const mark = async (locator, label, width = 2) => { const o = await outline(locator); assert.equal(o.shadow, 'none', label + ': box-shadow is not drawn in forced colours'); assert.deepEqual({ style: o.style, width: o.width }, { style: 'solid', width }, label + ': outline instead'); };
+      await page.locator('#lifeRecordsMenu > summary').click(); await mark(page.locator('#lifeRecordsMenu > summary'), 'open 자료 메뉴 ⋯');
+      await page.locator('#lifeSelectionToggle').click(); await page.locator('#lifeSelectionBar').waitFor({ state: 'visible' });
+      await page.locator('#lifeRecordsMenu > summary').click(); await mark(page.locator('#lifeSelectionToggle'), '기록 선택 that is on'); await capture(page, 'forced-records-menu');
+      await page.locator('#lifeFolderManageOpen').click(); await page.locator('#lifeFolderManage').waitFor({ state: 'visible' }); await mark(page.locator('#lifeFolderManage'), 'folder panel edge', 1);
+      const row = page.locator('#lifeSearchResults .records-row').first(); await row.locator('.records-row-more > summary').click(); await mark(row.locator('.records-row-more > summary'), 'open row ⋯'); await capture(page, 'forced-records-row-menu'); await page.keyboard.press('Escape');
+      await page.locator('#lifeFilterToggle').click(); await mark(page.locator('#lifeFilterToggle'), 'open 검색 필터');
+      assert.equal(await page.locator('.records-tab-row').evaluate(el => getComputedStyle(el).borderBottomStyle), 'solid', 'tab row line');
+      await nav(page, 'manage'); await page.locator('#lifeSettings .settings-row').first().waitFor();
+      const lines = await page.locator('#lifeSettings .settings-row').evaluateAll(rows => rows.filter(row => row.getClientRects().length).map(row => { const s = getComputedStyle(row); return s.borderTopStyle + ' ' + s.borderTopWidth; }));
+      assert(lines.length >= 5 && lines.every(line => line === 'solid 1px'), 'settings row lines: ' + JSON.stringify(lines)); await capture(page, 'forced-settings');
+      await nav(page, 'news'); await idle(page); await page.locator('#discoveryFilterToggle').click(); await mark(page.locator('#discoveryFilterToggle'), 'open 정렬·필터'); await capture(page, 'forced-news-filter');
+    }, { width: 1440, height: 960 }, { forcedColors: 'active' });
     await check('kind tab and search together open the exact earlier version and the exact excerpt range', async ({ page }) => {
       const ids = await seedRecords(page); await nav(page, 'records');
       await page.locator('#lifeRecordKind-article').click(); await frames(page);

@@ -31,6 +31,7 @@
 .sf-assignment-panel { clear: both; min-width: 0; max-width: 100%; margin-block: 8px 12px; padding-block: 12px; border-block: 1px solid var(--line, #e3e9e6); }
 .sf-assignment-panel .life-field { min-width: 0; margin: 0 0 12px; }
 .sf-assignment-panel > p { margin-block: 8px; font-size: 13px; overflow-wrap: anywhere; }
-.source-folders :is(summary, input, select, button):focus-visible, .source-folder-assignment :is(summary, select, button):focus-visible { outline: 3px solid var(--color-primary, #145b50); outline-offset: 3px; }
+.source-folders :is(summary, input, select, button):focus-visible, .source-folder-assignment :is(summary, select, button):focus-visible { outline: 3px solid var(--haedo-focus, #267a69); outline-offset: 3px; }
+@media (forced-colors: active) { .sf-manage { outline: 1px solid CanvasText; outline-offset: -1px; } .sf-assignment-panel { border-block-color: CanvasText; } }
 @media (hover: hover) and (pointer: fine) { .sf-assignment-toggle:hover { background: var(--haedo-hover, #eaf1ed); color: var(--ink, #182522); } }
 @media (max-width: 540px) { .sf-editor { grid-template-columns: minmax(0, 1fr); } .sf-editor > * { grid-column: 1; } .sf-assignment-panel .sf-actions { align-items: stretch; } }
