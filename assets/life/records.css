@@ -6,9 +6,8 @@
 /* 머리: 큰 제목 줄(1101px 이상)의 자료 단추와, 열렸거나 켜진 아이콘 단추의 두 번째 표시(선택 면 + 1.5px 먹색 테). */
 .haedo-title-band .life-title-button { display: inline-flex; align-items: center; min-width: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 0; background: none; color: var(--haedo-ink); font: inherit; }
 body.haedo-shell[data-haedo-section=records] .life-toolbar :is(.haedo-icon-button, .life-icon-button):is([aria-current=page], [aria-current=true], [aria-expanded=true], [aria-pressed=true]),
-body.haedo-shell[data-haedo-section=records] .life-toolbar .life-feature-menu[open] > summary,
-#lifeMain[data-mode=sources] :is(.life-icon-button:is([aria-expanded=true], [aria-pressed=true]), .life-feature-menu[open] > summary, .source-folder-assignment[open] > .sf-assignment-toggle),
-.records-pane .life-icon-button[aria-expanded=true] { background: var(--haedo-selected); color: var(--haedo-ink); box-shadow: inset 0 0 0 1.5px var(--haedo-ink); }
+/* Icon buttons and ⋯ menus take the common second cue (haedo-shell.css, W5); the folder toggle is a summary of its own. */
+#lifeMain[data-mode=sources] .source-folder-assignment[open] > .sf-assignment-toggle { background: var(--haedo-selected); color: var(--haedo-ink); box-shadow: inset 0 0 0 1.5px var(--haedo-ink); }
 /* 자료 메뉴 (⋯)와 행 메뉴: 떠 있는 흰 면, 정한 그림자, 8px 모서리, 항목 44px. */
 .haedo-shell :is(#lifeRecordsMenu, .records-row-more) > .life-feature-menu-panel { border-radius: var(--haedo-radius); box-shadow: 0 0 0 1px rgba(15, 15, 15, .05), 0 3px 6px rgba(15, 15, 15, .1), 0 9px 24px rgba(15, 15, 15, .2); }
 .haedo-shell :is(#lifeRecordsMenu, .records-row-more) .life-destination { border-radius: var(--haedo-control-radius); color: var(--haedo-ink); }

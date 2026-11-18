@@ -162,23 +162,8 @@
 .schedule-plan-links > .schedule-plan-sep { color: var(--ink-soft); }
 .schedule-aside > .schedule-plan-links + * { margin-top: 16px; }
 
-/* 2026-11-16 노션 방향 W2 머리 (notion-visual-contract.md 머리줄): 노트 and 일정 from 1101px. The sticky top row is 44px:
- * the path (14px muted, the menu's current item, aria-hidden) and the actions. The title is the large page title
- * (34px 700) in its own band after that row, so it scrolls with the body (ui.js renderHeader). Up to 1100px the one-row
- * heading stays as it was. */
-.haedo-heading-path { display: none; }
-@media (min-width: 1101px) {
-  .haedo-shell .life-toolbar.haedo-page-heading[data-page-head] { min-height: 44px; margin-bottom: 0; }
-  .life-toolbar[data-page-head] > .haedo-heading-path { display: flex; flex: 1; align-items: center; min-width: 0; min-height: 44px; color: var(--haedo-muted); font-size: 14px; line-height: 1.5; }
-  .haedo-title-band { max-width: none; margin: 24px 0 8px; }
-  .haedo-title-band > .haedo-heading-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
-  .haedo-title-band h1.life-page-title { margin: 0; color: var(--haedo-ink); font: var(--haedo-weight-bold) var(--haedo-text-page-title) / 1.25 var(--haedo-font); letter-spacing: -.01em; overflow-wrap: anywhere; word-break: keep-all; }
-  .haedo-title-band h1.life-page-title:focus { outline: none; }
-  .haedo-title-band h1.life-page-title:focus-visible { outline: 2px solid var(--haedo-focus); outline-offset: 4px; border-radius: 4px; }
-}
-/* A heading control that is open or current: the selected surface and a 1.5px ink ring (a second cue). */
-.haedo-shell .life-toolbar[data-page-head] :is(.haedo-icon-button, .life-icon-button):is([aria-current=page], [aria-current=true], [aria-expanded=true]),
-.haedo-shell .life-toolbar[data-page-head] .life-feature-menu[open] > summary { background: var(--haedo-selected); color: var(--haedo-ink); box-shadow: inset 0 0 0 1.5px var(--haedo-ink); }
+/* 노트·일정·자료·뉴스·설정이 함께 쓰는 머리(경로 줄 + 큰 제목 줄)는 haedo-shell.css로 옮겼다(W5, 2026-11-18). */
+/* An open or current heading control: the common second cue in haedo-shell.css (W5). */
 /* 글 메뉴 (⋯): a floating menu, white with the defined shadow and 8px corners; items stay 44px. */
 .haedo-shell #lifeBlogMenu > .life-feature-menu-panel { border-radius: var(--haedo-radius); box-shadow: 0 0 0 1px rgba(15, 15, 15, .05), 0 3px 6px rgba(15, 15, 15, .1), 0 9px 24px rgba(15, 15, 15, .2); }
 .haedo-shell #lifeBlogMenu .life-destination { border-radius: var(--haedo-control-radius); }
@@ -195,7 +180,6 @@
 .haedo-shell .life-home .home-tabs > .home-tab[aria-selected=true] { background: transparent; color: var(--haedo-ink); font-weight: var(--haedo-weight-semibold); box-shadow: none; }
 .haedo-shell .life-home .home-tabs > .home-tab[aria-selected=true]::after { display: block; left: 12px; right: 12px; bottom: -1px; height: 2px; background: var(--haedo-ink); }
 .haedo-shell .life-home .home-search-toggle { border-radius: var(--haedo-control-radius); }
-.haedo-shell .life-home .home-search-toggle[aria-expanded=true] { background: var(--haedo-selected); color: var(--haedo-ink); box-shadow: inset 0 0 0 1.5px var(--haedo-ink); }
 .haedo-shell .life-home .home-search { min-height: 44px; border-radius: var(--haedo-control-radius); }
 /* 작성하던 글 · 제목 · 이어쓰기: one line on the soft fill. */
 .haedo-shell .life-home .home-resume { gap: 12px; min-height: 44px; margin-top: 16px; border-radius: var(--haedo-control-radius); padding: 8px 12px; background: var(--haedo-soft); }

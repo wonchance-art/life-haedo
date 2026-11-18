@@ -59,7 +59,7 @@ h4 { font-size: 16px; line-height: 1.7; }
 @media (hover: hover) and (pointer: fine) { .life-primary:hover { background: #34343a; color: #fff; } }
 .life-icon-button { position: relative; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 44px; width: 44px; height: 44px; min-width: 44px; min-height: 44px; padding: 12px; border: 0; border-radius: 50%; background: transparent; color: var(--ink-soft); text-decoration: none; transition: color 180ms ease, background 180ms ease; }
 @media (hover: hover) and (pointer: fine) { .life-icon-button:hover { background: var(--paper-2); color: var(--ink); } }
-.life-icon-button[aria-current=page],.life-icon-button[aria-pressed=true],.life-icon-button[aria-expanded=true] { color: var(--color-primary); background: var(--soft); }
+.life-icon-button[aria-current=page],.life-icon-button[aria-pressed=true],.life-icon-button[aria-expanded=true] { color: var(--ui-pressed-color, var(--color-primary)); background: var(--soft); }
 .life-icon-button[aria-current=page]::before { content: ''; position: absolute; bottom: 1px; width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
 .life-glyph { display: block; flex: none; }
 .life-tooltip { display: none; position: absolute; z-index: 50; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); padding: 4px 8px; border-radius: 5px; background: var(--ink); color: var(--paper); font-size: var(--haedo-text-badge); font-weight: 400; line-height: 1.6; white-space: nowrap; pointer-events: none; }
@@ -71,7 +71,7 @@ h4 { font-size: 16px; line-height: 1.7; }
 .life-account { position: relative; margin-left: 8px; }
 .life-account > summary { list-style: none; }
 .life-account > summary::-webkit-details-marker { display: none; }
-.life-account[open] > summary { color: var(--color-primary); }
+.life-account[open] > summary { color: var(--ui-pressed-color, var(--color-primary)); }
 .life-account .life-tooltip { left: auto; right: 0; transform: none; }
 .life-account-panel { position: absolute; z-index: 40; right: 0; top: 54px; width: max-content; max-width: min(320px,calc(100vw - 40px)); min-width: 220px; padding: 20px; border: 1px solid var(--line); border-radius: var(--ui-panel-radius, 12px); background: var(--paper); overflow-wrap: anywhere; }
 #lifeAccountLabel { display: block; margin-bottom: 16px; color: var(--ink-soft); font-size: var(--haedo-text-meta); }
@@ -99,7 +99,7 @@ html.auth-pending [data-private] { display: none !important; }
 .life-filter-panel .life-field { margin-block: 0 12px; }
 .life-topic-list { margin: 12px 0 20px; }
 .life-topic-list .life-button { border-color: transparent; color: var(--ink-soft); }
-.life-topic-list .life-button[aria-pressed=true] { color: var(--color-primary); background: var(--soft); }
+.life-topic-list .life-button[aria-pressed=true] { color: var(--ui-pressed-color, var(--color-primary)); background: var(--soft); font-weight: var(--ui-pressed-weight, inherit); }
 .life-count { font-variant-numeric: tabular-nums; font-size: var(--haedo-text-badge); font-weight: 400; }
 .life-topic-list .life-button { gap: 8px; text-align: left; }
 #lifeSearchCount { font-size: var(--haedo-text-badge); margin: 16px 0 4px; }
@@ -203,7 +203,7 @@ textarea.life-source-text { min-height: 340px; max-height: 70vh; padding: 16px; 
 .life-import-phase { margin: 0 0 20px; color: var(--ink-soft); font-size: var(--haedo-text-meta); line-height: 1.8; }
 .life-import-methods { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 4px; margin: 20px 0; padding: 4px; background: var(--canvas); border-radius: var(--surface-radius); }
 .life-import-methods .life-button { min-width: 0; padding: 12px 8px; border-color: transparent; border-radius: var(--control-radius); color: var(--ink-soft); font-size: var(--haedo-text-control); word-break: keep-all; }
-.life-import-methods .life-button[aria-pressed=true] { color: var(--color-primary); background: var(--soft); font-weight: 600; }
+.life-import-methods .life-button[aria-pressed=true] { color: var(--ui-pressed-color, var(--color-primary)); background: var(--soft); font-weight: 600; }
 .life-import-form > .life-actions { margin-block: 24px; }
 .life-origin-suggestion { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; margin: -8px 0 16px; }
 .life-origin-suggestion .life-help { margin: 0; }
@@ -294,7 +294,7 @@ details.life-sync-account { display: block; width: 100%; margin: 12px 0 0; overf
 /* Page headings and settings use the same quiet feed rhythm. */
 .life-toolbar.haedo-page-heading { flex-wrap: wrap; margin-inline: auto; margin-bottom: 12px; }
 .life-toolbar .life-title-button { display: inline-flex; align-items: center; min-width: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 0; font: inherit; color: var(--ink); background: none; }
-.life-toolbar .life-title-button:hover { color: var(--color-primary); }
+.life-toolbar .life-title-button:hover { color: var(--ui-title-hover-color, var(--color-primary)); text-decoration: var(--ui-title-hover-line, none); text-decoration-color: var(--field-line); text-underline-offset: 4px; }
 .life-toolbar .life-refresh { flex-basis: 100%; }
 .life-toolbar[hidden] { display: none; }
 .life-toolbar[data-post-heading] { display: none; }

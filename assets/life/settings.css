@@ -111,10 +111,8 @@
   .life-main[data-mode=backup] .fb-kinds > .fb-kind > .fb-kind-copy { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; column-gap: 24px; }
   .life-main[data-mode=backup] .fb-kinds > .fb-kind > .fb-kind-copy > .life-meta { text-align: right; }
 }
-/* 머리줄: 열렸거나 현재인 아이콘 단추의 두 번째 표시(선택 면 + 1.5px 먹색 테). */
-body.haedo-shell[data-haedo-section=manage] .life-toolbar :is(.haedo-icon-button, .life-icon-button):is([aria-current=page], [aria-current=true], [aria-expanded=true], [aria-pressed=true]),
-body.haedo-shell[data-haedo-section=manage] .haedo-account-host :is(.haedo-icon-button, .life-icon-button, summary):is([aria-current=page], [aria-current=true], [aria-expanded=true]),
-body.haedo-shell[data-haedo-section=manage] .haedo-account-host details[open] > summary { background: var(--haedo-selected); color: var(--haedo-ink); box-shadow: inset 0 0 0 1.5px var(--haedo-ink); }
+/* 아이콘 단추·⋯·계정 메뉴는 haedo-shell.css 공통 규칙(W5). 계정 칸의 다른 summary만 여기서 같은 모양을 준다. */
+body.haedo-shell[data-haedo-section=manage] .haedo-account-host summary:is([aria-current=page], [aria-current=true], [aria-expanded=true]) { background: var(--haedo-selected); color: var(--haedo-ink); box-shadow: inset 0 0 0 1.5px var(--haedo-ink); }
 /* 1101px 이상: 머리줄이 44px(경로 + 행동)이므로 오른쪽 위 계정 단추도 그 줄에 맞춘다. */
 @media (min-width: 1101px) { body.haedo-shell[data-haedo-section=manage]:has(.life-toolbar[data-page-head]) .haedo-account-host { top: env(safe-area-inset-top, 0px); } }
 /* 강제 색 모드: box-shadow로 그린 행 구분선과 머리 단추의 테는 사라지므로 테두리·outline으로 둔다. */
