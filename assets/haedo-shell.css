@@ -291,6 +291,7 @@ body.haedo-shell:not([data-haedo-section=manage]) #lifeAccountHost{display:none}
  .haedo-shell :is(.haedo-account,.life-account,.life-feature-menu)[open]>summary{outline:2px solid Highlight;outline-offset:-2px}
  .haedo-shell :is(a,button,summary,input,select,textarea):focus-visible{outline-color:Highlight}
  .haedo-tooltip{background:CanvasText;color:Canvas;border:1px solid CanvasText}
+ .haedo-shell .life-import-methods .life-button[aria-pressed=true]::after{background:CanvasText}
 }
 .haedo-brand-mark { filter:grayscale(1); }
 body.haedo-shell:has(> #lifeWelcome:not([hidden])) { padding-left:0; }

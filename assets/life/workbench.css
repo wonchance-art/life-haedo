@@ -166,6 +166,8 @@
 }
 @media (forced-colors: active) {
   .wb-discovery-arrange,.wb-discovery-select { border: 1px solid ButtonText; }
+  /* W5: the pressed and open states are the selected surface and ink 600; forced colours drop the surface. */
+  :is(.wb-reflection-bar > [aria-pressed=true], .wb-reflection-controls [aria-pressed=true], .wb-book-plan .life-actions [aria-pressed=true], .wb-lenses [aria-pressed="true"], .wb-toolbar-outline[open] > summary, #wbChapterEvidence[open] > summary) { outline: 2px solid Highlight; outline-offset: -2px; }
   .wb-discovery-reasons { color: CanvasText; }
 }
 
