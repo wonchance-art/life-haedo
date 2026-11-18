@@ -331,6 +331,10 @@
   .photo-read-actions { position: relative; padding: calc(6px + env(safe-area-inset-top, 0px)) 44px 6px 0; flex-wrap: wrap; }
   .photo-read-actions .photo-more { position: static; }
   .photo-read-actions .photo-more-menu { top: calc(100% - 6px); width: min(300px, 100%); max-width: none; }
+  /* An alert or notice above the row (a failed backup, a storage problem) starts at the top of the screen,
+     where 글쓰기 is fixed: its words stop before that control. The success line sits under the post and the
+     quiet one is not drawn, so they keep their own box. */
+  .photo-posts[data-mode="read"] > .photo-status:not(.life-save-quiet):not([data-state="success"]) { padding-right: 44px; }
 }
 @media (max-width: 359px) {
   /* Below 360px the pill and 수정 are pictures (lock or globe, edit); their names do not change. A pill

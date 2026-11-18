@@ -270,7 +270,8 @@ async function header(page, width) {
   assert.deepEqual(overlap, [], 'full reading control rectangles do not overlap global compose');
   await capture(page, 'reader-' + width);
   // A failed export remains visible above the reader; only a success notice moves below it.
-  await page.evaluate(() => {window.originalCreateObjectURL=URL.createObjectURL;URL.createObjectURL=()=>{throw new Error('합성 백업 파일 생성 실패');};});
+  // Re-review n2: the sentence is long enough to wrap, so on a phone its lines would run under 글쓰기.
+  await page.evaluate(() => {window.originalCreateObjectURL=URL.createObjectURL;URL.createObjectURL=()=>{throw new Error('합성 백업 파일 생성 실패: 사진 원본 두 장을 읽지 못해 백업 파일을 만들지 못했습니다. 잠시 뒤 다시 시도해 주세요.');};});
   try {
     await page.locator('.photo-read-actions .photo-more > summary').click();
     await page.getByRole('button',{name:'사진 포함 백업',exact:true}).click();
@@ -279,6 +280,26 @@ async function header(page, width) {
     const errorTop=await page.locator('.photo-status[role=alert]').evaluate(el=>el.getBoundingClientRect().top);
     assert.ok(errorTop < (await page.locator('.photo-read-heading').boundingBox()).y);
     assert.match(await page.locator('.photo-article').textContent(), /읽기와 편집을 오가도/);
+    // Up to 760px the alert sits at the top of the screen where 글쓰기 is fixed: neither the box its words may
+    // flow in nor any drawn line of them reaches under that control (320·360·390).
+    for (const screen of width === 390 ? [390, 360, 320] : [width]) {
+      await page.setViewportSize({ width: screen, height: 1000 }); await paint(page);
+      const alert = await page.locator('.photo-status[role=alert]').evaluate(el => {
+        const meets = (a, b) => Math.min(a.right, b.right) > Math.max(a.left, b.left) + .5 && Math.min(a.bottom, b.bottom) > Math.max(a.top, b.top) + .5;
+        const box = r => ({ left: Math.round(r.left * 10) / 10, right: Math.round(r.right * 10) / 10, top: Math.round(r.top * 10) / 10, bottom: Math.round(r.bottom * 10) / 10 });
+        const compose = [...document.querySelectorAll('[data-haedo-compose]')].find(node => node.getClientRects().length).getBoundingClientRect();
+        const style = getComputedStyle(el), outer = el.getBoundingClientRect();
+        const words = { left: outer.left + parseFloat(style.paddingLeft), right: outer.right - parseFloat(style.paddingRight), top: outer.top, bottom: outer.bottom };
+        const range = document.createRange(); range.selectNodeContents(el.querySelector('.photo-status-text'));
+        const lines = [...range.getClientRects()];
+        return { compose: box(compose), words: box(words), wordsUnder: meets(words, compose), lines: lines.length, linesUnder: lines.filter(line => meets(line, compose)).map(box) };
+      });
+      assert.ok(alert.lines >= (screen <= 760 ? 2 : 1), screen + ': the alert sentence is drawn: ' + JSON.stringify(alert));
+      assert.equal(alert.wordsUnder, false, screen + ': the alert words do not run under 글쓰기: ' + JSON.stringify(alert));
+      assert.deepEqual(alert.linesUnder, [], screen + ': no drawn line of the alert is under 글쓰기');
+      if (screen === 320) await capture(page, 'reader-alert-320');
+    }
+    await page.setViewportSize({ width, height: 1000 }); await paint(page);
   } finally {await page.evaluate(()=>URL.createObjectURL=originalCreateObjectURL);}
 
   await page.getByRole('button', { name: '글 수정', exact: true }).focus(); await page.keyboard.press('Enter');
