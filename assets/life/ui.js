@@ -2164,6 +2164,12 @@
         else if (destination !== here) global.history.replaceState(null, '', destination);
       }
       lastRouteBase = url.pathname + url.search;
+      // 일정's units are put back by the app alone (restoreOriginView; ‹ up opens the parent at its top). Left to the
+      // browser as well (auto), its own restore of the entry, animated by the root's smooth scrolling, was still moving
+      // when the app set the recorded position and Chromium added the step in flight: M left at 162 came back at 175,
+      // ‹ up ended at 15 instead of 0 (2026-11-18, W2 review m-2). The mode belongs to the entry just written; other
+      // screens keep the browser's restore.
+      try { global.history.scrollRestoration = calendarModes.has(mode) ? 'manual' : 'auto'; } catch (_) { /* The app's own restore still runs. */ }
     }
 
     // News: opening an article where it replaces the list pushes an entry; closing it in the app
@@ -2572,7 +2578,10 @@
         target?.focus({ preventScroll: true });
         // The return skipped the heading focus, so a target that could not take focus must not leave focus on <body>.
         if (!document.activeElement || document.activeElement === document.body) focusFirstHeading();
-        if (!anchor && Number.isFinite(origin.scrollY)) global.scrollTo({ top: origin.scrollY, behavior: 'instant' });
+        // An entry of 일정 has no browser restore (writeRoute): one without a recorded position (a forward entry after a
+        // reload) opens at its top instead of keeping the position of the screen just left.
+        const top = Number.isFinite(origin.scrollY) ? origin.scrollY : calendarModes.has(origin.mode) ? 0 : null;
+        if (!anchor && top !== null) global.scrollTo({ top, behavior: 'instant' });
       });
       if (origin.mode === 'find') findRenderPromise.then(restore);
       else if (origin.mode === 'home') homeRenderPromise.then(restore);
@@ -2660,6 +2669,13 @@
       // list) has its own: 노트 · 통합 검색 · 글 메뉴 (2026-11-16 notes-menu).
       const scheduleParts = calendarModes.has(state.mode) && global.HaedoLife.ScheduleUI ? scheduleHeader() : null;
       if (scheduleParts) heading.textContent = scheduleParts.title;
+      // D on a narrow phone shows its weekday short so the title stays one line beside 오늘 ‹ › (schedule.css, to 374px).
+      // The heading is still named by the whole date: the short text is not read out.
+      if (scheduleParts?.titleShort) {
+        const short = node('span', scheduleParts.titleShort, 'schedule-title-short');
+        short.setAttribute('aria-hidden', 'true');
+        heading.replaceChildren(node('span', scheduleParts.title, 'schedule-title-full'), short);
+      }
       if (subviewTitles[state.mode] && state.mode !== 'external-discovery' && !(state.mode === 'page' && blogPageTask && blogMode === 'edit')) {
         const labels = { 'naver-blog': '네이버 블로그 목록으로 돌아가기', 'naver-capture': '본문·사진 검토로 돌아가기', 'account-blog': '계정 보관 상태로 돌아가기', 'external-discovery': '새 글 찾기로 돌아가기', interests: '관심 주제 편집으로 돌아가기', blog: '글 공개·보관으로 돌아가기', find: '검색 결과로 돌아가기', reflection: '회고로 돌아가기', home: '노트로 돌아가기', sources: '자료로 돌아가기', topics: '검색 결과로 돌아가기', tools: '일정으로 돌아가기', manage: '설정으로 돌아가기', backup: '백업·복원으로 돌아가기', collection: '컬렉션으로 돌아가기', activities: '묶음으로 돌아가기', page: '선택 자료 페이지로 돌아가기', books: '책으로 돌아가기', import: '가져오기로 돌아가기', write: '자료 작성으로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기' , quarter: '일정으로 돌아가기', month: '일정으로 돌아가기', week: '일정으로 돌아가기', day: '일정으로 돌아가기' };
         const origin = subviewOrigin();
@@ -3810,6 +3826,9 @@
       }
       else if (context.mode === 'find') findRenderPromise.then(restore);
       else if (context.mode === 'naver-capture' || context.mode === 'naver-blog' || context.mode === 'interests' || context.mode === 'external-discovery' || context.mode === 'blog') mainRenderPromise.then(restore);
+      // A calendar unit is drawn after its read (as restoreOriginView waits): set before that, the position was cut to the
+      // empty frame's height (D left at 1169 came back at 58 from a reader's 돌아가기, 2026-11-18).
+      else if (calendarModes.has(context.mode) && schedule) mainRenderPromise.then(restore);
       else restore();
     }
 
