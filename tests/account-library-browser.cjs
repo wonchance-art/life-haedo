@@ -3,6 +3,7 @@
  * BASE_URL=http://127.0.0.1:4173 node tests/account-library-browser.cjs */
 'use strict';
 const { openRecordsMenu, openFolderManage, openRowFolderMove, recordRowMenuItem } = require('./helpers/feature-menus.cjs');
+const { watched } = require('./helpers/stall-watch.cjs');
 process.env.BASE_URL ||= 'http://127.0.0.1:4173';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -128,7 +129,8 @@ async function captureThree(page) {
   for (const width of [1440, 820, 390]) {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 }); await page.evaluate(async () => { await document.fonts.ready; scrollTo(0, 0); }); await summary.focus();
     const audit = await summary.evaluate(el => { const box = el.getBoundingClientRect(), hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2); return { width: innerWidth, documentWidth: document.documentElement.scrollWidth, height: box.height, focus: document.activeElement === el, outline: getComputedStyle(el).outlineStyle, pointerClear: hit === el || el.contains(hit) }; });
-    const controls = await page.locator('#lifeFolderFilter, #lifeFolderManage input:not([type=hidden]), #lifeFolderManage select, #lifeFolderManage button:enabled').evaluateAll(nodes => nodes.filter(el => el.getClientRects().length && !el.closest('[hidden]')).map(el => { el.scrollIntoView({ block: 'center' }); const b = el.getBoundingClientRect(), hit = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2); return { id: el.id, tag: el.tagName, fontSize: parseFloat(getComputedStyle(el).fontSize), width: b.width, height: b.height, left: b.left, right: b.right, pointerClear: hit === el || el.contains(hit), named: !!(el.getAttribute('aria-label') || el.labels?.length || el.textContent?.trim()) }; }));
+    // This read has no time limit of its own; watched() ends a stall as a failure that says what the page was doing (2026-11-18).
+    const controls = await watched(page, 'folder controls at ' + width + 'px', () => page.locator('#lifeFolderFilter, #lifeFolderManage input:not([type=hidden]), #lifeFolderManage select, #lifeFolderManage button:enabled').evaluateAll(nodes => nodes.filter(el => el.getClientRects().length && !el.closest('[hidden]')).map(el => { el.scrollIntoView({ block: 'center' }); const b = el.getBoundingClientRect(), hit = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2); return { id: el.id, tag: el.tagName, fontSize: parseFloat(getComputedStyle(el).fontSize), width: b.width, height: b.height, left: b.left, right: b.right, pointerClear: hit === el || el.contains(hit), named: !!(el.getAttribute('aria-label') || el.labels?.length || el.textContent?.trim()) }; })));
     await page.evaluate(() => scrollTo(0, 0)); await summary.focus(); const file = 'account-library-' + width + '.png'; await page.screenshot({ path: path.join(output, file), fullPage: true }); report.visual.push({ width, file, audit, controls });
     assert(audit.documentWidth <= width); assert(audit.height >= 44); assert.equal(audit.focus, true); assert.notEqual(audit.outline, 'none'); assert.equal(audit.pointerClear, true);
     for (const c of controls) { assert(c.width >= 44 && c.height >= 44, c.id + ': target44px'); assert(c.left >= -0.5 && c.right <= width + 0.5, c.id + ': bounds'); assert.equal(c.pointerClear, true, c.id + ': real pointer hit'); assert.equal(c.named, true, c.id + ': name'); if (['INPUT', 'SELECT'].includes(c.tag)) assert(c.fontSize >= 16, c.id + ': input16px'); }

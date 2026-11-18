@@ -719,8 +719,9 @@
     const SCROLL_KEYS = new Set(['PageDown', 'PageUp', 'ArrowDown', 'ArrowUp', 'Home', 'End', ' ', 'Spacebar']);
     function pageScrollIntent(event) {
       if (event.type === 'keydown') lastKeyAt = Date.now();
-      // A wheel or a finger takes the page over: what scrolls from here is the person's, not the rest of a move the screen began.
-      else { ownMoving = false; ownFrames = 0; }
+      // A wheel or a finger takes the page over: what scrolls from here is the person's, not the rest of a move the
+      // screen began. (The 250ms rule is ended too, or it would claim the very next scroll.)
+      else { ownMoving = false; ownFrames = 0; placedAt = -Infinity; }
       if (!scope() || !current || current.listTouched || current.settingsScreen || root.document.getElementById('lifeApp')?.hidden !== false) return;
       if (event.type === 'keydown' && (!SCROLL_KEYS.has(event.key) || event.target?.closest?.('input, textarea, select, [contenteditable]'))) return;
       touchList();
@@ -739,25 +740,31 @@
     //    always arrives while frames remain, however late that update is. (A smooth move shows its first event
     //    within these frames as well.)
     //  - ownMoving: once one such event has come, every scroll up to that movement's `scrollend` is the same
-    //    movement (a smooth scroll goes on for many frames). Browsers without `scrollend` keep counting frames and
-    //    the earlier 250ms rule from the last event instead.
+    //    movement (a smooth scroll goes on for many frames). Each of its scroll events opens the frames again, and
+    //    the movement is also over when OWN_FRAMES frames pass with no scroll at all: a page pulled up because the
+    //    document got shorter (a clamp) fires `scroll` but no `scrollend`, and the claim must not outlive it
+    //    (2026-11-18 재검수 N-1). Browsers without `scrollend` count frames only, with the 250ms rule beside them.
     // The 250ms rule stays as a second way to recognise a move the shell makes a little later (nothing that was
-    // the screen's before is now the person's). A wheel, touch or scroll key ends the screen's claim at once.
+    // the screen's before is now the person's). A wheel or a touch (pageScrollIntent) ends the screen's claim at
+    // once; a scroll key does not (the key press itself already counts as a use of the list). So does the page
+    // being hidden: frames do not run then, and a claim kept until the tab is shown again would cover whatever
+    // scrolls first on return.
     let placedAt = -Infinity, opening = false;
     const OWN_FRAMES = 4, scrollEnds = 'onscrollend' in root;
     let ownFrames = 0, ownMoving = false, ownTick = 0;
     const clock = () => root.performance?.now?.() ?? Date.now();
-    function ownFrame() { ownTick = root.requestAnimationFrame(() => { ownTick = 0; if (ownFrames > 0 && --ownFrames > 0) ownFrame(); }); }
+    function ownFrame() { ownTick = root.requestAnimationFrame(() => { ownTick = 0; if (ownFrames > 0 && --ownFrames > 0) ownFrame(); else ownMoving = false; }); }
     function placing() { placedAt = clock(); ownFrames = OWN_FRAMES; if (!ownTick) ownFrame(); }
     function pageScrollEnded() { ownMoving = false; }
+    function pageHidden() { if (root.document.visibilityState === 'hidden') { ownMoving = false; ownFrames = 0; placedAt = -Infinity; } }
     function pageScrolled() {
       const shown = !opening && active && !!surface?.isConnected && scope() && !!current && !current.settingsScreen && root.document.getElementById('lifeApp')?.hidden === false;
       if (shown) current.newsY = root.scrollY || 0; // news's own place (capture)
-      if (ownMoving) return;
+      if (ownMoving) { ownFrames = OWN_FRAMES; if (!ownTick) ownFrame(); return; }
       const now = clock();
       if (ownFrames > 0 || now - placedAt < 250) {
-        placedAt = now;
-        if (scrollEnds) ownMoving = true; else if (ownFrames > 0) { ownFrames = OWN_FRAMES; if (!ownTick) ownFrame(); }
+        placedAt = now; ownFrames = OWN_FRAMES; if (!ownTick) ownFrame();
+        if (scrollEnds) ownMoving = true;
         return;
       }
       if (!shown || current.listTouched) return;
@@ -2059,8 +2066,9 @@
     for (const type of ['wheel', 'touchmove', 'keydown']) root.addEventListener(type, pageScrollIntent, { passive: true });
     root.addEventListener('scroll', pageScrolled, { passive: true });
     if (scrollEnds) root.addEventListener('scrollend', pageScrollEnded, { passive: true });
+    root.document.addEventListener('visibilitychange', pageHidden);
     root.document.addEventListener('haedo:page-suspend', pageSuspend); root.document.addEventListener('haedo:page-ready', pageReady); root.document.addEventListener('visibilitychange', lifecycle); root.addEventListener('online', lifecycle); root.addEventListener('offline', lifecycle);
-    function dispose() { leave(); readingUI?.dispose(); readingUI = null; disposed = true; downloadUrls.forEach(address => URL.revokeObjectURL(address)); downloadUrls.clear(); dropImages(); wideClient?.dispose(); wideClient = null; wideUnlisten?.(); wideUnlisten = null; if (current?.wide) current.wide.items = []; root.document.removeEventListener('pointerdown', closeCardMenus, true); for (const type of ['wheel', 'touchmove', 'keydown']) root.removeEventListener(type, pageScrollIntent); root.removeEventListener('scroll', pageScrolled); root.removeEventListener('scrollend', pageScrollEnded); if (ownTick) root.cancelAnimationFrame(ownTick); root.document.removeEventListener('haedo:page-suspend', pageSuspend); root.document.removeEventListener('haedo:page-ready', pageReady); root.document.removeEventListener('visibilitychange', lifecycle); root.removeEventListener('online', lifecycle); root.removeEventListener('offline', lifecycle); client?.dispose(); client = null; current = null; workspaceId = null; }
+    function dispose() { leave(); readingUI?.dispose(); readingUI = null; disposed = true; downloadUrls.forEach(address => URL.revokeObjectURL(address)); downloadUrls.clear(); dropImages(); wideClient?.dispose(); wideClient = null; wideUnlisten?.(); wideUnlisten = null; if (current?.wide) current.wide.items = []; root.document.removeEventListener('pointerdown', closeCardMenus, true); for (const type of ['wheel', 'touchmove', 'keydown']) root.removeEventListener(type, pageScrollIntent); root.removeEventListener('scroll', pageScrolled); root.removeEventListener('scrollend', pageScrollEnded); root.document.removeEventListener('visibilitychange', pageHidden); if (ownTick) root.cancelAnimationFrame(ownTick); root.document.removeEventListener('haedo:page-suspend', pageSuspend); root.document.removeEventListener('haedo:page-ready', pageReady); root.document.removeEventListener('visibilitychange', lifecycle); root.removeEventListener('online', lifecycle); root.removeEventListener('offline', lifecycle); client?.dispose(); client = null; current = null; workspaceId = null; }
     return Object.freeze({ render, refresh: render, leave, dispose, flush, dirty, showArticle, settingsControl });
   }
   root.HaedoLife ||= {}; root.HaedoLife.DiscoveryUI = Object.freeze({ create });
