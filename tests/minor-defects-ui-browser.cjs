@@ -97,6 +97,28 @@ async function workspace(page, width) {
   await capture(page, 'workspace-startup-error-' + width);
   report.checks.push(width + ': corrupt workspace gives recovery guidance and preserves both spaces on switch and reload');
 }
+// The reading row's visible controls with their boxes, and where 글쓰기 sits.
+const readRow = page => page.locator('.photo-read-actions').evaluate(bar => {
+  const compose = [...document.querySelectorAll('[data-haedo-compose]')].find(el => el.getClientRects().length).getBoundingClientRect();
+  return { composeLeft: compose.left, overflow: document.documentElement.scrollWidth - innerWidth, items: [...bar.querySelectorAll('button, summary')]
+    .filter(el => el.getClientRects().length && !el.closest('.photo-more-menu'))
+    .map(el => { const r = el.getBoundingClientRect(); return { name: el.getAttribute('aria-label') || el.textContent.trim(), left: r.left, right: r.right, top: r.top, width: r.width, height: r.height }; }) };
+});
+async function assertOneLine(row, names, where) {
+  assert.deepEqual(row.items.map(item => item.name), names, where + ': names');
+  assert.ok(row.items.every((item, index) => item.width >= 44 && item.height >= 44 && item.top === row.items[0].top && (!index || item.left >= row.items[index - 1].right)),
+    where + ': 44px controls on one line: ' + JSON.stringify(row));
+  assert.ok(row.items.at(-1).right <= row.composeLeft && row.items[0].left >= 0 && row.overflow <= 0, where + ': beside 글쓰기, nothing off screen: ' + JSON.stringify(row));
+}
+// Publication is read from BlogSync; window.__minorForcePublic makes that read say the post is public.
+async function configurePublication(context) {
+  await context.route(base + '/assets/life/blog-sync.js', async route => {
+    const response = await route.fetch(), source = await response.text();
+    await route.fulfill({ response, contentType: 'application/javascript', body: source + `
+      ;(()=>{const B=HaedoLife.BlogSync;if(!B)return;HaedoLife.BlogSync=Object.freeze({...B,create(...args){const s=B.create(...args);
+      return Object.freeze({...s,async getState(...a){const state=await s.getState(...a);return window.__minorForcePublic?{...state,publication:{active:true}}:state;}});}});})();` });
+  });
+}
 async function header(page, width) {
   await page.goto(base + '/index.html?compose=1'); await ready(page);
   await page.locator('#photoTitle').waitFor();
@@ -140,8 +162,21 @@ async function header(page, width) {
   const backup = page.getByRole('button', { name: '사진 포함 백업', exact: true });
   assert.equal(await backup.isVisible(), false, '사진 포함 백업 is not a separate control of the row');
   const more = page.locator('.photo-read-actions .photo-more > summary');
+  // Review m1/m2: an open ⋯ floats (the row keeps its height); up to 760px it opens under the whole row,
+  // at least 240px wide, with no item cut short.
+  const rowHeight = () => page.locator('.photo-read-actions').evaluate(el => el.getBoundingClientRect().height);
+  const menuFits = async (screen, where) => {
+    const menu = await page.locator('.photo-read-actions .photo-more-menu').evaluate(el => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right, width: r.width,
+      cut: [...el.querySelectorAll(':scope > button')].filter(item => item.scrollWidth > item.clientWidth || item.getBoundingClientRect().left < r.left || item.getBoundingClientRect().right > r.right).map(item => item.textContent) }; });
+    assert.ok(menu.left >= 0 && menu.right <= screen, where + ': the menu stays on screen: ' + JSON.stringify(menu));
+    assert.ok(menu.width >= 240, where + ': the menu is at least 240px wide: ' + JSON.stringify(menu));
+    assert.deepEqual(menu.cut, [], where + ': no menu item is cut short');
+  };
+  const closedHeight = await rowHeight();
   await more.focus(); await page.keyboard.press('Enter');
   assert.equal(await backup.isVisible(), true);
+  assert.ok(Math.abs(await rowHeight() - closedHeight) <= 1, width + ': opening ⋯ does not grow the row: ' + JSON.stringify({ closedHeight, open: await rowHeight() }));
+  await menuFits(width, String(width));
   assert.deepEqual(await page.locator('.photo-read-actions .photo-more-menu > button').allTextContents(),
     ['사진 포함 백업', '이 글 공개·보관', '근거 포함 파일', 'HTML 읽기 파일 받기', '사본으로 이어 쓰기', '목록에서 숨기기', '삭제']);
   const menuBox = await page.locator('.photo-read-actions .photo-more-menu').boundingBox();
@@ -163,12 +198,7 @@ async function header(page, width) {
     // Below 360px (W3): the pill and 수정 show their pictures only, with the same names; the five 44px
     // controls stay one line beside 글쓰기, and ⋯ opens inside the 320px screen.
     await page.setViewportSize({ width: 320, height: 1000 }); await paint(page);
-    const narrow = await page.locator('.photo-read-actions').evaluate(bar => {
-      const compose = [...document.querySelectorAll('[data-haedo-compose]')].find(el => el.getClientRects().length).getBoundingClientRect();
-      return { composeLeft: compose.left, overflow: document.documentElement.scrollWidth - innerWidth, items: [...bar.querySelectorAll('button, summary')]
-        .filter(el => el.getClientRects().length && !el.closest('.photo-more-menu'))
-        .map(el => { const r = el.getBoundingClientRect(); return { name: el.getAttribute('aria-label') || el.textContent.trim(), left: r.left, right: r.right, top: r.top, width: r.width, height: r.height }; }) };
-    });
+    const narrow = await readRow(page);
     assert.deepEqual(narrow.items.map(item => item.name), ['노트로 돌아가기', '비공개 · 글 정보', '글 수정', '통합 검색', '더 보기'], 'names stay at 320px');
     assert.ok(narrow.items.every((item, index) => item.width >= 44 && item.height >= 44 && item.top === narrow.items[0].top && (!index || item.left >= narrow.items[index - 1].right)),
       '320px: five 44px controls on one line: ' + JSON.stringify(narrow));
@@ -176,11 +206,16 @@ async function header(page, width) {
     assert.equal(await page.locator('.photo-read-actions .photo-privacy-label').isVisible(), false, 'the pill is its lock below 360px');
     assert.equal(await page.locator('.photo-read-actions .photo-privacy-face > svg').first().isVisible(), true);
     assert.equal(await page.locator('.photo-read-edit > svg').isVisible(), true, '수정 is its picture below 360px');
+    const narrowClosed = await rowHeight();
     await more.click();
-    const narrowMenu = await page.locator('.photo-read-actions .photo-more-menu').boundingBox();
-    assert.ok(narrowMenu.x >= 0 && narrowMenu.x + narrowMenu.width <= 320, '320px: the menu stays on screen: ' + JSON.stringify(narrowMenu));
+    assert.ok(Math.abs(await rowHeight() - narrowClosed) <= 1, '320px: opening ⋯ does not grow the row');
+    await menuFits(320, '320px');
     assert.equal(await page.locator('.photo-read-actions .photo-more-menu > button.photo-delete').isVisible(), true);
     await page.keyboard.press('Escape');
+    // Review m3: at 360px the five controls are one line with their words (비공개, 수정).
+    await page.setViewportSize({ width: 360, height: 1000 }); await paint(page);
+    await assertOneLine(await readRow(page), ['노트로 돌아가기', '비공개 · 글 정보', '글 수정', '통합 검색', '더 보기'], '360px private');
+    assert.equal(await page.locator('.photo-read-actions .photo-privacy-label').isVisible(), true, 'the pill keeps its word at 360px');
     await page.setViewportSize({ width, height: 1000 }); await paint(page);
     assert.equal(await page.locator('.photo-read-edit > span').isVisible(), true, 'the word returns from 360px');
   }
@@ -235,8 +270,19 @@ async function header(page, width) {
   assert.match(await back.getAttribute('aria-label') || await back.textContent(), /돌아가기|목록/);
   await back.focus(); await page.keyboard.press('Enter'); await settle(page);
   await page.locator('#lifeMain[data-mode="home"]').waitFor();
+  // Review m3: the same one line at 360px when the post is public (the publication read is forced by the seam).
+  if (width === 390) await page.evaluate(() => { window.__minorForcePublic = true; });
   await page.getByRole('button', { name: '다시 읽고 이어 쓰는 합성 기록', exact: true }).click();
   await page.locator('.photo-read-heading').waitFor();
+  if (width === 390) {
+    await page.locator('.photo-read-actions .photo-privacy[data-state="public"]').waitFor();
+    await page.locator('.photo-read-actions #lifeFindOpen').waitFor();
+    await page.setViewportSize({ width: 360, height: 1000 }); await paint(page);
+    await assertOneLine(await readRow(page), ['노트로 돌아가기', '공개 · 글 정보', '글 수정', '통합 검색', '더 보기'], '360px public');
+    await capture(page, 'reader-public-360');
+    await page.setViewportSize({ width, height: 1000 }); await paint(page);
+    await page.evaluate(() => { window.__minorForcePublic = false; });
+  }
   const exact = await page.evaluate(async () => {
     const s=HaedoLife.Shell.storage,w=await s.getActive(),post=(await s.listPhotoPosts(w)).find(p=>p.title==='다시 읽고 이어 쓰는 합성 기록'&&p.status==='saved');
     return {id:post.id,doc:await s.readPhotoPost(w,post.id)};
@@ -381,6 +427,7 @@ async function main() {
         if (selected && selected !== name) continue;
         const context = await makeContext(browser, new FakeCloud(), 'minor-e-' + name + width, accounts.a, { viewport: { width, height: 1000 } });
         if (name==='source') await configureSourceSync(context);
+        if (name==='header') await configurePublication(context);
         const page = await context.newPage(); page.setDefaultTimeout(12000);
         page.on('pageerror', e => report.errors.push(e.message));
         page.on('console', m => { if (m.type() === 'error') report.consoleErrors.push(m.text()); });
