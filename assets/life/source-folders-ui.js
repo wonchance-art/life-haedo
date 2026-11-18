@@ -170,15 +170,24 @@
       });
       owner.writing = promise; updateMounts(); return promise;
     }
-    function mountList(host, { filter = 'all', onFilter = () => {} } = {}) {
+    // `filterHost` (optional) takes the folder choice, e.g. the end of the kind tab row; the rest stays in `host`.
+    // 폴더 관리 is a panel opened by the caller's own control through the returned openManage() (노션 방향 W4: the
+    // 자료 메뉴); 닫기 and Esc close it and call onManageClose so the caller can return focus to that control.
+    function mountList(host, { filter = 'all', onFilter = () => {}, filterHost = null, onManageClose = () => {} } = {}) {
       const owner = ensureScope(); if (!owner) throw uiFault('자료를 연 뒤 폴더를 확인하세요.');
       const token = epoch;
       for (const previous of [...mounts]) releaseMount(previous);
       const element = el('section', null, 'source-folders'); element.setAttribute('aria-label', '자료 폴더');
       const bar = el('div', null, 'sf-filter-row'), filterLabel = el('label', null, 'sf-filter-label'), select = el('select'); select.id = 'lifeFolderFilter';
-      select.setAttribute('aria-label', '자료 폴더, 상위 폴더를 선택하면 하위 폴더 포함'); filterLabel.append(select); bar.append(filterLabel); element.append(bar);
-      const details = el('details', null, 'sf-manage'); details.id = 'lifeFolderManage'; details.open = owner.manageOpen;
-      details.append(el('summary', '폴더 관리')); element.append(details);
+      select.setAttribute('aria-label', '자료 폴더, 상위 폴더를 선택하면 하위 폴더 포함'); filterLabel.append(select);
+      if (root.HaedoLife.Icons) filterLabel.append(root.HaedoLife.Icons.create('chevron'));
+      if (filterHost) filterHost.append(filterLabel); else { bar.append(filterLabel); element.append(bar); }
+      const details = el('section', null, 'sf-manage'); details.id = 'lifeFolderManage'; details.hidden = !owner.manageOpen; details.setAttribute('aria-labelledby', 'lifeFolderManageHeading');
+      const manageHead = el('div', null, 'sf-manage-head'), manageTitle = el('h2', '폴더 관리', 'sf-manage-title'); manageTitle.id = 'lifeFolderManageHeading';
+      const closeManage = (returnFocus = true) => { if (details.hidden) return; owner.manageOpen = false; details.hidden = true; if (returnFocus) onManageClose(); };
+      const manageClose = nodeButton(null, 'lifeFolderManageClose', () => closeManage(), token, owner, 'life-button life-icon-button sf-manage-close'); manageClose.setAttribute('aria-label', '폴더 관리 닫기');
+      if (root.HaedoLife.Icons) manageClose.append(root.HaedoLife.Icons.create('close')); else manageClose.textContent = '닫기';
+      manageHead.append(manageTitle, manageClose); details.append(manageHead); element.append(details);
       const status = el('p', '', 'life-meta sf-status'); status.id = 'lifeFolderStatus'; status.setAttribute('role', 'status'); status.hidden = true;
       const error = el('p', '', 'life-error sf-error'); error.id = 'lifeFolderError'; error.setAttribute('role', 'alert'); error.hidden = true;
       const reload = nodeButton('최신 폴더 확인', 'lifeFolderReload', () => load(owner, token), token, owner); reload.hidden = true;
@@ -208,11 +217,19 @@
       }, token, owner), nodeButton('취소', 'lifeFolderDeleteCancel', () => { owner.confirm = null; updateMounts(); }, token, owner));
       const unavailable = el('p', '', 'life-meta'); unavailable.id = 'lifeFolderUnavailable'; unavailable.hidden = true;
       form.append(editLabel, nameLabel, parentLabel, actions, children, confirm); details.append(form, unavailable);
-      const mount = { owner, token, host, element, filter: select, filterValue: filter, onFilter, edit, name, parent, save, remove, children, confirm, unavailable, status, error, reload, initialized: false, released: false };
+      const mount = { owner, token, host, element, filterLabel, filter: select, filterValue: filter, onFilter, edit, name, parent, save, remove, children, confirm, unavailable, status, error, reload, initialized: false, released: false };
       mounts.add(mount); host.append(element); updateMount(mount, true);
       const fieldLive = target => live(token, owner, target) && element.contains(target);
       select.addEventListener('change', () => { if (!fieldLive(select)) return; mount.filterValue = select.value; onFilter(select.value); });
-      details.addEventListener('toggle', () => { if (fieldLive(details)) owner.manageOpen = details.open; });
+      details.addEventListener('keydown', event => {
+        if (event.key !== 'Escape' || event.isComposing || owner.editor.composing || details.hidden || !fieldLive(details)) return;
+        event.preventDefault(); event.stopPropagation(); closeManage();
+      });
+      const openManage = () => {
+        if (mount.released || !live(token, owner, element)) return;
+        owner.manageOpen = true; details.hidden = false;
+        details.scrollIntoView({ block: 'nearest' }); (edit.disabled ? manageClose : edit).focus({ preventScroll: true });
+      };
       edit.addEventListener('change', () => {
         if (!fieldLive(edit)) return;
         if (editorDirty(owner)) { edit.value = owner.editor.id; owner.error = '입력한 이름·상위 폴더를 보관하거나 취소한 뒤 다른 폴더를 선택하세요.'; updateMounts(); return; }
@@ -236,14 +253,18 @@
           }
         }).catch(error => { if (owns(token, owner)) { owner.error = errorText(error); updateMounts(); } });
       });
-      return Object.freeze({ dispose: () => releaseMount(mount) });
+      return Object.freeze({ dispose: () => releaseMount(mount), openManage, closeManage: () => closeManage(false), get manageOpen() { return !details.hidden; } });
     }
-    function releaseMount(mount) { if (mount.released) return; mount.released = true; mounts.delete(mount); mount.element.remove(); }
-    function assignmentControl({ sourceIds, buttonLabel = '폴더로 이동', onSaved = () => {} } = {}) {
+    function releaseMount(mount) { if (mount.released) return; mount.released = true; mounts.delete(mount); mount.element.remove(); mount.filterLabel.remove(); }
+    // `embedded`: the caller opens this form from its own menu item (a row's ⋯), so the summary is not shown and
+    // focus after 이동·취소·Esc goes to `focusReturn()` instead of the hidden summary.
+    function assignmentControl({ sourceIds, buttonLabel = '폴더로 이동', onSaved = () => {}, embedded = false, focusReturn = null } = {}) {
       const owner = ensureScope(); if (!owner) throw uiFault('자료를 연 뒤 폴더를 확인하세요.');
       const token = epoch, details = el('details', null, 'source-folder-assignment'); details.dataset.sourceFolderAssignment = 'true';
       const summary = el('summary', null, 'sf-assignment-toggle'); summary.setAttribute('aria-label', buttonLabel); summary.title = buttonLabel;
       if (root.HaedoLife.Icons) summary.append(root.HaedoLife.Icons.create('folder')); else summary.append(el('span', '폴더'));
+      if (embedded) { details.dataset.embedded = 'true'; summary.hidden = true; }
+      const returnFocus = () => { const target = embedded && typeof focusReturn === 'function' ? focusReturn() : summary; (target?.isConnected ? target : summary).focus({ preventScroll: true }); };
       details.append(summary);
       const panel = el('div', null, 'sf-assignment-panel'), label = el('label', '이동할 폴더', 'life-field'), destination = el('select'); destination.dataset.sourceFolderDestination = 'true'; label.append(destination);
       const message = el('p', '', 'life-meta'), error = el('p', '', 'life-error sf-error'); error.setAttribute('role', 'alert'); error.hidden = true;
@@ -267,7 +288,7 @@
           const captured = destination.value || null; applying = true; refreshControl(); error.hidden = true;
           const saved = await saveMutation(state => model().assignSources(state, sources, captured), '자료의 폴더를 옮겼습니다.');
           if (!saved || !owns(token, owner) || !isCurrent()) return;
-          if (details.isConnected) { details.open = false; selection = null; summary.focus({ preventScroll: true }); }
+          if (details.isConnected) { details.open = false; selection = null; returnFocus(); }
           onSaved(copy(saved));
         } catch (cause) { if (live(token, owner, details)) { error.textContent = errorText(cause); error.hidden = false; } }
         finally { applying = false; if (live(token, owner, details)) refreshControl(); }
@@ -276,7 +297,11 @@
         try { await load(owner, token); if (live(token, owner, details)) { error.hidden = true; refreshControl(); } }
         catch (cause) { if (live(token, owner, details)) { error.textContent = errorText(cause); error.hidden = false; } }
       }, token, owner); reload.dataset.sourceFolderReload = 'true';
-      const cancel = nodeButton('취소', null, () => { details.open = false; selection = null; summary.focus({ preventScroll: true }); }, token, owner); cancel.dataset.sourceFolderCancel = 'true';
+      const cancel = nodeButton('취소', null, () => { details.open = false; selection = null; returnFocus(); }, token, owner); cancel.dataset.sourceFolderCancel = 'true';
+      if (embedded) details.addEventListener('keydown', event => {
+        if (event.key !== 'Escape' || !details.open || applying) return;
+        event.preventDefault(); event.stopPropagation(); details.open = false; selection = null; returnFocus();
+      });
       const actions = el('div', null, 'sf-actions'); actions.append(apply, reload, cancel); panel.append(label, message, error, actions); details.append(panel);
       destination.addEventListener('change', () => { if (live(token, owner, destination)) selection = destination.value; });
       details.addEventListener('toggle', () => {

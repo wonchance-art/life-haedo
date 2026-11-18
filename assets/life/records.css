@@ -1,77 +1,116 @@
-/* 자료 목록과 읽기 칸 (2026-11-03 부드러운 판 묶음 C).
- * 행: 날짜·시간 왼쪽 칸, 제목, 일치 문맥, 실제 데이터 배지. 1101px 이상은 목록 옆에서 읽는다. */
+/* 자료 목록과 읽기 칸 (2026-11-03 부드러운 판 묶음 C, 2026-11-18 노션 방향 W4).
+ * 머리: 가져오기 · 통합 검색 · ⋯(기록 선택·폴더 관리). 검색 칸 44px 안에 검색 필터. 종류 탭 오른쪽에 폴더 선택.
+ * 행: 제목 1줄 · 발췌 2줄 · 꼬리표 줄(원천·사실 표시, 끝에 날짜·시각) · 오른쪽 ⋯. 1101px 이상은 목록 옆에서 읽는다.
+ * 색·굵기·모서리는 haedo-shell.css의 --haedo-* 토큰이고, 틸은 초점 링·인용 바에만 남는다. */
 
-/* 종류 탭 */
+/* 머리: 큰 제목 줄(1101px 이상)의 자료 단추와, 열렸거나 켜진 아이콘 단추의 두 번째 표시(선택 면 + 1.5px 먹색 테). */
+.haedo-title-band .life-title-button { display: inline-flex; align-items: center; min-width: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 0; background: none; color: var(--haedo-ink); font: inherit; }
+body.haedo-shell[data-haedo-section=records] .life-toolbar :is(.haedo-icon-button, .life-icon-button):is([aria-current=page], [aria-current=true], [aria-expanded=true], [aria-pressed=true]),
+body.haedo-shell[data-haedo-section=records] .life-toolbar .life-feature-menu[open] > summary,
+#lifeMain[data-mode=sources] :is(.life-icon-button:is([aria-expanded=true], [aria-pressed=true]), .life-feature-menu[open] > summary, .source-folder-assignment[open] > .sf-assignment-toggle),
+.records-pane .life-icon-button[aria-expanded=true] { background: var(--haedo-selected); color: var(--haedo-ink); box-shadow: inset 0 0 0 1.5px var(--haedo-ink); }
+/* 자료 메뉴 (⋯)와 행 메뉴: 떠 있는 흰 면, 정한 그림자, 8px 모서리, 항목 44px. */
+.haedo-shell :is(#lifeRecordsMenu, .records-row-more) > .life-feature-menu-panel { border-radius: var(--haedo-radius); box-shadow: 0 0 0 1px rgba(15, 15, 15, .05), 0 3px 6px rgba(15, 15, 15, .1), 0 9px 24px rgba(15, 15, 15, .2); }
+.haedo-shell :is(#lifeRecordsMenu, .records-row-more) .life-destination { border-radius: var(--haedo-control-radius); color: var(--haedo-ink); }
+.haedo-shell :is(#lifeRecordsMenu, .records-row-more) .life-destination:hover { background: var(--haedo-hover); color: var(--haedo-ink); }
+/* 기록 선택이 켜져 있으면 선택 면 + 600 + 1.5px 먹색 테(바탕만으로 나타내지 않는다). */
+.haedo-shell #lifeRecordsMenu .life-destination[aria-pressed=true] { background: var(--haedo-selected); box-shadow: inset 0 0 0 1.5px var(--haedo-ink); }
+.haedo-shell #lifeRecordsMenu .life-destination[aria-pressed=true] .life-destination-copy strong { font-weight: var(--haedo-weight-semibold); }
+.haedo-shell #lifeRecordsMenu .life-destination[aria-pressed=true] > .life-glyph:first-child { color: var(--haedo-ink); }
+
+/* 종류 탭: 글자 탭, 현재 탭은 먹색 600 + 아래 2px 먹색 선. 목록 화면에서는 오른쪽에 폴더 선택이 같은 줄에 온다. */
 .records-kind-host { min-width: 0; margin: 4px 0 0; }
+.records-tab-row { display: flex; align-items: stretch; gap: 8px; min-width: 0; margin: 4px 0 0; box-shadow: inset 0 -1px 0 var(--haedo-line); }
+.records-tab-row > .records-kind-host { flex: 1 1 auto; margin: 0; }
+.records-tab-row .records-tabs { box-shadow: none; }
 .records-tabs { display: flex; gap: 4px; min-width: 0; overflow-x: auto; scrollbar-width: none; box-shadow: inset 0 -1px 0 var(--haedo-line); }
 .records-tabs::-webkit-scrollbar { display: none; }
-.records-tab { flex: none; display: inline-block; min-height: 44px; padding: 0 12px; white-space: pre; border: 0; border-radius: 0; background: transparent; color: var(--haedo-muted); font: inherit; font-size: var(--haedo-text-control); line-height: 44px; }
+.records-tab { position: relative; flex: none; display: inline-block; min-width: 44px; min-height: 44px; padding: 0 12px; white-space: pre; border: 0; border-radius: 0; background: transparent; color: var(--haedo-muted); font: inherit; font-size: var(--haedo-text-control); font-weight: var(--haedo-weight-regular); line-height: 44px; text-align: left; }
 .records-tab:first-child { padding-left: 0; }
-.records-tab[aria-selected=true] { color: var(--haedo-ink); font-weight: 650; box-shadow: inset 0 -2px 0 var(--haedo-accent); }
+.records-tab[aria-selected=true] { color: var(--haedo-ink); font-weight: var(--haedo-weight-semibold); }
+.records-tab[aria-selected=true]::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: 0; height: 2px; background: var(--haedo-ink); }
+.records-tab:first-child[aria-selected=true]::after { left: 0; }
 .records-tab:focus-visible { outline-offset: -3px; }
 .records-tab-count { font-variant-numeric: tabular-nums; }
 @media (hover: hover) and (pointer: fine) { .records-tab:hover { color: var(--haedo-ink); } }
+.records-folder-filter { display: flex; flex: 0 1 auto; align-items: center; min-width: 0; max-width: 46%; }
+.records-folder-filter:empty { display: none; }
+.records-folder-filter .sf-filter-label { position: relative; display: flex; align-items: center; min-width: 0; max-width: 100%; }
+.records-folder-filter select { appearance: none; -webkit-appearance: none; width: auto; min-width: 44px; max-width: 100%; min-height: 44px; margin: 0; padding: 0 24px 0 8px; border: 0; border-radius: var(--haedo-control-radius); background: transparent; color: var(--haedo-muted); font: inherit; font-size: var(--haedo-text-input); line-height: 1.5; text-align: right; text-align-last: right; text-overflow: ellipsis; cursor: pointer; }
+.records-folder-filter .sf-filter-label > .life-glyph { position: absolute; right: 2px; width: 16px; height: 16px; color: var(--haedo-muted); pointer-events: none; }
+@media (hover: hover) and (pointer: fine) { .records-folder-filter select:hover:not(:disabled) { background: var(--haedo-hover); color: var(--haedo-ink); } }
 
 /* 행 */
 .life-card.records-row, .records-row {
-  position: relative; display: grid; grid-template-columns: 76px minmax(0, 1fr); column-gap: 12px; row-gap: 0; align-items: start;
+  --records-badge: #f1f1ef;
+  position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 0; row-gap: 0; align-items: start;
   padding: 4px 0 12px; border-bottom: 1px solid var(--haedo-line); overflow-wrap: anywhere;
 }
-.records-row > * { grid-column: 2; min-width: 0; }
-.records-row > .records-when {
-  grid-column: 1; grid-row: 1 / span 8; display: flex; flex-direction: column; padding-top: 11px;
-  color: var(--haedo-muted); font-size: var(--haedo-text-meta); line-height: 1.5; font-variant-numeric: tabular-nums; white-space: nowrap;
-}
-.records-day { color: var(--haedo-ink); font-weight: 600; }
+.records-row > * { grid-column: 1; min-width: 0; }
+.records-row > .records-row-tools { grid-column: 2; grid-row: 1 / span 2; margin-left: 4px; }
+.records-row > :is(.life-result-details, .source-folder-assignment, .life-record-notes) { grid-column: 1 / -1; }
 .records-row .life-record-heading { gap: 8px; align-items: center; }
 .records-row .life-source-open, .records-row-open, .records-excerpt-open {
-  position: static; display: block; width: 100%; min-height: 44px; padding: 11px 0; border: 0; border-radius: 0; background: none;
-  color: var(--haedo-ink); font: inherit; font-size: var(--haedo-text-control); font-weight: 650; line-height: 1.4; text-align: left;
+  position: static; display: block; width: 100%; min-height: 44px; padding: 10px 0; border: 0; border-radius: 0; background: none;
+  color: var(--haedo-ink); font: inherit; font-size: var(--haedo-text-input); font-weight: var(--haedo-weight-semibold); line-height: 1.5; text-align: left;
 }
+/* 제목은 한 줄이다. 넘치면 말줄임하고, 전체 제목은 단추의 접근 이름과 원문 화면에 있다. */
+.records-row .life-source-open { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The whole row opens the original; controls inside the row stay above this target. */
 .records-row .life-source-open::after, .records-row-open::after, .records-excerpt-open::after { content: ""; position: absolute; inset: 0; }
 .records-row :is(.life-source-select, .life-feed-actions, .life-icon-button, .source-folder-assignment, .life-record-notes, .life-result-details, details, a) { position: relative; z-index: 1; }
-.records-row .life-source-open:hover, .records-row-open:hover, .records-excerpt-open:hover { background: none; color: var(--haedo-accent); }
+.records-row .records-row-more[open] { z-index: 46; }
+.records-row .life-source-open:hover, .records-row-open:hover, .records-excerpt-open:hover { background: none; color: var(--haedo-ink); }
+@media (hover: hover) and (pointer: fine) {
+  .records-row :is(.life-source-open, .records-row-open, .records-excerpt-open):hover::after { inset: 0 -12px; border-radius: var(--haedo-radius); background: var(--haedo-hover); }
+}
 .records-row .life-source-open:focus-visible, .records-row-open:focus-visible, .records-excerpt-open:focus-visible { outline: 3px solid var(--haedo-focus); outline-offset: 3px; }
 .records-row .life-search-context, .records-row-context, .records-note {
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
-  margin-top: 0; color: #2a3733; font-size: var(--haedo-text-meta); font-weight: 400; line-height: 1.5;
+  margin-top: 0; color: var(--haedo-muted); font-size: 14px; font-weight: var(--haedo-weight-regular); line-height: 1.5;
 }
-.records-row mark, .records-row-context mark { padding: 0 1px; border-radius: 3px; background: #fbefc0; color: inherit; font-weight: 600; }
+.records-row mark, .records-row-context mark { padding: 0 1px; border-radius: 3px; background: var(--haedo-mark, #fbefc0); color: var(--haedo-ink); font-weight: var(--haedo-weight-semibold); }
 .records-row-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.records-badges { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; margin: 4px 0 0; padding: 0; }
-.records-badge { display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; border-radius: 6px; background: var(--haedo-soft); color: var(--haedo-muted); font-size: var(--haedo-text-badge); line-height: 1.4; }
-.records-row > .life-feed-footer { margin-top: 0; gap: 8px; }
-.records-row > .life-feed-footer > .records-badges { flex: 1; margin: 0; }
-.records-row > .life-feed-footer { justify-content: flex-start; }
+/* 꼬리표 줄: 원천·사실 표시(#F1F1EF, 12px, 모서리 4px)와 끝의 날짜·시각(13px 메타). */
+.records-badges { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 0; margin: 6px 0 0; padding: 0; }
+.records-badge { display: inline-flex; align-items: center; min-height: 22px; padding: 0 6px; border-radius: 4px; background: var(--records-badge, #f1f1ef); color: var(--haedo-muted); font-size: var(--haedo-text-badge); line-height: 1.4; }
+.records-badges > .records-when { margin-left: 2px; color: var(--haedo-meta); font-size: var(--haedo-text-meta); line-height: 1.5; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .records-row > .life-result-details { margin-top: 8px; }
-/* 인용: 3px 틸 세로 바를 날짜 칸과 본문 사이 간격에 두어 인용문 시작선을 다른 행의 제목과 맞춘다. */
+/* 인용: 3px 틸 세로 바(소유자 결정)를 본문 시작선에 두고 인용문은 그 안쪽에서 시작한다. */
 .records-quote, .records-row .life-record-notes .life-quote {
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; max-height: none;
-  margin-left: -11px; padding-left: 11px; font-weight: 400; white-space: pre-line;
+  margin-left: 0; padding-left: 12px; font-weight: var(--haedo-weight-regular); white-space: pre-line;
   background: linear-gradient(var(--haedo-accent), var(--haedo-accent)) left 0 top 3px / 3px calc(100% - 6px) no-repeat;
 }
 .records-row .life-record-notes { margin-top: 8px; }
 .records-row .life-record-notes .life-excerpt-card { gap: 4px; padding: 8px 0 0; border: 0; }
 .records-row .life-record-notes .life-excerpt-card + .life-excerpt-card { margin-top: 8px; border-top: 1px solid var(--haedo-line); }
 .records-row .life-record-notes .life-quote { font-size: var(--haedo-text-control); line-height: 1.6; }
-.records-pane-count, #lifeMain[data-wide=records] #lifeSearchCount { margin: 8px 0 0; color: var(--haedo-muted); font-size: var(--haedo-text-meta); }
+/* 개수 줄(#lifeSearchCount, role=status): 탭 아래 13px 메타. 문구는 그대로다. */
+.records-pane-count, #lifeMain[data-wide=records] #lifeSearchCount { margin: 8px 0 0; color: var(--haedo-meta); font-size: var(--haedo-text-meta); line-height: 1.5; }
 
-/* The original open beside the list: its row keeps a 2px outline (the face may widen past the column). */
-.records-pane-row[data-current=true]::before, .records-pane .records-excerpt-row[data-current=true]::before { content: ""; position: absolute; inset: 0 -12px; border-radius: 12px; box-shadow: inset 0 0 0 2px var(--haedo-accent); pointer-events: none; }
+/* The original open beside the list: its row keeps a 2px ink outline (the face may widen past the column). */
+.records-pane-row[data-current=true]::before, .records-pane .records-excerpt-row[data-current=true]::before { content: ""; position: absolute; inset: 0 -12px; border-radius: var(--haedo-radius); box-shadow: inset 0 0 0 2px var(--haedo-ink); pointer-events: none; }
 /* 가져오기 with its label in the heading toolbar (icon only on a phone). */
-.life-icon-button.life-records-import { width: auto; flex: 0 0 auto; gap: 6px; padding: 0 12px; border-radius: 12px; color: var(--haedo-ink); font-size: var(--haedo-text-control); font-weight: 550; }
+.life-icon-button.life-records-import { width: auto; flex: 0 0 auto; gap: 6px; padding: 0 12px; border-radius: var(--haedo-control-radius); color: var(--haedo-ink); font-size: var(--haedo-text-control); font-weight: var(--haedo-weight-medium); }
 .life-records-import-label { white-space: nowrap; }
 @media (max-width: 760px) {
   .life-icon-button.life-records-import { width: 44px; padding: 12px; }
   .life-records-import-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
 
-/* 검색 막대 끝의 지우기·필터 묶음: 행 끝 동작과 같은 오른쪽 선에 둔다. */
-.life-search-tools { display: flex; flex: none; align-items: center; gap: 8px; }
-#lifeMain[data-mode=sources] .life-search-bar, .records-pane .life-search-bar { padding-right: 0; }
-.records-row-tools { display: flex; flex: none; align-items: center; gap: 8px; margin-left: auto; }
+/* 검색 칸: 44px, --field-line 테두리, 흰 바탕(haedo-shell.css). 칸 안 오른쪽 끝에 지우기(글자가 있을 때)와 검색 필터. */
+.life-search-tools { display: flex; flex: none; align-items: center; gap: 0; }
+.haedo-shell #lifeMain[data-mode=sources] .life-search-bar, .haedo-shell .records-pane .life-search-bar { min-height: 44px; margin-bottom: 8px; padding: 0 0 0 12px; }
+#lifeMain[data-mode=sources] .life-search-bar input, .records-pane .life-search-bar input { min-height: 42px; margin-block: 1px; padding-block: 0; background: transparent; }
+#lifeMain[data-mode=sources] .life-search-bar:has(input:placeholder-shown) [id$=SearchClear], .records-pane .life-search-bar:has(input:placeholder-shown) [id$=SearchClear] { display: none; }
+#lifeMain[data-mode=sources] .life-filter-panel { margin: 8px 0 16px; }
+/* 기록 선택 중 행 왼쪽 끝의 선택 단추: 도움말이 화면 왼쪽으로 잘리지 않게 단추의 왼쪽 선에서 시작한다. */
+.records-row .life-source-select > .life-tooltip { left: 0; transform: none; width: max-content; max-width: min(280px, calc(100vw - 48px)); white-space: normal; word-break: keep-all; overflow-wrap: anywhere; }
+.records-row-tools { display: flex; flex: none; align-items: center; }
 .records-row-tools > * { position: relative; z-index: 1; }
+.records-row-more > .records-row-menu { width: min(220px, calc(100vw - 32px)); }
+.records-row-more .life-destination > .life-glyph:first-child { color: var(--haedo-muted); }
 
 /* 읽기 칸 */
 .life-reader-version-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; margin: 4px 0 12px; }
@@ -124,10 +163,6 @@
 html[data-haedo-split-dragging] { cursor: col-resize; -webkit-user-select: none; user-select: none; }
 html[data-haedo-split-dragging] body { cursor: col-resize; }
 html[data-haedo-split-dragging] iframe { pointer-events: none; }
-@media (max-width: 760px) {
-  .life-card.records-row, .records-row { grid-template-columns: 64px minmax(0, 1fr); column-gap: 12px; }
-  .records-row > .records-when { white-space: normal; }
-}
 @media (forced-colors: active) {
   .records-tab[aria-selected=true] { box-shadow: none; text-decoration: underline 2px; }
   .haedo-split-handle::before, .haedo-split-grip { background: CanvasText; }
