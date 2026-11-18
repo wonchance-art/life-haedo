@@ -707,6 +707,8 @@
     const SCROLL_KEYS = new Set(['PageDown', 'PageUp', 'ArrowDown', 'ArrowUp', 'Home', 'End', ' ', 'Spacebar']);
     function pageScrollIntent(event) {
       if (event.type === 'keydown') lastKeyAt = Date.now();
+      // A wheel or a finger takes the page over: what scrolls from here is the person's, not the rest of a move the screen began.
+      else { ownMoving = false; ownFrames = 0; }
       if (!scope() || !current || current.listTouched || current.settingsScreen || root.document.getElementById('lifeApp')?.hidden !== false) return;
       if (event.type === 'keydown' && (!SCROLL_KEYS.has(event.key) || event.target?.closest?.('input, textarea, select, [contenteditable]'))) return;
       touchList();
@@ -716,14 +718,36 @@
     // itself. placing() marks the screen's own scrolls (restoring a place, bringing a control into view); a smooth one
     // goes on for a while, so the scrolls that follow it closely belong to it.
     // opening: from the start of render() to its end; the page then still shows wherever the other tab left it.
+    //
+    // 2026-11-18: which scrolls are the screen's own is decided by the order of events, not only by a clock. A slow
+    // machine delivered the scroll event of the screen's own move more than 250ms after placing(), and it was then
+    // taken for the person's (news-wide-search-browser "the list took them", 1 run in 3 under load).
+    //  - ownFrames: placing() opens OWN_FRAMES animation frames. A scroll event is dispatched in the rendering
+    //    update before that update's animation frame callbacks, so the event of a move made right after placing()
+    //    always arrives while frames remain, however late that update is. (A smooth move shows its first event
+    //    within these frames as well.)
+    //  - ownMoving: once one such event has come, every scroll up to that movement's `scrollend` is the same
+    //    movement (a smooth scroll goes on for many frames). Browsers without `scrollend` keep counting frames and
+    //    the earlier 250ms rule from the last event instead.
+    // The 250ms rule stays as a second way to recognise a move the shell makes a little later (nothing that was
+    // the screen's before is now the person's). A wheel, touch or scroll key ends the screen's claim at once.
     let placedAt = -Infinity, opening = false;
+    const OWN_FRAMES = 4, scrollEnds = 'onscrollend' in root;
+    let ownFrames = 0, ownMoving = false, ownTick = 0;
     const clock = () => root.performance?.now?.() ?? Date.now();
-    function placing() { placedAt = clock(); }
+    function ownFrame() { ownTick = root.requestAnimationFrame(() => { ownTick = 0; if (ownFrames > 0 && --ownFrames > 0) ownFrame(); }); }
+    function placing() { placedAt = clock(); ownFrames = OWN_FRAMES; if (!ownTick) ownFrame(); }
+    function pageScrollEnded() { ownMoving = false; }
     function pageScrolled() {
       const shown = !opening && active && !!surface?.isConnected && scope() && !!current && !current.settingsScreen && root.document.getElementById('lifeApp')?.hidden === false;
       if (shown) current.newsY = root.scrollY || 0; // news's own place (capture)
+      if (ownMoving) return;
       const now = clock();
-      if (now - placedAt < 250) { placedAt = now; return; }
+      if (ownFrames > 0 || now - placedAt < 250) {
+        placedAt = now;
+        if (scrollEnds) ownMoving = true; else if (ownFrames > 0) { ownFrames = OWN_FRAMES; if (!ownTick) ownFrame(); }
+        return;
+      }
       if (!shown || current.listTouched) return;
       touchList();
     }
@@ -1833,7 +1857,9 @@
         if (gone) { const again = button('다시 추천받기', 'discoveryPickAgain', () => { capture(null, 'pick-again'); resetList(); refreshPick({ force: true }).catch(error => report(error)); }, 'discovery-quiet'); again.dataset.focusKey = 'pick-again'; body.append(again); }
         if (current.mode === 'pick' && current.pick.next) {
           // An answer that came while the list was in use: pressing shows it from the top, like 새 글 n건.
-          const show = button(null, 'discoveryPickShow', () => { applyPendingPick(); resetList(); draw(); root.requestAnimationFrame(() => { if (scope()) { placing(); surface.querySelector('#discoveryList [data-discovery-select], #discoveryList a[data-discovery-open]')?.focus({ preventScroll: true }); current.listPane.scrollIntoView({ block: 'start' }); } }); }, 'discovery-new-articles');
+          // placing() before the redraw as well: drawing the list again can move the page by itself (the list is
+          // rebuilt, so the page is clamped to a shorter document for a moment), before the frame below scrolls to it.
+          const show = button(null, 'discoveryPickShow', () => { applyPendingPick(); resetList(); placing(); draw(); root.requestAnimationFrame(() => { if (scope()) { placing(); surface.querySelector('#discoveryList [data-discovery-select], #discoveryList a[data-discovery-open]')?.focus({ preventScroll: true }); current.listPane.scrollIntoView({ block: 'start' }); } }); }, 'discovery-new-articles');
           show.append(icon('up', 16), node('span', 'AI 추천 ' + current.pick.next.picks.length + '건 보기')); body.append(show);
         }
         if (!items.length) {
@@ -1849,7 +1875,7 @@
         const fresh = current.newUrls && !current.newDismissed ? items.filter(item => current.newUrls.has(item.article.canonicalUrl)).length : 0;
         if (fresh) {
           // Pressing it is a refresh the person asks for: the order is computed again, so the new ones take their place.
-          const notice = button(null, 'discoveryNewArticles', () => { current.newDismissed = true; resetList(); draw(); root.requestAnimationFrame(() => { if (scope()) { placing(); surface.querySelector('#discoveryList [data-discovery-select]')?.focus({ preventScroll: true }); current.listPane.scrollIntoView({ block: 'start' }); } }); }, 'discovery-new-articles');
+          const notice = button(null, 'discoveryNewArticles', () => { current.newDismissed = true; resetList(); placing(); draw(); root.requestAnimationFrame(() => { if (scope()) { placing(); surface.querySelector('#discoveryList [data-discovery-select]')?.focus({ preventScroll: true }); current.listPane.scrollIntoView({ block: 'start' }); } }); }, 'discovery-new-articles');
           notice.append(icon('up', 16), node('span', '새 글 ' + fresh + '건')); body.append(notice);
         }
         rows = items.map(item => () => articleCard(item, feed.sources || []));
@@ -2020,8 +2046,9 @@
     root.document.addEventListener('pointerdown', closeCardMenus, true);
     for (const type of ['wheel', 'touchmove', 'keydown']) root.addEventListener(type, pageScrollIntent, { passive: true });
     root.addEventListener('scroll', pageScrolled, { passive: true });
+    if (scrollEnds) root.addEventListener('scrollend', pageScrollEnded, { passive: true });
     root.document.addEventListener('haedo:page-suspend', pageSuspend); root.document.addEventListener('haedo:page-ready', pageReady); root.document.addEventListener('visibilitychange', lifecycle); root.addEventListener('online', lifecycle); root.addEventListener('offline', lifecycle);
-    function dispose() { leave(); readingUI?.dispose(); readingUI = null; disposed = true; downloadUrls.forEach(address => URL.revokeObjectURL(address)); downloadUrls.clear(); dropImages(); wideClient?.dispose(); wideClient = null; wideUnlisten?.(); wideUnlisten = null; if (current?.wide) current.wide.items = []; root.document.removeEventListener('pointerdown', closeCardMenus, true); for (const type of ['wheel', 'touchmove', 'keydown']) root.removeEventListener(type, pageScrollIntent); root.removeEventListener('scroll', pageScrolled); root.document.removeEventListener('haedo:page-suspend', pageSuspend); root.document.removeEventListener('haedo:page-ready', pageReady); root.document.removeEventListener('visibilitychange', lifecycle); root.removeEventListener('online', lifecycle); root.removeEventListener('offline', lifecycle); client?.dispose(); client = null; current = null; workspaceId = null; }
+    function dispose() { leave(); readingUI?.dispose(); readingUI = null; disposed = true; downloadUrls.forEach(address => URL.revokeObjectURL(address)); downloadUrls.clear(); dropImages(); wideClient?.dispose(); wideClient = null; wideUnlisten?.(); wideUnlisten = null; if (current?.wide) current.wide.items = []; root.document.removeEventListener('pointerdown', closeCardMenus, true); for (const type of ['wheel', 'touchmove', 'keydown']) root.removeEventListener(type, pageScrollIntent); root.removeEventListener('scroll', pageScrolled); root.removeEventListener('scrollend', pageScrollEnded); if (ownTick) root.cancelAnimationFrame(ownTick); root.document.removeEventListener('haedo:page-suspend', pageSuspend); root.document.removeEventListener('haedo:page-ready', pageReady); root.document.removeEventListener('visibilitychange', lifecycle); root.removeEventListener('online', lifecycle); root.removeEventListener('offline', lifecycle); client?.dispose(); client = null; current = null; workspaceId = null; }
     return Object.freeze({ render, refresh: render, leave, dispose, flush, dirty, showArticle, settingsControl });
   }
   root.HaedoLife ||= {}; root.HaedoLife.DiscoveryUI = Object.freeze({ create });

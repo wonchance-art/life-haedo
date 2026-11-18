@@ -138,6 +138,8 @@ async function main() {
     await context.route(cloud + '/functions/v1/haedo-news-wide', serve(wide.requests, body => body?.topics?.some(refusedTopic) ? { status: 400, body: { error: 'invalid_topic' } } : wide.reply(body)));
     await context.route(cloud + '/rest/v1/rpc/life_news_wide_clear', serve(wide.clears, body => wide.clearReply(body)));
     const page = await context.newPage(); page.setDefaultTimeout(15000);
+    // NEWS_WIDE_THROTTLE=<rate>: the page's CPU slowed (CDP), to reproduce a slow machine; no assertion or wait changes.
+    if (process.env.NEWS_WIDE_THROTTLE) { const cdp = await context.newCDPSession(page); await cdp.send('Emulation.setCPUThrottlingRate', { rate: Number(process.env.NEWS_WIDE_THROTTLE) }); }
     const messages = [];
     page.on('console', message => { messages.push(message.text()); if (message.type() === 'error') report.consoleErrors.push({ check: name, text: message.text() }); });
     page.on('pageerror', error => { if (harnessFrameError(error.message)) (report.harnessFrameErrors ||= []).push(name); else report.pageErrors.push({ check: name, text: error.message }); });
@@ -699,6 +701,43 @@ async function main() {
       await until(page, () => !document.querySelector('#discoveryWideNotice')?.textContent.includes('찾는 중'), null, 'answer drawn'); await page.waitForTimeout(300); await frames(page);
       assert.equal(await page.locator('#discoveryNewArticles').count(), 0, 'nothing to announce: the list took them');
       assert.notDeepEqual(await shownIds(page), drawn, 'the new links took their place on the first page');
+    });
+    // 2026-11-18: the other direction. The screen's own move is recognised by the order of its events up to its
+    // `scrollend`, not by a clock alone; that must not swallow the person's scroll afterwards. After 새 글 n건 has
+    // scrolled the page by itself and come to rest, a scroll with no wheel, touch or key (scroll bar, screen reader)
+    // is a use: the answer that arrives when news is opened again is announced, and the drawn cards keep their places.
+    await check('after the screen\'s own scroll has ended, a scroll without wheel, touch or key is still the person\'s: a late answer is announced', async ({ page, wide, state }) => {
+      let round = 0;
+      wide.reply = body => { round++; const base = answer(body, { per: 0 });
+        base.items = Array.from({ length: 12 }, (_, i) => item(body.topics[0], 'ko', round * 100 + i, { sourceName: '넓은 매체 ' + i, publishedAt: new Date(Date.now() - (i + 2) * 60000).toISOString() }));
+        base.topics = body.topics.map(topic => ({ topic, language: 'ko', status: 'fresh', fetchedAt: base.fetchedAt, count: 12 })); return { status: 200, body: base }; };
+      state.catalog = skewed(80); await page.reload(); await ready(page); await nav(page, 'news'); await idle(page);
+      await start(page, wide, ['합성 주제']);
+      let release; wide.hold = new Promise(resolve => { release = resolve; });
+      await page.reload(); await ready(page); await nav(page, 'news'); await idle(page); await frames(page);
+      const box = await page.locator('#discoveryList').boundingBox(); await page.mouse.move(box.x + 40, box.y + 40); await page.mouse.wheel(0, 300); await frames(page);
+      release(); wide.hold = null;
+      await page.locator('#discoveryNewArticles').waitFor(); await frames(page);
+      const pressed = await page.evaluate(() => scrollY);
+      await page.evaluate(() => { window.__ends = 0; addEventListener('scrollend', () => { window.__ends++; }); });
+      await page.locator('#discoveryNewArticles').click();
+      const still = async () => { let last = -1; for (let n = 0; n < 40; n++) { await page.waitForTimeout(100); const y = await page.evaluate(() => scrollY); if (y === last) return y; last = y; } return last; };
+      const placed = await still(); assert.notEqual(placed, pressed, 'the screen scrolled to the list by itself');
+      await until(page, () => window.__ends > 0, null, 'the screen\'s own scroll has ended'); await page.waitForTimeout(600);
+      // The person drags the scroll bar (a script stands in: headless Chromium draws none).
+      await page.evaluate(() => window.scrollBy({ top: 240, behavior: 'instant' })); await frames(page);
+      assert.notEqual(await page.evaluate(() => scrollY), placed, 'the page moved');
+      await nav(page, 'schedule'); await page.waitForTimeout(300);
+      await page.evaluate(async () => { const s = HaedoLife.Shell.storage, w = await s.getActive(), p = await s.readInterestProfile(w);
+        await s.saveInterestProfile(w, HaedoLife.InterestProfile.setManual(p, [...p.manual, { id: 'manual-other-device', label: '둘째 주제' }], { expectedRevision: p.revision }), p.revision); });
+      wide.hold = new Promise(resolve => { release = resolve; }); const asked = wide.requests.length;
+      await nav(page, 'news'); await idle(page); await frames(page);
+      await settled(async () => wide.requests.length, asked + 1, 'asked on opening'); await still();
+      const drawn = await shownIds(page); assert.equal(drawn.length, 20);
+      release(); wide.hold = null;
+      await page.locator('#discoveryNewArticles').waitFor(); await frames(page);
+      assert.match(await page.locator('#discoveryNewArticles').innerText(), /새 글 \d+건/);
+      assert.deepEqual(await shownIds(page), drawn, 'the cards the person had scrolled keep their places');
     });
     // 11-12 re-review MINOR-A: news opened from a long 일정 list scrolled down opened in the middle of its own list. The
     // 넓게 찾기 request made while news opened kept the other tab's scroll as news's place, and the screen put the page
