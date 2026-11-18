@@ -291,6 +291,7 @@ async function main() {
         if (Math.abs(got - want) > 1) misses.push(scene + ': left at ' + left + ', expected ' + want + ', came back at ' + got);
       }
       const dayShown = () => shown(page, 'day');
+      const monthLabel = '#lifeSchedule .schedule-month-label', weekLabel = '#lifeSchedule .schedule-week-label';
       for (const [width, height, monthTops, weekTops, dayTops] of [[1440, 600, [60, 120, 162, 200], [80, 160], [100, 200]], [820, 700, [60, 120, 200], [90, 170], [100, 200]], [390, 600, [60, 120, 189], [90, 170], [100, 200]]]) {
         await page.setViewportSize({ width, height });
         const size = width + '×' + height;
@@ -299,6 +300,9 @@ async function main() {
         await trip(size + ' W ' + weekTops[1] + ' → 글 읽기 → 뒤로', 'week', '?section=schedule&view=week&date=2026-10-28', weekTops[1], post, read, browserBack);
         await trip(size + ' D ' + dayTops[0] + ' → 글 읽기 → 돌아가기', 'day', '?section=schedule&view=day&date=2026-10-28', dayTops[0], post, read, appReturn);
         await trip(size + ' D ' + dayTops[1] + ' → 글 읽기 → 뒤로', 'day', '?section=schedule&view=day&date=2026-10-28', dayTops[1], post, read, browserBack);
+        // Y and Q are entries of 일정 too: a month opened from Y, a week opened from Q, then the browser's back.
+        await trip(size + ' Y 120 → M → 뒤로', 'tools', '?section=schedule&view=tools', 120, monthLabel, () => shown(page, 'month'), browserBack);
+        await trip(size + ' Q 130 → W → 뒤로', 'quarter', '?section=schedule&view=quarter&date=2026-10-28', 130, weekLabel, () => shown(page, 'week'), browserBack);
         // A direct writing opens in the 자료 reader. Its 돌아가기 set the position before the calendar was drawn again, so
         // it was cut to the empty frame's height (on 8c3c54f at 1440×600: D left at 1169 came back at 58).
         await trip(size + ' D → 직접 쓴 글 → 돌아가기', 'day', '?section=schedule&view=day&date=2026-10-28', null, writing, readWriting, readerReturn);
