@@ -961,7 +961,8 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
 .photo-info-line > svg { flex: none; width: 16px; height: 16px; }
 .photo-info-row > dd[data-state="error"] > .photo-info-value { color: var(--color-error, #a3243d); }
 .photo-info-note { margin: 4px 0 0; font-size: var(--haedo-text-meta, 13px); line-height: 1.6; color: var(--ink-soft, #5d6b65); }
-.photo-info-action { display: inline-flex; align-items: center; min-height: 44px; margin-top: 8px; border-radius: var(--haedo-control-radius, 6px); font-weight: var(--haedo-weight-medium, 500); }
+/* 공개하기 and the sheet's retries: the same framed 44px button as 내 글로 돌아가기 (field line, 6px). */
+.photo-info .photo-info-action { display: inline-flex; align-items: center; min-height: 44px; margin-top: 8px; border-color: var(--field-line, #8a8984); border-radius: var(--haedo-control-radius, 6px); font-weight: var(--haedo-weight-medium, 500); }
 .photo-info :focus-visible { outline: 2px solid var(--haedo-focus, var(--color-primary, #145b50)); outline-offset: 2px; }
 @media (max-width: 760px) {
   .photo-info {
