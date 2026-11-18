@@ -29,7 +29,7 @@ body.haedo-shell:not(.haedo-timeline) {
   /* W5 (2026-11-16): ui.css also serves the public pages, so its old weights and radii read these app-only
      values and fall back to the old ones elsewhere (public pages stay as they are). */
   --ui-link-color:var(--haedo-link); --ui-label-weight:var(--haedo-weight-medium); --ui-strong-weight:var(--haedo-weight-semibold); --ui-title-weight:var(--haedo-weight-bold);
-  --ui-pressed-color:var(--haedo-ink); --ui-pressed-weight:var(--haedo-weight-semibold); --ui-title-hover-color:var(--haedo-ink); --ui-title-hover-line:underline;
+  --ui-icon-radius:var(--haedo-control-radius); --ui-pressed-color:var(--haedo-ink); --ui-pressed-weight:var(--haedo-weight-semibold); --ui-title-hover-color:var(--haedo-ink); --ui-title-hover-line:underline;
   --ui-panel-radius:var(--haedo-radius); --ui-tile-radius:var(--haedo-control-radius); --ui-item-radius:var(--haedo-control-radius); --ui-pill-radius:var(--haedo-control-radius);
   --control-radius:var(--haedo-control-radius); --surface-radius:var(--haedo-radius);
 }
@@ -186,7 +186,16 @@ body.haedo-shell:not([data-haedo-section=manage]) #lifeAccountHost{display:none}
    The page is white now, so they take the soft surface or a field ring. Kept here, under .haedo-shell, so the
    public pages (ui.css without this file) keep their current look. */
 .haedo-shell .life-search-bar{background:var(--haedo-paper);box-shadow:inset 0 0 0 1px var(--field-line);border-radius:var(--haedo-control-radius)}
-.haedo-shell :is(.life-selection-bar,.life-import-methods,.wb-share-confirm){background:var(--haedo-soft)}
+.haedo-shell :is(.life-selection-bar,.wb-share-confirm){background:var(--haedo-soft)}
+/* 가져오기 방식 (본문 붙여넣기 · 텍스트 파일 · 링크 보관): letter tabs, not a grey segmented box (contract 탭, W5).
+   They stay aria-pressed buttons; the pressed one is ink 600 with a 2px ink line under it (two cues). */
+.haedo-shell .life-import-methods{display:flex;flex-wrap:wrap;gap:0;padding:0;background:transparent;border-radius:0;box-shadow:inset 0 -1px 0 var(--haedo-line)}
+.haedo-shell .life-import-methods .life-button{position:relative;flex:none;min-height:44px;padding:0 12px;border:0;border-radius:0;background:transparent;color:var(--haedo-muted);font-weight:var(--haedo-weight-regular)}
+.haedo-shell .life-import-methods .life-button:first-child{padding-left:0}
+.haedo-shell .life-import-methods .life-button:hover{background:transparent;color:var(--haedo-ink)}
+.haedo-shell .life-import-methods .life-button[aria-pressed=true]{background:transparent;color:var(--haedo-ink);font-weight:var(--haedo-weight-semibold)}
+.haedo-shell .life-import-methods .life-button[aria-pressed=true]::after{content:"";position:absolute;left:12px;right:12px;bottom:0;height:2px;background:var(--haedo-ink)}
+.haedo-shell .life-import-methods .life-button[aria-pressed=true]:first-child::after{left:0}
 .haedo-shell .home-post-media{background:var(--haedo-soft)}
 /* blog-manager.css (read-only 공개 이름·소개 fields) and collection.css (candidate card) also filled with the canvas. */
 .haedo-shell :is(.blog-manager-profile-editor input[readonly],.blog-manager-profile-editor textarea[readonly],.cl-candidate){background:var(--haedo-soft)}
@@ -204,6 +213,9 @@ body.haedo-shell:not([data-haedo-section=manage]) #lifeAccountHost{display:none}
 @media (min-width: 1101px) {
   .haedo-shell .life-toolbar.haedo-page-heading[data-page-head] { min-height: 44px; margin-bottom: 0; }
   .life-toolbar[data-page-head] > .haedo-heading-path { display: flex; flex: 1; align-items: center; min-width: 0; min-height: 44px; color: var(--haedo-muted); font-size: 14px; line-height: 1.5; }
+  /* 최신 내용 확인 joins the 44px row at its end instead of taking a whole second line of the sticky header (W5).
+     It is last in the DOM too, so the Tab order matches. Up to 1100px it keeps its own line as before. */
+  .haedo-shell .life-toolbar[data-page-head] > .life-refresh { flex: none; flex-basis: auto; margin-left: 4px; }
   .haedo-title-band { max-width: none; margin: 24px 0 8px; }
   .haedo-title-band > .haedo-heading-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .haedo-title-band h1.life-page-title { margin: 0; color: var(--haedo-ink); font: var(--haedo-weight-bold) var(--haedo-text-page-title) / 1.25 var(--haedo-font); letter-spacing: -.01em; overflow-wrap: anywhere; word-break: keep-all; }

@@ -57,7 +57,7 @@ h4 { font-size: 16px; line-height: 1.7; }
 @media (hover: hover) and (pointer: fine) { .life-button:hover { background: var(--paper-2); } }
 .life-primary { border-color: var(--ink); color: #fff; background: var(--ink); font-weight: var(--ui-strong-weight, 650); border-radius: var(--ui-pill-radius, 999px); }
 @media (hover: hover) and (pointer: fine) { .life-primary:hover { background: #34343a; color: #fff; } }
-.life-icon-button { position: relative; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 44px; width: 44px; height: 44px; min-width: 44px; min-height: 44px; padding: 12px; border: 0; border-radius: 50%; background: transparent; color: var(--ink-soft); text-decoration: none; transition: color 180ms ease, background 180ms ease; }
+.life-icon-button { position: relative; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 44px; width: 44px; height: 44px; min-width: 44px; min-height: 44px; padding: 12px; border: 0; border-radius: var(--ui-icon-radius, 50%); background: transparent; color: var(--ink-soft); text-decoration: none; transition: color 180ms ease, background 180ms ease; }
 @media (hover: hover) and (pointer: fine) { .life-icon-button:hover { background: var(--paper-2); color: var(--ink); } }
 .life-icon-button[aria-current=page],.life-icon-button[aria-pressed=true],.life-icon-button[aria-expanded=true] { color: var(--ui-pressed-color, var(--color-primary)); background: var(--soft); }
 .life-icon-button[aria-current=page]::before { content: ''; position: absolute; bottom: 1px; width: 4px; height: 4px; border-radius: 50%; background: currentColor; }

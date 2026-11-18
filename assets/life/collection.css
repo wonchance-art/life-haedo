@@ -9,9 +9,10 @@
 .cl-search input,.cl-search select { background:#fff; }
 .cl-chip-row { display:flex; gap:6px; overflow-x:auto; overscroll-behavior-x:contain; scrollbar-width:thin; padding:5px 2px; }
 .cl-chip-row button { flex:none; min-height:44px; white-space:nowrap; border-radius:var(--haedo-control-radius, 6px); border-color:transparent; background:transparent; }
-.cl-chip-row button[aria-pressed=true],.cl-result-line button[aria-pressed=true] { color:#fff; background:var(--ink); }
-.cl-children button[aria-pressed=true] { color:#fff; background:var(--ink); }
-.cl-chip-row button[aria-pressed=true]:is(:hover,:active),.cl-result-line button[aria-pressed=true]:is(:hover,:active) { color:#fff; background:#343439; }
+/* A chosen filter: the selected surface with ink 600 (contract 거르기; W5 — was a dark fill). */
+.cl-chip-row button[aria-pressed=true],.cl-result-line button[aria-pressed=true] { color:var(--haedo-ink, #37352f); background:var(--haedo-selected, rgba(55,53,47,.06)); font-weight:var(--haedo-weight-semibold, 600); }
+.cl-children button[aria-pressed=true] { color:var(--haedo-ink, #37352f); background:var(--haedo-selected, rgba(55,53,47,.06)); font-weight:var(--haedo-weight-semibold, 600); }
+.cl-chip-row button[aria-pressed=true]:is(:hover,:active),.cl-result-line button[aria-pressed=true]:is(:hover,:active) { color:var(--haedo-ink, #37352f); background:var(--haedo-selected, rgba(55,53,47,.06)); }
 .cl-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:30px 24px; }
 .cl-card { display:flex; flex-direction:column; min-width:0; border:0; padding:0; text-align:left; color:var(--ink); background:transparent; cursor:pointer; font:inherit; }
 .cl-card:hover strong { text-decoration:underline; text-underline-offset:4px; }

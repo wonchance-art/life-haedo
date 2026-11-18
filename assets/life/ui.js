@@ -293,7 +293,8 @@
     // 노트·일정, and the 자료 list·뉴스·설정 (W4), from 1101px keep their large title after the toolbar (renderHeader);
     // the screen's title is found in either.
     const wideHeading = global.matchMedia?.('(min-width: 1101px)') || null;
-    const pageHeadModes = new Set(['sources', 'external-discovery', 'manage']);
+    // W5 (2026-11-18): 자료's own screens (주제·컬렉션·가져오기·묶음) take the same wide heading as 자료.
+    const pageHeadModes = new Set(['sources', 'external-discovery', 'manage', 'topics', 'collection', 'import', 'activities']);
     const pageHeading = () => toolbar.querySelector('h1') || root?.querySelector(':scope > .haedo-title-band h1') || null;
     const pageHeadingWidth = () => { if (!disposed && state.bundle && (state.mode === 'home' || calendarModes.has(state.mode) || pageHeadModes.has(state.mode))) renderHeader(); };
     const planningNavigation = node('div', null, 'life-planning-navigation');
@@ -3956,7 +3957,8 @@
     }
 
     function sourceFeedCard(source, version) {
-      const card = node('article', null, 'life-card life-source-card');
+      // W5: the 주제 rows use the 자료 row (records.css .records-row: title one line, excerpt two, one meta line, whole row opens).
+      const card = node('article', null, 'life-card life-source-card records-row');
       const key = resultFocusKey('topics', source.id, 'original');
       const open = button(sourceLabel(source), guarded(() => openResult('topics', key, { sourceId: source.id, sourceVersionId: version.id })), 'life-source-open');
       open.dataset.focusKey = key;
