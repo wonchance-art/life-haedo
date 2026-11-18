@@ -2,7 +2,8 @@
  * account/workspace-scoped IDB. Anonymous synthetic records/FakeCloud Auth only.
  * BASE_URL=http://127.0.0.1:4173 node tests/source-folders-browser.cjs */
 'use strict';
-const { openRecordsMenu } = require('./helpers/feature-menus.cjs');
+const { openRecordsMenu, toggleRecordSelection, openFolderManage, openRowFolderMove } = require('./helpers/feature-menus.cjs');
+const { watched } = require('./helpers/stall-watch.cjs');
 const { isLegacyLibraryCapabilityRead } = require('./helpers/library-cloud.cjs');
 const { isBackgroundSync, isRssInboxRead } = require('./helpers/account-sync-rpcs.cjs'); // Owner directive 2026-11-01: only owner-scoped background sync calls are excluded.
 process.env.BASE_URL ||= 'http://127.0.0.1:4173';
@@ -53,17 +54,22 @@ async function fixture(page, rich = false) {
   }
   await records(page); return { a, b, before: await snapshot(page) };
 }
-async function manage(page) { const details = page.locator('#lifeFolderManage'); if (!await details.evaluate(el => el.open)) await details.locator(':scope > summary').click(); await page.locator('#lifeFolderName').waitFor(); }
+// 2026-11-18 (노션 방향 W4): 폴더 관리 opens from the 자료 메뉴 (⋯); a row's 폴더로 이동 opens from the row's ⋯.
+async function manage(page) { await openFolderManage(page); await page.locator('#lifeFolderName').waitFor(); }
 async function folderEditor(page, id = '') { await manage(page); await page.locator('#lifeFolderEdit').selectOption(id || 'new'); }
 async function saveFolder(page, { id = '', name, parentId = '' }) { await folderEditor(page, id); await page.locator('#lifeFolderName').fill(name); await page.locator('#lifeFolderParent').selectOption(parentId); const before = (await snapshot(page)).sourceFolders; await click(page, '#lifeFolderSave'); const state = (await waitSnapshot(page, value => value.sourceFolders.revision > before.revision)).sourceFolders; assert.equal(state.revision, before.revision + 1); const folder = id ? state.folders.find(f => f.id === id) : state.folders.find(f => f.name === name.trim()); assert(folder, 'Explicit folder save did not persist'); assert.equal(folder.name, name.trim()); assert.equal(folder.parentId, parentId || null); await page.waitForFunction(id => document.querySelector('#lifeFolderEdit')?.value === id && !document.querySelector('#lifeFolderSave')?.disabled, folder.id); return folder; }
 async function assign(page, control, folderId) {
   const before = (await snapshot(page)).sourceFolders;
-  if (!await control.evaluate(el => el.open)) await control.locator(':scope > summary').click();
+  if (!await control.evaluate(el => el.open)) { if (await control.getAttribute('data-embedded')) await openRowFolderMove(control.locator('xpath=ancestor::article[1]')); else await control.locator(':scope > summary').click(); }
   await control.locator('[data-source-folder-destination]:enabled').waitFor(); await control.locator('[data-source-folder-destination]').selectOption(folderId);
   await control.locator('[data-source-folder-apply]').click();
   const saved = await waitSnapshot(page, value => value.sourceFolders.revision > before.revision); assert.equal(saved.sourceFolders.revision, before.revision + 1); await settle(page);
 }
-async function assignCard(page, sourceId, folderId) { await assign(page, page.locator('#lifeSearchResults .life-source-card[data-source-id="' + sourceId + '"] [data-source-folder-assignment]').first(), folderId); }
+async function assignCard(page, sourceId, folderId) {
+  await assign(page, page.locator('#lifeSearchResults .life-source-card[data-source-id="' + sourceId + '"] [data-source-folder-assignment]').first(), folderId);
+  // 2026-11-18 (노션 방향 W4): after 이동 from the row's ⋯, focus is on that material's title button (the row is redrawn), when it is still listed.
+  if (await page.locator('#lifeSearchResults .life-source-open[data-source-id="' + sourceId + '"]').count()) await page.waitForFunction(id => document.activeElement?.matches('#lifeSearchResults .life-source-open') && document.activeElement.dataset.sourceId === id, sourceId, { timeout: 5000 });
+}
 async function assignBulk(page, folderId) { await assign(page, page.locator('#lifeSelectionBar [data-source-folder-assignment]'), folderId); }
 async function deleteFolder(page, id) {
   await folderEditor(page, id); const before = await snapshot(page); await click(page, '#lifeFolderDelete'); await page.locator('#lifeFolderDeleteConfirm:not([hidden])').waitFor(); assert.ok((await page.locator('#lifeFolderDeleteConfirm').textContent()).includes('자료는 미분류로 남습니다.')); await click(page, '#lifeFolderDeleteCancel'); assert.deepEqual(await snapshot(page), before, 'Inline deletion cancellation must not write');
@@ -75,7 +81,15 @@ async function expectSources(page, ids) { assert.deepEqual(await visibleSources(
 async function errorVisible(page) { await page.locator('#lifeFolderError:not([hidden])').waitFor(); await page.locator('#lifeFolderSave:enabled').waitFor(); }
 async function commonBackup(page) { await openBackupCenter(page); await byName(page, '자료·구성 백업'); await page.locator('#wbBackupDownload').waitFor(); const pending = page.waitForEvent('download'); await click(page, '#wbBackupDownload'); const download = await pending, chunks = []; for await (const chunk of await download.createReadStream()) chunks.push(chunk); return JSON.parse(Buffer.concat(chunks).toString('utf8')); }
 async function editReader(page) { await sourceOptions(page); await click(page, '#lifeSourceEdit'); await page.locator('#lifeSourceEditText').waitFor(); await page.locator('#lifeSourceEditText').fill(edited); await click(page, '#lifeSourceEditSave'); await page.locator('#lifeSourceInfoToggle').waitFor(); }
-async function prepareFolders(page, rich = false) { const f = await fixture(page, rich), parent = await saveFolder(page, { name: parentName }), child = await saveFolder(page, { name: childName, parentId: parent.id }); await assignCard(page, f.a.source.id, child.id); return { ...f, parent, child }; }
+// Where focus is a moment after 폴더 관리 opens (it is placed in the next frame, once the menu's own action has ended).
+async function manageFocus(page, id, label) {
+  await page.waitForFunction(id => document.activeElement?.id === id, id, { timeout: 5000 }).catch(() => {});
+  assert.equal(await page.evaluate(() => document.activeElement?.id || document.activeElement?.tagName), id, label);
+}
+async function prepareFolders(page, rich = false) { const f = await fixture(page, rich);
+  // 2026-11-18 (W4 검수 MINOR-1): with no folder yet there is nothing to choose in 편집할 폴더, so focus is on 이름.
+  assert.equal((await snapshot(page)).sourceFolders.folders.length, 0); await openFolderManage(page); await manageFocus(page, 'lifeFolderName', 'no folders: 폴더 관리 opens with focus on 이름');
+  const parent = await saveFolder(page, { name: parentName }), child = await saveFolder(page, { name: childName, parentId: parent.id }); await assignCard(page, f.a.source.id, child.id); return { ...f, parent, child }; }
 async function waitSnapshot(page, predicate) { const deadline = Date.now() + 15000; do { const value = await snapshot(page); if (predicate(value)) return value; await page.waitForTimeout(25); } while (Date.now() < deadline); throw Error('Expected committed folder state did not arrive'); }
 async function abortFolderWrite(page, enabled, workspaceId) {
   await page.evaluate(({ enabled, workspaceId }) => {
@@ -87,12 +101,20 @@ async function abortFolderWrite(page, enabled, workspaceId) {
   }, { enabled, workspaceId });
 }
 async function captureThree(page) {
-  const before = await snapshot(page), summary = page.locator('#lifeFolderManage > summary');
-  await summary.focus(); await summary.press('Space'); assert.equal(await page.locator('#lifeFolderManage').evaluate(el => el.open), false); await summary.press('Enter'); assert.equal(await page.locator('#lifeFolderManage').evaluate(el => el.open), true);
+  // Keyboard: ⋯ → 폴더 관리 opens the panel and focuses its first field; Esc closes it and returns focus to ⋯.
+  const before = await snapshot(page), summary = page.locator('#lifeRecordsMenu > summary'), panel = page.locator('#lifeFolderManage');
+  if (await panel.isVisible()) await page.locator('#lifeFolderManageClose').click();
+  assert.equal(await panel.isHidden(), true); assert.equal(await summary.evaluate(el => document.activeElement === el), true, '닫기 returns focus to the 자료 메뉴 button');
+  await summary.press('Enter'); await page.locator('#lifeFolderManageOpen').press('Enter'); assert.equal(await panel.isVisible(), true);
+  // With folders, focus is on 편집할 폴더 (2026-11-18 W4 검수 MINOR-1: not on 폴더 관리 닫기).
+  await manageFocus(page, 'lifeFolderEdit', 'folders exist: 폴더 관리 opens with focus on 편집할 폴더'); assert.equal(await page.locator('#lifeRecordsMenu').evaluate(el => el.open), false);
+  await page.keyboard.press('Escape'); assert.equal(await panel.isHidden(), true); assert.equal(await summary.evaluate(el => document.activeElement === el), true, 'Esc returns focus to the 자료 메뉴 button');
+  await summary.press('Enter'); await page.locator('#lifeFolderManageOpen').press('Enter'); assert.equal(await panel.isVisible(), true);
   for (const width of [1440, 820, 390]) {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 }); await page.evaluate(async () => { await document.fonts.ready; scrollTo(0, 0); }); await page.keyboard.press('Tab'); await summary.focus();
     const audit = await summary.evaluate(el => { const box = el.getBoundingClientRect(), style = getComputedStyle(el), hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2); return { viewport: innerWidth, documentWidth: document.documentElement.scrollWidth, summaryHeight: box.height, summaryWidth: box.width, focus: document.activeElement === el, outline: style.outlineStyle, pointerClear: hit === el || el.contains(hit) }; });
-    const controls = await page.locator('#lifeFolderFilter, #lifeFolderManage input:not([type=hidden]), #lifeFolderManage select, #lifeFolderManage button:enabled').evaluateAll(nodes => nodes.filter(el => el.getClientRects().length && !el.closest('[hidden]')).map(el => { el.scrollIntoView({ block: 'center' }); const box = el.getBoundingClientRect(), hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2); return { id: el.id, tag: el.tagName, fontSize: parseFloat(getComputedStyle(el).fontSize), width: box.width, height: box.height, left: box.left, right: box.right, scrollWidth: el.scrollWidth, clientWidth: el.clientWidth, pointerClear: hit === el || el.contains(hit), named: !!(el.getAttribute('aria-label') || el.labels?.length || el.textContent?.trim()) }; }));
+    // This read has no time limit of its own; watched() ends a stall as a failure that says what the page was doing (2026-11-18).
+    const controls = await watched(page, 'folder controls at ' + width + 'px', () => page.locator('#lifeFolderFilter, #lifeFolderManage input:not([type=hidden]), #lifeFolderManage select, #lifeFolderManage button:enabled').evaluateAll(nodes => nodes.filter(el => el.getClientRects().length && !el.closest('[hidden]')).map(el => { el.scrollIntoView({ block: 'center' }); const box = el.getBoundingClientRect(), hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2); return { id: el.id, tag: el.tagName, fontSize: parseFloat(getComputedStyle(el).fontSize), width: box.width, height: box.height, left: box.left, right: box.right, scrollWidth: el.scrollWidth, clientWidth: el.clientWidth, pointerClear: hit === el || el.contains(hit), named: !!(el.getAttribute('aria-label') || el.labels?.length || el.textContent?.trim()) }; })));
     await page.evaluate(() => scrollTo(0, 0)); await summary.focus(); const file = 'folders-' + width + '.png'; await page.screenshot({ path: path.join(output, file), fullPage: true }); report.visual.push({ width, file, audit, controls });
     assert.ok(audit.documentWidth <= width, 'Folder management must not overflow'); assert.ok(audit.summaryHeight >= 44 && audit.summaryWidth >= 44); assert.equal(audit.focus, true); assert.notEqual(audit.outline, 'none'); assert.equal(audit.pointerClear, true);
     for (const control of controls) { if (['INPUT', 'SELECT'].includes(control.tag)) assert.ok(control.fontSize >= 16, control.id + ': 16px text input/select'); assert.ok(control.width >= 44 && control.height >= 44, control.id + ': 44px target'); assert.ok(control.left >= -0.5 && control.right <= width + 0.5, control.id + ': horizontal bounds'); assert.equal(control.pointerClear, true, control.id + ': actual pointer hit / fixed-navigation overlap'); assert.equal(control.named, true, control.id + ': accessible name'); }
@@ -160,7 +182,7 @@ async function main() {
       assert.equal(await page.locator('#lifeFolderFilter').inputValue(), f.child.id); assert.equal(await page.locator('#lifeSearch').inputValue(), '익명 폴더 본문'); assert.equal(await page.locator('#lifeOriginFilter').inputValue(), 'obsidian');
       await page.waitForFunction(id => document.activeElement?.dataset.versionId === id, f.a.version.id); assert.ok(Math.abs(await page.evaluate(() => scrollY) - returnY) <= 2, 'Reader return restores the actual result position');
       assert.equal(await page.locator('.life-source-open[data-source-id="' + f.a.source.id + '"]').count(), 2, 'Exact-version search retains old and new versions');
-      await click(page, '#lifeSelectionToggle'); for (const id of [f.a.version.id, latest.id]) await click(page, '.life-source-select[data-version-id="' + id + '"]');
+      await toggleRecordSelection(page); await settle(page); for (const id of [f.a.version.id, latest.id]) await click(page, '.life-source-select[data-version-id="' + id + '"]');
       await assignBulk(page, f.parent.id); let state = (await snapshot(page)).sourceFolders; assert.equal(state.assignments.filter(a => a.sourceId === f.a.source.id).length, 1, 'Bulk exact-version selection is deduplicated by source ID'); assert.equal(state.assignments.find(a => a.sourceId === f.a.source.id).folderId, f.parent.id);
       await byName(page, '선택 취소'); await page.locator('#lifeSearch').fill(''); await settle(page); await chooseFolder(page, 'all');
       await assignCard(page, f.a.source.id, ''); await chooseFolder(page, 'unfiled'); await expectSources(page, [f.a.source.id, f.b.source.id]);

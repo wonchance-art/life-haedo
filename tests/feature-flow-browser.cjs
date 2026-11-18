@@ -6,7 +6,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
-const { playwright, ready, shellReady, settle, nav } = require('./unified-home-browser.cjs');
+const { playwright, ready, shellReady, settle, atRest, nav } = require('./unified-home-browser.cjs');
 const { context: makeFixture, sizes } = require('./integrated-release-entry-browser.cjs');
 const { fixture, current, seedComposition, abortWorkbenchWrites } = require('./life-workbench-browser.cjs');
 const { inspectHome } = require('./home-entry-browser.cjs');
@@ -26,6 +26,8 @@ async function back(page, value) {
 async function capture(page, scene, size) {
   await page.evaluate(async () => { await document.fonts.ready; scrollTo({ top: 0, behavior: 'instant' }); });
   await page.mouse.move(0, 0);
+  // The screen's enter motion has ended: boxes are measured and pictured where they rest (unified-home atRest).
+  await atRest(page);
   const metrics = await page.evaluate(inspectHome, '#lifeApp');
   const file = scene + '-' + size.width + '.png';
   await page.screenshot({ path: path.join(output, file) });

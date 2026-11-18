@@ -19,6 +19,19 @@ async function ready(page) {
   await page.evaluate(() => HaedoLife.Shell.ready);
 }
 async function shellReady(page) { await page.waitForFunction(() => globalThis.HaedoLife?.Shell); await page.evaluate(() => HaedoLife.Shell.ready); }
+// The main area at rest: a screen's enter motion (HaedoMotion, a 160–260ms translate that starts once the screen is
+// drawn) has ended, so a caller measures boxes where they come to rest. It waits two frames (the motion starts after
+// the draw) and then for the finite animations of #lifeMain only, never for a read (aria-busy): checks of late
+// responses hold a read across nav() on purpose (home-entry, subview-navigation), so nav()'s wide path does not wait
+// and the side that measures does (2026-11-18, N re-review m-b: at 1440 nav(page, 'tools') returned while Y was still
+// moving, up to 8px off, in 11 of 12 runs).
+async function atRest(page) {
+  await page.evaluate(async () => {
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const main = document.querySelector('#lifeMain');
+    if (main) await Promise.all(main.getAnimations({ subtree: true }).filter(animation => Number.isFinite(animation.effect?.getComputedTiming().endTime)).map(animation => animation.finished.catch(() => {})));
+  });
+}
 // 2026-11-16 menu 뉴스·일정·노트·자료·설정 (notes-menu): the former home (일정's list until then) is 노트; the
 // former tools (계획) is 일정's Y, opened from the 보기 단위 switch as a person does. 일정 itself opens a calendar unit.
 async function nav(page, section) {
@@ -43,11 +56,7 @@ async function nav(page, section) {
       // animations of the main area (as blog-writing-completion-browser waits for them). Only this phone path moves by
       // ‹; the wide path's bar switch is unchanged (its callers hold reads across it and measure nothing moving).
       await page.waitForFunction(() => document.querySelector('#lifeSchedule')?.getAttribute('aria-busy') === 'false');
-      await page.evaluate(async () => {
-        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-        const main = document.querySelector('#lifeMain');
-        await Promise.all(main.getAnimations({ subtree: true }).filter(animation => Number.isFinite(animation.effect?.getComputedTiming().endTime)).map(animation => animation.finished.catch(() => {})));
-      });
+      await atRest(page);
     }
     await page.locator('#lifeMain[data-mode="tools"]').waitFor();
   }
@@ -602,5 +611,5 @@ async function main() {
   for (const error of [...report.consoleErrors, ...report.pageErrors]) annotation(JSON.stringify(error));
   if (failed || report.consoleErrors.length || report.pageErrors.length) process.exitCode = 1;
 }
-module.exports = { playwright, ready, shellReady, settle, nav, makeContext, observe, importExcerpt };
+module.exports = { playwright, ready, shellReady, settle, atRest, nav, makeContext, observe, importExcerpt };
 if (require.main === module) main().catch(error => { console.error(error.stack); annotation(error.stack); process.exitCode = 1; });

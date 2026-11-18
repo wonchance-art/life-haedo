@@ -41,6 +41,10 @@ test('titles name the period; another year is named in full', () => {
   assert.equal(D.title('week', '2026-12-29', '2027-01-02'), '2026년 12.28 – 2027년 1.3');
   assert.equal(D.title('week', '2027-01-06', '2027-01-02'), '1.4 – 1.10');
   assert.equal(D.title('week', '2025-06-04', '2026-11-03'), '2025년 6.2 – 6.8');
+  // The day with its weekday short (a narrow phone's D heading shows it; the heading is still named by dayTitle).
+  assert.equal(D.dayTitleShort('2026-10-28', '2026-11-03'), '10월 28일 (수)');
+  assert.equal(D.dayTitleShort('2025-12-31', '2026-11-03'), '2025년 12월 31일 (수)');
+  assert.equal(D.dayTitle('2026-10-28', '2026-11-03'), '10월 28일 수요일');
 });
 
 test('records group by the local civil day of their time; plans by their own date', () => {

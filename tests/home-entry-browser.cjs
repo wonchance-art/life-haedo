@@ -9,7 +9,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { openRecordsMenu } = require('./helpers/feature-menus.cjs');
 const { FakeCloud, accounts, cloud, base, openAccount } = require('./life-sync-browser.cjs');
-const { playwright, ready, settle, makeContext, observe, nav } = require('./unified-home-browser.cjs');
+const { playwright, ready, settle, atRest, makeContext, observe, nav } = require('./unified-home-browser.cjs');
 const { fixture, current, seedComposition, oldBody, newBody } = require('./life-workbench-browser.cjs');
 const out = process.env.ENTRY_OUT_DIR ? path.resolve(process.env.ENTRY_OUT_DIR) : path.resolve(__dirname, '../.local/home-entry');
 const report = { createdAt: new Date().toISOString(), scope: 'Actual local app/SDK/IDB, synthetic HTTP Auth; viewport simulation, not Apple device testing', checks: [], visual: [], consoleErrors: [], pageErrors: [], expectedErrors: 0, external: [] };
@@ -105,6 +105,8 @@ function inspectHome(selector = '.life-home') {
 async function snapshot(page, scene, size, selector = '.life-home') {
   await page.evaluate(() => document.fonts.ready); await page.evaluate(() => scrollTo({ top: 0, behavior: 'instant' }));
   await page.mouse.move(size.width - 1, 0);
+  // The screen's enter motion has ended (no read is waited for): boxes are measured where they rest (unified-home atRest).
+  await atRest(page);
   const metrics = await page.evaluate(inspectHome, selector), file = `${scene}-${size.width}.png`;
   await page.screenshot({ path: path.join(out, file), fullPage: !scene.startsWith('records') }); report.visual.push({ scene, file, ...metrics });
   assert(!metrics.horizontalOverflow && !metrics.overflow.length, `${scene}/${size.width} overflow ${JSON.stringify(metrics.overflow)}`);

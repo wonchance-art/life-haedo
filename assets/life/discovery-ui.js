@@ -20,6 +20,9 @@
   function create({ container, storage, getBundle, isCurrent, onImport, onOpenInterests, onOpenOriginal, onReaderHistory, privateReader = null }) {
     let active = false, disposed = false, generation = 0, workspaceId = null, surface = null;
     let current = null, client = null, unsubscribe = null, aborter = null, pendingWrite = null;
+    // 뉴스 설정 (노션 방향 W4): one control for the whole screen. The app heading takes it through settingsControl()
+    // (ui.js renderHeader) so the tab row keeps its tabs and 정렬·필터 only; a host that never asks keeps it in the tab row.
+    let settingsToggle = null, settingsHosted = false;
     const downloadUrls = new Set();
     let splitDispose = null, splitLayout = null;
     let settingsWrite = null, topicWrite = null, actionWrite = null, languageWrite = null, timer = null, fetchEpoch = 0, suspended = false;
@@ -263,14 +266,40 @@
       const fromSettings = current.settingsScreen;
       capture(); current.settingsScreen = false; current.collection = collection; current.collectionUrls = null; current.memory = null; resetList(); current.confirmForget = null; current.toast = null; current.selected = null; readerHistoryClosed(); draw();
       if (fromSettings) { placing(); surface.querySelector('#discoveryDiscover')?.focus(); surface.scrollIntoView({ block: 'start' }); }
+      revealTab(collection);
+    }
+    // The chosen tab is brought fully into its row when the row is wider than the screen (a narrow phone, long
+    // counts). Focusing or pressing a tab that is half out of the row does not scroll it by itself, so it stayed cut
+    // under the row's end fade. Only the tab row moves; the page does not.
+    function revealTab(collection) {
+      const tab = current?.header?.collections.find(item => item.collection === collection)?.control, scroller = tab?.closest('.discovery-tab-scroller');
+      if (!scroller || !tab.getClientRects().length) return;
+      const row = scroller.getBoundingClientRect(), box = tab.getBoundingClientRect();
+      if (box.right > row.right) scroller.scrollLeft += box.right - row.right;
+      else if (box.left < row.left) scroller.scrollLeft -= row.left - box.left;
+      current.header.hint();
     }
     function showSettings(value) {
       if (value === !!current.settingsScreen) return;
       if (value) capture();
       current.settingsScreen = value; draw();
+      if (settingsHosted && settingsToggle) { settingsToggle.hidden = value; settingsToggle.setAttribute('aria-expanded', String(value)); }
       placing();
       if (value) { current.settingsBack.focus({ preventScroll: true }); surface.scrollIntoView({ block: 'start' }); }
-      else { surface.querySelector('#discoveryNewsSettings')?.focus({ preventScroll: true }); root.scrollTo({ top: current.memory?.scrollY || 0, behavior: 'instant' }); }
+      else { settingsButton().focus({ preventScroll: true }); root.scrollTo({ top: current.memory?.scrollY || 0, behavior: 'instant' }); }
+    }
+    function settingsButton() {
+      if (settingsToggle) return settingsToggle;
+      settingsToggle = button(null, 'discoveryNewsSettings', () => { if (current?.settingsPanel) showSettings(true); }, 'life-icon-button discovery-news-settings-toggle');
+      settingsToggle.setAttribute('aria-label', '뉴스 설정'); settingsToggle.title = '뉴스 설정'; settingsToggle.setAttribute('aria-controls', 'discoveryNewsSettingsPanel'); settingsToggle.setAttribute('aria-expanded', 'false');
+      settingsToggle.append(icon('settings'));
+      return settingsToggle;
+    }
+    // The heading's 뉴스 설정. While the settings screen is open it is not shown (its ‹ returns); closing focuses it again.
+    function settingsControl() {
+      settingsHosted = true; const control = settingsButton(); control.hidden = !!current?.settingsScreen;
+      if (current?.header && control.parentNode === current.header.listTools) control.remove();
+      return control;
     }
     function setMode(mode) {
       if (!['latest', 'related', 'personal', 'pick'].includes(mode) || mode === 'personal' && (!current.actions?.personalizationEnabled || current.personalBlocked) || mode === 'pick' && !pickSaved()) return;
@@ -420,12 +449,11 @@
       const outside = event => { if (filter.open && !filter.contains(event.target)) filter.open = false; };
       filter.addEventListener('toggle', () => { if (filter.open) root.document.addEventListener('pointerdown', outside, true); else root.document.removeEventListener('pointerdown', outside, true); });
       filter.addEventListener('keydown', event => { if (event.key === 'Escape' && filter.open) { event.preventDefault(); event.stopPropagation(); filter.open = false; filterSummary.focus({ preventScroll: true }); } });
-      const settings = button(null, 'discoveryNewsSettings', () => showSettings(true), 'discovery-news-settings-toggle');
-      settings.setAttribute('aria-label', '뉴스 설정'); settings.title = '뉴스 설정'; settings.setAttribute('aria-controls', 'discoveryNewsSettingsPanel'); settings.append(icon('settings'));
-      // Filter and settings end the tab row on the same right edge as each row's 담기.
+      const settings = settingsButton();
+      // 정렬·필터 ends the tab row on the same right edge as each row's 담기. 뉴스 설정 is in the app heading when hosted.
       const listTools = node('div', null, 'discovery-list-tools');
-      listTools.append(filter, settings); toolbar.append(scroller, listTools); section.append(statusRow, toolbar);
-      current.header = { section, statusRow, progress, failed, refresh, toolbar, collections, sort, filter, filterSummary, filterCount, settings, hint };
+      listTools.append(filter); if (!settingsHosted) listTools.append(settings); toolbar.append(scroller, listTools); section.append(statusRow, toolbar);
+      current.header = { section, statusRow, progress, failed, refresh, toolbar, collections, sort, filter, filterSummary, filterCount, settings, hint, listTools };
       return current.header;
     }
     function recommendationControls() {
@@ -456,6 +484,7 @@
       }
       if (sort.value !== current.mode && [...sort.options].some(option => option.value === current.mode)) sort.value = current.mode;
       sort.hidden = current.collection !== 'discover'; settings.setAttribute('aria-expanded', String(!!current.settingsScreen));
+      if (settingsHosted) settings.hidden = !!current.settingsScreen;
       const changed = filterChanges(); filterCount.textContent = changed ? String(changed) : '';
       filterSummary.setAttribute('aria-label', '정렬·주제·언어 (' + (changed ? '적용 ' + changed : '기본값') + ')'); filterSummary.title = '정렬·주제·언어';
       // The prepared catalog arrives as one file, so there is no per-source progress to count.
@@ -690,6 +719,9 @@
     const SCROLL_KEYS = new Set(['PageDown', 'PageUp', 'ArrowDown', 'ArrowUp', 'Home', 'End', ' ', 'Spacebar']);
     function pageScrollIntent(event) {
       if (event.type === 'keydown') lastKeyAt = Date.now();
+      // A wheel or a finger takes the page over: what scrolls from here is the person's, not the rest of a move the
+      // screen began. (The 250ms rule is ended too, or it would claim the very next scroll.)
+      else { ownMoving = false; ownFrames = 0; placedAt = -Infinity; }
       if (!scope() || !current || current.listTouched || current.settingsScreen || root.document.getElementById('lifeApp')?.hidden !== false) return;
       if (event.type === 'keydown' && (!SCROLL_KEYS.has(event.key) || event.target?.closest?.('input, textarea, select, [contenteditable]'))) return;
       touchList();
@@ -699,14 +731,42 @@
     // itself. placing() marks the screen's own scrolls (restoring a place, bringing a control into view); a smooth one
     // goes on for a while, so the scrolls that follow it closely belong to it.
     // opening: from the start of render() to its end; the page then still shows wherever the other tab left it.
+    //
+    // 2026-11-18: which scrolls are the screen's own is decided by the order of events, not only by a clock. A slow
+    // machine delivered the scroll event of the screen's own move more than 250ms after placing(), and it was then
+    // taken for the person's (news-wide-search-browser "the list took them", 1 run in 3 under load).
+    //  - ownFrames: placing() opens OWN_FRAMES animation frames. A scroll event is dispatched in the rendering
+    //    update before that update's animation frame callbacks, so the event of a move made right after placing()
+    //    always arrives while frames remain, however late that update is. (A smooth move shows its first event
+    //    within these frames as well.)
+    //  - ownMoving: once one such event has come, every scroll up to that movement's `scrollend` is the same
+    //    movement (a smooth scroll goes on for many frames). Each of its scroll events opens the frames again, and
+    //    the movement is also over when OWN_FRAMES frames pass with no scroll at all: a page pulled up because the
+    //    document got shorter (a clamp) fires `scroll` but no `scrollend`, and the claim must not outlive it
+    //    (2026-11-18 재검수 N-1). Browsers without `scrollend` count frames only, with the 250ms rule beside them.
+    // The 250ms rule stays as a second way to recognise a move the shell makes a little later (nothing that was
+    // the screen's before is now the person's). A wheel or a touch (pageScrollIntent) ends the screen's claim at
+    // once; a scroll key does not (the key press itself already counts as a use of the list). So does the page
+    // being hidden: frames do not run then, and a claim kept until the tab is shown again would cover whatever
+    // scrolls first on return.
     let placedAt = -Infinity, opening = false;
+    const OWN_FRAMES = 4, scrollEnds = 'onscrollend' in root;
+    let ownFrames = 0, ownMoving = false, ownTick = 0;
     const clock = () => root.performance?.now?.() ?? Date.now();
-    function placing() { placedAt = clock(); }
+    function ownFrame() { ownTick = root.requestAnimationFrame(() => { ownTick = 0; if (ownFrames > 0 && --ownFrames > 0) ownFrame(); else ownMoving = false; }); }
+    function placing() { placedAt = clock(); ownFrames = OWN_FRAMES; if (!ownTick) ownFrame(); }
+    function pageScrollEnded() { ownMoving = false; }
+    function pageHidden() { if (root.document.visibilityState === 'hidden') { ownMoving = false; ownFrames = 0; placedAt = -Infinity; } }
     function pageScrolled() {
       const shown = !opening && active && !!surface?.isConnected && scope() && !!current && !current.settingsScreen && root.document.getElementById('lifeApp')?.hidden === false;
       if (shown) current.newsY = root.scrollY || 0; // news's own place (capture)
+      if (ownMoving) { ownFrames = OWN_FRAMES; if (!ownTick) ownFrame(); return; }
       const now = clock();
-      if (now - placedAt < 250) { placedAt = now; return; }
+      if (ownFrames > 0 || now - placedAt < 250) {
+        placedAt = now; ownFrames = OWN_FRAMES; if (!ownTick) ownFrame();
+        if (scrollEnds) ownMoving = true;
+        return;
+      }
       if (!shown || current.listTouched) return;
       touchList();
     }
@@ -1816,7 +1876,9 @@
         if (gone) { const again = button('다시 추천받기', 'discoveryPickAgain', () => { capture(null, 'pick-again'); resetList(); refreshPick({ force: true }).catch(error => report(error)); }, 'discovery-quiet'); again.dataset.focusKey = 'pick-again'; body.append(again); }
         if (current.mode === 'pick' && current.pick.next) {
           // An answer that came while the list was in use: pressing shows it from the top, like 새 글 n건.
-          const show = button(null, 'discoveryPickShow', () => { applyPendingPick(); resetList(); draw(); root.requestAnimationFrame(() => { if (scope()) { placing(); surface.querySelector('#discoveryList [data-discovery-select], #discoveryList a[data-discovery-open]')?.focus({ preventScroll: true }); current.listPane.scrollIntoView({ block: 'start' }); } }); }, 'discovery-new-articles');
+          // placing() before the redraw as well: drawing the list again can move the page by itself (the list is
+          // rebuilt, so the page is clamped to a shorter document for a moment), before the frame below scrolls to it.
+          const show = button(null, 'discoveryPickShow', () => { applyPendingPick(); resetList(); placing(); draw(); root.requestAnimationFrame(() => { if (scope()) { placing(); surface.querySelector('#discoveryList [data-discovery-select], #discoveryList a[data-discovery-open]')?.focus({ preventScroll: true }); current.listPane.scrollIntoView({ block: 'start' }); } }); }, 'discovery-new-articles');
           show.append(icon('up', 16), node('span', 'AI 추천 ' + current.pick.next.picks.length + '건 보기')); body.append(show);
         }
         if (!items.length) {
@@ -1832,7 +1894,7 @@
         const fresh = current.newUrls && !current.newDismissed ? items.filter(item => current.newUrls.has(item.article.canonicalUrl)).length : 0;
         if (fresh) {
           // Pressing it is a refresh the person asks for: the order is computed again, so the new ones take their place.
-          const notice = button(null, 'discoveryNewArticles', () => { current.newDismissed = true; resetList(); draw(); root.requestAnimationFrame(() => { if (scope()) { placing(); surface.querySelector('#discoveryList [data-discovery-select]')?.focus({ preventScroll: true }); current.listPane.scrollIntoView({ block: 'start' }); } }); }, 'discovery-new-articles');
+          const notice = button(null, 'discoveryNewArticles', () => { current.newDismissed = true; resetList(); placing(); draw(); root.requestAnimationFrame(() => { if (scope()) { placing(); surface.querySelector('#discoveryList [data-discovery-select]')?.focus({ preventScroll: true }); current.listPane.scrollIntoView({ block: 'start' }); } }); }, 'discovery-new-articles');
           notice.append(icon('up', 16), node('span', '새 글 ' + fresh + '건')); body.append(notice);
         }
         rows = items.map(item => () => articleCard(item, feed.sources || []));
@@ -2003,9 +2065,11 @@
     root.document.addEventListener('pointerdown', closeCardMenus, true);
     for (const type of ['wheel', 'touchmove', 'keydown']) root.addEventListener(type, pageScrollIntent, { passive: true });
     root.addEventListener('scroll', pageScrolled, { passive: true });
+    if (scrollEnds) root.addEventListener('scrollend', pageScrollEnded, { passive: true });
+    root.document.addEventListener('visibilitychange', pageHidden);
     root.document.addEventListener('haedo:page-suspend', pageSuspend); root.document.addEventListener('haedo:page-ready', pageReady); root.document.addEventListener('visibilitychange', lifecycle); root.addEventListener('online', lifecycle); root.addEventListener('offline', lifecycle);
-    function dispose() { leave(); readingUI?.dispose(); readingUI = null; disposed = true; downloadUrls.forEach(address => URL.revokeObjectURL(address)); downloadUrls.clear(); dropImages(); wideClient?.dispose(); wideClient = null; wideUnlisten?.(); wideUnlisten = null; if (current?.wide) current.wide.items = []; root.document.removeEventListener('pointerdown', closeCardMenus, true); for (const type of ['wheel', 'touchmove', 'keydown']) root.removeEventListener(type, pageScrollIntent); root.removeEventListener('scroll', pageScrolled); root.document.removeEventListener('haedo:page-suspend', pageSuspend); root.document.removeEventListener('haedo:page-ready', pageReady); root.document.removeEventListener('visibilitychange', lifecycle); root.removeEventListener('online', lifecycle); root.removeEventListener('offline', lifecycle); client?.dispose(); client = null; current = null; workspaceId = null; }
-    return Object.freeze({ render, refresh: render, leave, dispose, flush, dirty, showArticle });
+    function dispose() { leave(); readingUI?.dispose(); readingUI = null; disposed = true; downloadUrls.forEach(address => URL.revokeObjectURL(address)); downloadUrls.clear(); dropImages(); wideClient?.dispose(); wideClient = null; wideUnlisten?.(); wideUnlisten = null; if (current?.wide) current.wide.items = []; root.document.removeEventListener('pointerdown', closeCardMenus, true); for (const type of ['wheel', 'touchmove', 'keydown']) root.removeEventListener(type, pageScrollIntent); root.removeEventListener('scroll', pageScrolled); root.removeEventListener('scrollend', pageScrollEnded); root.document.removeEventListener('visibilitychange', pageHidden); if (ownTick) root.cancelAnimationFrame(ownTick); root.document.removeEventListener('haedo:page-suspend', pageSuspend); root.document.removeEventListener('haedo:page-ready', pageReady); root.document.removeEventListener('visibilitychange', lifecycle); root.removeEventListener('online', lifecycle); root.removeEventListener('offline', lifecycle); client?.dispose(); client = null; current = null; workspaceId = null; }
+    return Object.freeze({ render, refresh: render, leave, dispose, flush, dirty, showArticle, settingsControl });
   }
   root.HaedoLife ||= {}; root.HaedoLife.DiscoveryUI = Object.freeze({ create });
 })(globalThis);

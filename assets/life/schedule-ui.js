@@ -732,7 +732,8 @@
         event.preventDefault(); onUp(parent[0]);
       });
     }
-    return { views, today, step, help, up, title: D.title(unit, date) };
+    // titleShort: D's weekday short, for the narrow phone heading (the name read out stays the whole title).
+    return { views, today, step, help, up, title: D.title(unit, date), titleShort: unit === 'day' ? D.dayTitleShort(date) : null };
   }
   const SHORTCUTS = Object.freeze([['Y · Q · M · W · D', '연 · 분기 · 월 · 주 · 일'], ['T', '오늘'], ['← 또는 P', '이전'], ['→ 또는 N', '다음'], ['/', '통합 검색'], ['?', '이 도움말']]);
   // 노트 lists only the shortcuts it takes (/ and ?); a calendar unit lists them all.
