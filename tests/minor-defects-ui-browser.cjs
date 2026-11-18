@@ -110,13 +110,14 @@ async function assertOneLine(row, names, where) {
     where + ': 44px controls on one line: ' + JSON.stringify(row));
   assert.ok(row.items.at(-1).right <= row.composeLeft && row.items[0].left >= 0 && row.overflow <= 0, where + ': beside 글쓰기, nothing off screen: ' + JSON.stringify(row));
 }
-// Publication is read from BlogSync; window.__minorForcePublic makes that read say the post is public.
+// Publication and the account state are read from BlogSync: window.__minorForcePublic makes that read say the
+// post is public, window.__minorForceStatus gives it an account state (error: 계정에 올리지 못함 + 다시 시도).
 async function configurePublication(context) {
   await context.route(base + '/assets/life/blog-sync.js', async route => {
     const response = await route.fetch(), source = await response.text();
     await route.fulfill({ response, contentType: 'application/javascript', body: source + `
       ;(()=>{const B=HaedoLife.BlogSync;if(!B)return;HaedoLife.BlogSync=Object.freeze({...B,create(...args){const s=B.create(...args);
-      return Object.freeze({...s,async getState(...a){const state=await s.getState(...a);return window.__minorForcePublic?{...state,publication:{active:true}}:state;}});}});})();` });
+      return Object.freeze({...s,async getState(...a){const state=await s.getState(...a);return {...state,...(window.__minorForcePublic?{publication:{active:true}}:{}),...(window.__minorForceStatus?{status:window.__minorForceStatus}:{})};}});}});})();` });
   });
 }
 async function header(page, width) {
@@ -270,7 +271,8 @@ async function header(page, width) {
   assert.deepEqual(overlap, [], 'full reading control rectangles do not overlap global compose');
   await capture(page, 'reader-' + width);
   // A failed export remains visible above the reader; only a success notice moves below it.
-  await page.evaluate(() => {window.originalCreateObjectURL=URL.createObjectURL;URL.createObjectURL=()=>{throw new Error('합성 백업 파일 생성 실패');};});
+  // Re-review n2: the sentence is long enough to wrap, so on a phone its lines would run under 글쓰기.
+  await page.evaluate(() => {window.originalCreateObjectURL=URL.createObjectURL;URL.createObjectURL=()=>{throw new Error('합성 백업 파일 생성 실패: 사진 원본 두 장을 읽지 못해 백업 파일을 만들지 못했습니다. 잠시 뒤 다시 시도해 주세요.');};});
   try {
     await page.locator('.photo-read-actions .photo-more > summary').click();
     await page.getByRole('button',{name:'사진 포함 백업',exact:true}).click();
@@ -279,6 +281,26 @@ async function header(page, width) {
     const errorTop=await page.locator('.photo-status[role=alert]').evaluate(el=>el.getBoundingClientRect().top);
     assert.ok(errorTop < (await page.locator('.photo-read-heading').boundingBox()).y);
     assert.match(await page.locator('.photo-article').textContent(), /읽기와 편집을 오가도/);
+    // Up to 760px the alert sits at the top of the screen where 글쓰기 is fixed: neither the box its words may
+    // flow in nor any drawn line of them reaches under that control (320·360·390).
+    for (const screen of width === 390 ? [390, 360, 320] : [width]) {
+      await page.setViewportSize({ width: screen, height: 1000 }); await paint(page);
+      const alert = await page.locator('.photo-status[role=alert]').evaluate(el => {
+        const meets = (a, b) => Math.min(a.right, b.right) > Math.max(a.left, b.left) + .5 && Math.min(a.bottom, b.bottom) > Math.max(a.top, b.top) + .5;
+        const box = r => ({ left: Math.round(r.left * 10) / 10, right: Math.round(r.right * 10) / 10, top: Math.round(r.top * 10) / 10, bottom: Math.round(r.bottom * 10) / 10 });
+        const compose = [...document.querySelectorAll('[data-haedo-compose]')].find(node => node.getClientRects().length).getBoundingClientRect();
+        const style = getComputedStyle(el), outer = el.getBoundingClientRect();
+        const words = { left: outer.left + parseFloat(style.paddingLeft), right: outer.right - parseFloat(style.paddingRight), top: outer.top, bottom: outer.bottom };
+        const range = document.createRange(); range.selectNodeContents(el.querySelector('.photo-status-text'));
+        const lines = [...range.getClientRects()];
+        return { compose: box(compose), words: box(words), wordsUnder: meets(words, compose), lines: lines.length, linesUnder: lines.filter(line => meets(line, compose)).map(box) };
+      });
+      assert.ok(alert.lines >= (screen <= 760 ? 2 : 1), screen + ': the alert sentence is drawn: ' + JSON.stringify(alert));
+      assert.equal(alert.wordsUnder, false, screen + ': the alert words do not run under 글쓰기: ' + JSON.stringify(alert));
+      assert.deepEqual(alert.linesUnder, [], screen + ': no drawn line of the alert is under 글쓰기');
+      if (screen === 320) await capture(page, 'reader-alert-320');
+    }
+    await page.setViewportSize({ width, height: 1000 }); await paint(page);
   } finally {await page.evaluate(()=>URL.createObjectURL=originalCreateObjectURL);}
 
   await page.getByRole('button', { name: '글 수정', exact: true }).focus(); await page.keyboard.press('Enter');
@@ -368,6 +390,8 @@ async function reader(page, width) {
   });
   await page.reload(); await ready(page);
   await page.locator('#homePosts[aria-busy="false"]').waitFor();
+  // Re-review n1: the post opens with an account upload problem, so the end of the post shows 다시 시도.
+  await page.evaluate(() => { window.__minorForceStatus = 'error'; });
   await page.getByRole('button', { name: '링크가 있는 합성 글', exact: true }).click();
   await page.locator('.photo-read-heading').waitFor(); await paint(page);
   const underline = selector => page.locator(selector).evaluate(link => {
@@ -389,6 +413,13 @@ async function reader(page, width) {
     return link;
   };
   const read = await checkLink('.photo-article a[href]', 'reader');
+  // 다시 시도 is a text action: 600 ink with an underline that reaches 3:1 as well.
+  await page.locator('#photoServerStatus[data-state="error"]').waitFor();
+  const retry = await underline('#photoServerRetry');
+  assert.equal(await page.locator('#photoServerRetry').textContent(), '다시 시도');
+  assert.equal(retry.line, 'underline', '다시 시도 is underlined: ' + JSON.stringify(retry));
+  assert.ok(retry.contrast >= 3, 'the 다시 시도 underline reaches 3:1: ' + JSON.stringify(retry));
+  await page.evaluate(() => { window.__minorForceStatus = null; });
   await capture(page, 'reader-link-' + width);
   await page.getByRole('button', { name: '글 수정', exact: true }).click();
   await page.locator('.ql-editor a[href]').waitFor(); await paint(page);
@@ -464,7 +495,7 @@ async function main() {
         if (selected && selected !== name) continue;
         const context = await makeContext(browser, new FakeCloud(), 'minor-e-' + name + width, accounts.a, { viewport: { width, height: 1000 } });
         if (name==='source') await configureSourceSync(context);
-        if (name==='header') await configurePublication(context);
+        if (name==='header' || name==='reader') await configurePublication(context);
         const page = await context.newPage(); page.setDefaultTimeout(12000);
         page.on('pageerror', e => report.errors.push(e.message));
         page.on('console', m => { if (m.type() === 'error') report.consoleErrors.push(m.text()); });
