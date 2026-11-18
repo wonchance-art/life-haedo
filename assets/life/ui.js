@@ -1493,13 +1493,16 @@
         state.remoteChanged = true;
         announce('보관한 자료가 변경되었습니다. 현재 입력을 유지합니다. 최신 내용 확인을 눌러 주세요.');
         renderHeader();
+        // What a person has open on the 자료 list is not redrawn under them: the 폴더 관리 panel (a section shown by
+        // removing `hidden`, no longer a <details>), a row's 폴더로 이동 form, its 자료 출처 정보 and its ⋯ menu (W4).
+        const listHeld = () => !!main.querySelector('#lifeFolderManage:not([hidden]),.source-folder-assignment[open],.life-result-details:not([hidden]),.records-row-more[open]');
         if (managedLibrary && state.mode === 'sources' && !dirty() && !sourceEditor?.isDirty() &&
-            !main.querySelector('#lifeFolderManage[open],.source-folder-assignment[open]') &&
+            !listHeld() &&
             !main.contains(document.activeElement)) {
           const workspaceId = state.bundle.workspaceId, workspace = workspaceGeneration, input = inputGeneration;
           const canApply = () => !disposed && workspace === workspaceGeneration && workspaceId === state.bundle?.workspaceId &&
             state.mode === 'sources' && input === inputGeneration && !state.busy && !dirty() && !sourceEditor?.isDirty() &&
-            !container.hidden && !main.querySelector('#lifeFolderManage[open],.source-folder-assignment[open]') &&
+            !container.hidden && !listHeld() &&
             !main.contains(document.activeElement);
           refreshData({ canApply }).then(applied => {
             if (applied !== true || !canApply()) return;
