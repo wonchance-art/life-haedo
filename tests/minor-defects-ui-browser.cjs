@@ -159,6 +159,31 @@ async function header(page, width) {
   await page.locator('.photo-posts[aria-busy="false"]').waitFor();
   assert.equal(await page.locator('.photo-read-actions .photo-more').evaluate(el => el.open), false);
   assert.equal(await more.evaluate(el => el === document.activeElement), true, 'after 사진 포함 백업 focus is on ⋯');
+  if (width === 390) {
+    // Below 360px (W3): the pill and 수정 show their pictures only, with the same names; the five 44px
+    // controls stay one line beside 글쓰기, and ⋯ opens inside the 320px screen.
+    await page.setViewportSize({ width: 320, height: 1000 }); await paint(page);
+    const narrow = await page.locator('.photo-read-actions').evaluate(bar => {
+      const compose = [...document.querySelectorAll('[data-haedo-compose]')].find(el => el.getClientRects().length).getBoundingClientRect();
+      return { composeLeft: compose.left, overflow: document.documentElement.scrollWidth - innerWidth, items: [...bar.querySelectorAll('button, summary')]
+        .filter(el => el.getClientRects().length && !el.closest('.photo-more-menu'))
+        .map(el => { const r = el.getBoundingClientRect(); return { name: el.getAttribute('aria-label') || el.textContent.trim(), left: r.left, right: r.right, top: r.top, width: r.width, height: r.height }; }) };
+    });
+    assert.deepEqual(narrow.items.map(item => item.name), ['노트로 돌아가기', '비공개 · 글 정보', '글 수정', '통합 검색', '더 보기'], 'names stay at 320px');
+    assert.ok(narrow.items.every((item, index) => item.width >= 44 && item.height >= 44 && item.top === narrow.items[0].top && (!index || item.left >= narrow.items[index - 1].right)),
+      '320px: five 44px controls on one line: ' + JSON.stringify(narrow));
+    assert.ok(narrow.items.at(-1).right <= narrow.composeLeft && narrow.items[0].left >= 0 && narrow.overflow <= 0, '320px: beside 글쓰기, nothing off screen: ' + JSON.stringify(narrow));
+    assert.equal(await page.locator('.photo-read-actions .photo-privacy-label').isVisible(), false, 'the pill is its lock below 360px');
+    assert.equal(await page.locator('.photo-read-actions .photo-privacy-face > svg').first().isVisible(), true);
+    assert.equal(await page.locator('.photo-read-edit > svg').isVisible(), true, '수정 is its picture below 360px');
+    await more.click();
+    const narrowMenu = await page.locator('.photo-read-actions .photo-more-menu').boundingBox();
+    assert.ok(narrowMenu.x >= 0 && narrowMenu.x + narrowMenu.width <= 320, '320px: the menu stays on screen: ' + JSON.stringify(narrowMenu));
+    assert.equal(await page.locator('.photo-read-actions .photo-more-menu > button.photo-delete').isVisible(), true);
+    await page.keyboard.press('Escape');
+    await page.setViewportSize({ width, height: 1000 }); await paint(page);
+    assert.equal(await page.locator('.photo-read-edit > span').isVisible(), true, 'the word returns from 360px');
+  }
   const editLabel = await page.locator('.photo-read-edit > span').evaluate(el => {
     const box=el.getBoundingClientRect(), css=getComputedStyle(el);
     return {text:el.textContent,width:box.width,height:box.height,clipPath:css.clipPath};
