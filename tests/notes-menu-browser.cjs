@@ -12,6 +12,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { FakeCloud, accounts, base } = require('./life-sync-browser.cjs');
 const { playwright, makeContext, ready, settle } = require('./unified-home-browser.cjs');
+const { PlatformTables } = require('./schedule-entries-browser.cjs');
 
 const output = path.resolve(process.env.NOTES_MENU_OUTPUT || '.local/notes-menu');
 const TODAY = '2026-11-03T12:00:00+09:00';
@@ -469,6 +470,52 @@ async function main() {
       assert.match(await page.locator('.schedule-day-records').innerText(), /이 날 발췌가 없어요\./);
       await page.locator('#lifeSchedule [data-schedule-filter="all"]').click();
       assert.match(await page.locator('.schedule-day-records').innerText(), /창가 자리에서 읽은 책/);
+    });
+    // 2026-11-18 (review of S2, F1): with habits, M's tracker table follows where the side column stands. Under the
+    // calendar (to 1279px) it is the table of 761–1100px: 31 dots on one line under the day scale 1 · 3 · 10 · 20 · 30.
+    // Beside it (from 1280px, the 280px column) the dots wrap 16 to a line, without the scale, today ringed. On b795605
+    // the table kept the 280px shape from 1101px although the column had gone under the calendar.
+    await check('M with habits: the tracker table under the calendar is one line of dots under the day scale to 1279px; in the side column from 1280px it wraps', async ({ page, context }) => {
+      const tables = new PlatformTables('2026-11-03T02:00:00Z'); await tables.attach(context);
+      tables.seed('haedo_items', accounts.a.id, { id: 'h1', kind: 'habit', name: '아침 산책', data: { title: '아침 산책', days: [1, 3, 5], created: '2026-10-01', checks: ['2026-10-30', '2026-11-02'] } });
+      tables.seed('haedo_items', accounts.a.id, { id: 'h2', kind: 'habit', name: '저녁 일기 한 줄', data: { title: '저녁 일기 한 줄', days: [0, 1, 2, 3, 4, 5, 6], created: '2026-10-20', checks: ['2026-11-01', '2026-11-02'] } });
+      await page.goto(base + '/index.html'); await ready(page); await seed(page);
+      for (const [width, under] of [[1100, true], [1101, true], [1279, true], [1280, false], [1440, false]]) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(base + '/index.html?section=schedule&view=month&date=2026-11-03'); await ready(page); await shown(page, 'month');
+        await page.waitForFunction(() => document.querySelectorAll('#lifeSchedule .schedule-entries-month .habit-compact-row').length === 2);
+        const table = await page.evaluate(() => {
+          const box = node => node.getBoundingClientRect(), slot = document.querySelector('#lifeSchedule .schedule-entries-month');
+          const primary = box(document.querySelector('#lifeSchedule .schedule-primary')), aside = box(document.querySelector('#lifeSchedule .schedule-aside'));
+          const head = slot.querySelector('.habit-compact-head'), scale = head.querySelector('.habit-compact-days');
+          const rows = [...slot.querySelectorAll('.habit-compact-row')].map(row => {
+            const dots = [...row.querySelectorAll('.habit-compact-dot')].map(box), days = box(row.querySelector('.habit-compact-days')), name = box(row.querySelector('.habit-compact-name'));
+            return { dots: dots.length, lines: new Set(dots.map(dot => Math.round(dot.top))).size, sizes: [...new Set(dots.map(dot => Math.round(dot.width) + 'x' + Math.round(dot.height)))],
+              inside: dots.every(dot => dot.left >= days.left - 1 && dot.right <= days.right + 1) && days.right <= aside.right + 1, nameAbove: name.bottom <= days.top + 1, tall: box(row).height >= 44,
+              // Each dot stands under its day of the scale (both are centred in the day's column).
+              columns: scale.checkVisibility() ? dots.every((dot, i) => { const day = box(scale.children[i]); return Math.abs((dot.left + dot.right) / 2 - (day.left + day.right) / 2) <= 1; }) : null };
+          });
+          const today = slot.querySelector('.habit-compact-rows .habit-compact-dot[data-today]');
+          return { under: aside.top >= primary.bottom - 1, beside: aside.left >= primary.right - 1, rows, scaleShown: head.checkVisibility() && scale.checkVisibility(),
+            scale: scale.checkVisibility() ? [...scale.children].filter(node => node.textContent).map(node => node.textContent) : null,
+            scaleInside: scale.checkVisibility() ? [...scale.children].filter(node => node.textContent).every(node => { const range = document.createRange(); range.selectNodeContents(node); const text = range.getBoundingClientRect(); return text.left >= box(scale).left - 0.5 && text.right <= box(scale).right + 0.5; }) : null,
+            todayNumber: head.querySelector('.habit-compact-number[data-today]')?.textContent || null, todayRing: getComputedStyle(today).boxShadow !== 'none',
+            links: [...slot.querySelectorAll('a.habit-compact-row')].map(row => row.getAttribute('aria-label') || row.textContent).length, overflow: document.documentElement.scrollWidth - innerWidth };
+        });
+        const scene = 'M with habits ' + width;
+        assert.equal(under ? table.under : table.beside, true, scene + (under ? ': the side column under the calendar' : ': the side column beside the calendar'));
+        assert.deepEqual(table.rows.map(row => [row.dots, row.sizes, row.inside, row.nameAbove, row.tall]), table.rows.map(() => [30, ['10x10'], true, true, true]), scene + ': 30 dots of 10px inside their row, under the name, in a 44px row');
+        if (under) {
+          assert.deepEqual(table.rows.map(row => [row.lines, row.columns]), table.rows.map(() => [1, true]), scene + ': the dots are one line, each under its day of the scale');
+          assert.deepEqual([table.scaleShown, table.scale, table.scaleInside, table.todayNumber, table.todayRing], [true, ['1', '3', '10', '20', '30'], true, '3', false], scene + ': the day scale 1 · 3 · 10 · 20 · 30 with today\'s number, no ring');
+        } else {
+          assert.deepEqual(table.rows.map(row => row.lines), table.rows.map(() => 2), scene + ': the dots wrap to two lines in the 280px column');
+          assert.deepEqual([table.scaleShown, table.todayRing], [false, true], scene + ': no day scale; today is the ringed dot');
+        }
+        assert.equal(table.links, 2, scene + ': each row is still its link');
+        assert.equal(table.overflow, 0, scene + ': no horizontal overflow');
+        const file = 'schedule-month-habits-' + width + '.png'; await page.screenshot({ path: path.join(output, file), fullPage: true }); report.screenshots.push(file);
+      }
     });
     // 2026-11-18 (W2 review m-5; contract 일정 iPhone: the title and 오늘 ‹ › share one row). On 8c3c54f at 320px D's
     // "11월 3일 화요일" and W's "12.21 – 12.27" took two lines in the 146px the row leaves the title. To 374px D shows its

@@ -84,7 +84,8 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
 }
 /* M from 1101 to 1279px (an iPad on its side next to the 240px menu; 2026-11-18, W2 review m-3): beside the 305px
  * column a cell was 58–70px wide and its tags showed one or two characters (a plan 1 of 10 at 1101–1200px, 2 to
- * 1279px). There M's side column goes under the calendar, as up to 1100px; the other units keep it beside. */
+ * 1279px). There M's side column goes under the calendar, as up to 1100px; the other units keep it beside.
+ * habit-tracker.css draws M's habit table for the 280px column from the same 1280px. */
 @media (min-width: 1101px) and (max-width: 1279px) {
   .schedule-layout.schedule-month { grid-template-columns: minmax(0, 1fr); row-gap: 8px; }
   .schedule-month > .schedule-aside { align-self: start; max-width: 560px; padding-left: 0; border-left: 0; }
