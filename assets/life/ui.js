@@ -2164,6 +2164,12 @@
         else if (destination !== here) global.history.replaceState(null, '', destination);
       }
       lastRouteBase = url.pathname + url.search;
+      // 일정's units are put back by the app alone (restoreOriginView; ‹ up opens the parent at its top). Left to the
+      // browser as well (auto), its own restore of the entry, animated by the root's smooth scrolling, was still moving
+      // when the app set the recorded position and Chromium added the step in flight: M left at 162 came back at 175,
+      // ‹ up ended at 15 instead of 0 (2026-11-18, W2 review m-2). The mode belongs to the entry just written; other
+      // screens keep the browser's restore.
+      try { global.history.scrollRestoration = calendarModes.has(mode) ? 'manual' : 'auto'; } catch (_) { /* The app's own restore still runs. */ }
     }
 
     // News: opening an article where it replaces the list pushes an entry; closing it in the app
@@ -2572,7 +2578,10 @@
         target?.focus({ preventScroll: true });
         // The return skipped the heading focus, so a target that could not take focus must not leave focus on <body>.
         if (!document.activeElement || document.activeElement === document.body) focusFirstHeading();
-        if (!anchor && Number.isFinite(origin.scrollY)) global.scrollTo({ top: origin.scrollY, behavior: 'instant' });
+        // An entry of 일정 has no browser restore (writeRoute): one without a recorded position (a forward entry after a
+        // reload) opens at its top instead of keeping the position of the screen just left.
+        const top = Number.isFinite(origin.scrollY) ? origin.scrollY : calendarModes.has(origin.mode) ? 0 : null;
+        if (!anchor && top !== null) global.scrollTo({ top, behavior: 'instant' });
       });
       if (origin.mode === 'find') findRenderPromise.then(restore);
       else if (origin.mode === 'home') homeRenderPromise.then(restore);

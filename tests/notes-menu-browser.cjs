@@ -3,7 +3,8 @@
  * Checks: the five-tab menu at 1440·820·390·320 (no overflow, 44px, uncut labels), the first screen after login is 노트,
  * the address table opens the screen it names, 노트 ↔ 글 읽기·편집 ↔ 노트 and 일정 ↔ D ↔ 일정 keep scroll, search, tab and
  * filter, a late read cannot show another account's posts, and the five calendar units share one frame (거르기, side
- * column 예정 → 습관·행복도 → 목표·계획, no empty table, W's date columns hold records only).
+ * column 예정 → 습관·행복도 → 목표·계획, no empty table, W's date columns hold records only), and 일정 M·W·D come back to the
+ * exact position they were left at, also from the middle of the page (2026-11-18, the browser's own restore is off there).
  * NOTES_MENU_OUTPUT keeps the screenshots. Never uses real Google, production Supabase or Apple-device claims. */
 'use strict';
 const assert = require('node:assert/strict');
@@ -48,6 +49,39 @@ async function seed(page) {
     return { workspaceId: ws, ids };
   }, { PRIVATE });
 }
+// A day with enough posts for W and D to scroll at these screen heights.
+async function seedDay(page) {
+  return page.evaluate(async () => {
+    const s = HaedoLife.Shell.storage, c = HaedoLife.Core, m = HaedoLife.PhotoPost, ws = await s.getActive();
+    for (let i = 0; i < 12; i++) {
+      const doc = m.create(c.id, new Date('2026-10-28T' + String(8 + i).padStart(2, '0') + ':15:00+09:00').toISOString()); doc.title = '하루 익명 기록 ' + (i + 1); doc.status = 'saved';
+      doc.ops = [{ insert: '그날 본 것을 한 줄로 남긴다. ' + i + '\n' }]; await s.savePhotoPost(ws, doc, 0);
+    }
+  });
+}
+// A control that can be pressed where the page is: whole inside the screen and not under the fixed header or the bottom
+// tabs. It is pressed at its place with the mouse (press()): Playwright's own click scrolls a control clear of the root's
+// scroll padding first (120 became 73 for a cell in M's first row), and the position left would not be the one set.
+async function pressable(page, selector, scene) {
+  const found = await page.evaluate(selector => {
+    const nodes = [...document.querySelectorAll(selector)], index = nodes.findIndex(node => {
+      const box = node.getBoundingClientRect();
+      if (!box.width || box.top < 0 || box.bottom > innerHeight || box.left < 0 || box.right > innerWidth) return false;
+      return [[box.left + 2, box.top + 2], [box.right - 2, box.bottom - 2], [box.left + box.width / 2, box.top + box.height / 2]].every(([x, y]) => node.contains(document.elementFromPoint(x, y)));
+    });
+    if (index < 0) return null;
+    const box = nodes[index].getBoundingClientRect();
+    return { key: nodes[index].dataset.focusKey, x: box.left + box.width / 2, y: box.top + box.height / 2 };
+  }, selector);
+  assert.ok(found?.key, scene + ': a control of ' + selector + ' is on screen');
+  return found;
+}
+// The scroll position once it has stopped (the same for 20 frames): a restore still moving is not read as its end.
+const rest = page => page.evaluate(() => new Promise(resolve => {
+  let last = scrollY, same = 0;
+  const tick = () => { if (scrollY === last) same += 1; else { last = scrollY; same = 0; } if (same >= 20) resolve(last); else requestAnimationFrame(tick); };
+  requestAnimationFrame(tick);
+}));
 async function shown(page, expected) {
   await page.waitForFunction(value => document.querySelector('#lifeMain')?.dataset.mode === value && !document.querySelector('.life-app[aria-busy="true"]') &&
     (!document.querySelector('#lifeSchedule') || document.querySelector('#lifeSchedule').getAttribute('aria-busy') === 'false') &&
@@ -185,19 +219,20 @@ async function main() {
       await page.locator(tab('schedule')).click(); await shown(page, 'month');
       await page.goto(base + '/index.html?section=schedule&view=month&date=2026-10-28'); await ready(page); await shown(page, 'month');
       await page.locator('#lifeSchedule [data-schedule-filter="posts"]').click();
-      // M is scrolled to its end, as before the 2026-11-16 W2 page title (then 200 was past M's end at 600px, so the
-      // check always ran at the end). A position short of the end comes back 3–25px further down in Chromium today,
-      // also on the base commit (the root's smooth scrolling meets the browser's own history restore): reported
-      // separately, not part of this visual unit. The position is read at the click itself.
-      await page.evaluate(() => { scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }); addEventListener('click', () => { window.__monthScroll = scrollY; }, { once: true, capture: true }); });
+      // M is left in the middle of its page again (2026-11-18): from 40369e1 this ran at M's end only, because a position
+      // short of the end came back 3–25px further down (the browser's own restore met the app's; the check after this
+      // one holds the positions and paths). The position is read at the click itself: Playwright's click first moves
+      // the cell clear of the root's scroll padding. 1px is allowed for the whole number kept in history.state.
+      await page.evaluate(() => { scrollTo({ top: 150, behavior: 'instant' }); addEventListener('click', () => { window.__monthScroll = scrollY; window.__monthEnd = document.documentElement.scrollHeight - innerHeight; }, { once: true, capture: true }); });
       await page.locator('[data-focus-key="schedule:day:2026-10-29"]').click(); await shown(page, 'day');
-      const monthScroll = await page.evaluate(() => window.__monthScroll);
-      assert.ok(monthScroll >= 200, 'M was scrolled (' + monthScroll + ')');
+      const [monthScroll, monthEnd] = await page.evaluate(() => [window.__monthScroll, window.__monthEnd]);
+      assert.ok(monthScroll >= 100 && monthScroll < monthEnd - 20, 'M was left in the middle of its page (' + monthScroll + ' of ' + monthEnd + ')');
       assert.equal(await page.locator('#lifeSchedule [data-schedule-filter="posts"]').getAttribute('aria-selected'), 'true', 'D keeps the filter');
       await page.goBack(); await shown(page, 'month');
       assert.equal(await page.locator('#lifeSchedule [data-schedule-filter="posts"]').getAttribute('aria-selected'), 'true', 'M keeps the filter');
-      await page.waitForFunction(top => Math.abs(scrollY - top) < 4, monthScroll);
       await page.waitForFunction(() => document.activeElement?.dataset.focusKey === 'schedule:day:2026-10-29');
+      const monthBack = await rest(page);
+      assert.ok(Math.abs(monthBack - monthScroll) <= 1, 'M comes back where it was left (' + monthScroll + ' → ' + monthBack + ')');
       // Leaving 일정 for 노트 and coming back opens the unit shown last, at its date.
       await page.locator(tab('notes')).click(); await shown(page, 'home');
       await page.locator(tab('schedule')).click(); await shown(page, 'month');
@@ -208,6 +243,87 @@ async function main() {
       assert.equal(await current(page), 'schedule');
       await page.locator('#lifeSubviewReturn, [data-subview-return]').first().click(); await shown(page, 'day');
       assert.equal(new URL(page.url()).searchParams.get('date'), '2026-10-29');
+    });
+
+    // 2026-11-18 (W2 review m-2): a calendar unit left in the middle of its page came back 11–42px further down. The
+    // browser restored the entry's scroll itself, animated by the root's smooth scrolling, and that animation was still
+    // moving when the app set the recorded position: Chromium added its remaining step. Measured on 8c3c54f at
+    // 1440×600: 152 → 165, 162 → 175, 200 → 211; ‹ up on a phone ended at 3–15 instead of the top. The entries of 일정 now
+    // leave the position to the app alone (history.scrollRestoration manual, ui.js writeRoute).
+    // Allowed difference 1px: history.state keeps the position as a whole number (historyPublic rounds it).
+    await check('일정 M·W·D come back to the position they were left at, from the middle of the page too (1440, 820, 390)', async ({ page }) => {
+      await page.goto(base + '/index.html'); await ready(page); await seed(page); await seedDay(page);
+      const misses = [], trips = [];
+      const post = '#lifeSchedule .schedule-post-open', cell = '#lifeSchedule .schedule-day-cell:not([data-outside])', head = '#lifeSchedule .schedule-week-head';
+      const read = () => page.locator('.photo-article').waitFor();
+      const browserBack = () => page.goBack(), appReturn = () => page.locator('#lifeSubviewReturn, [data-subview-return]').first().click();
+      async function trip(scene, unit, query, top, control, arrive, back, { expected, wait } = {}) {
+        // A new entry each time (an address opened again in place is a reload to the browser, which restores its scroll).
+        await page.goto('about:blank'); await page.goto(base + '/index.html' + query); await ready(page); await shown(page, unit);
+        await page.waitForFunction(() => [...document.querySelectorAll('#lifeSchedule .schedule-entries')].every(slot => slot.getAttribute('aria-busy') === 'false'));
+        const max = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
+        assert.ok(top > 0 && top < max - 1, scene + ': ' + top + ' is a middle position (the page ends at ' + max + ')');
+        await page.evaluate(top => { scrollTo({ top, behavior: 'instant' }); addEventListener('click', () => { window.__left = scrollY; }, { once: true, capture: true }); }, top);
+        const target = await pressable(page, control, scene), key = target.key;
+        await page.mouse.click(target.x, target.y); await arrive();
+        const left = await page.evaluate(() => window.__left);
+        assert.equal(left, top, scene + ': pressed where the page was');
+        await back(); await shown(page, unit);
+        // The return puts focus back on the control and sets the position in the same frame (restoreOriginView).
+        if (wait) await wait(); else await page.waitForFunction(key => document.activeElement?.dataset.focusKey === key, key);
+        const got = await rest(page), want = expected ?? left;
+        trips.push(scene + ' ' + want + '→' + got);
+        if (Math.abs(got - want) > 1) misses.push(scene + ': left at ' + left + ', expected ' + want + ', came back at ' + got);
+      }
+      const dayShown = () => shown(page, 'day');
+      for (const [width, height, monthTops, weekTops, dayTops] of [[1440, 600, [60, 120, 162, 200], [80, 160], [100, 200]], [820, 700, [60, 120, 200], [90, 170], [100, 200]], [390, 600, [60, 120, 189], [90, 170], [100, 200]]]) {
+        await page.setViewportSize({ width, height });
+        const size = width + '×' + height;
+        for (const top of monthTops) await trip(size + ' M ' + top + ' → D → 뒤로', 'month', '?section=schedule&view=month&date=2026-10-28', top, cell, dayShown, browserBack);
+        await trip(size + ' W ' + weekTops[0] + ' → 글 읽기 → 돌아가기', 'week', '?section=schedule&view=week&date=2026-10-28', weekTops[0], post, read, appReturn);
+        await trip(size + ' W ' + weekTops[1] + ' → 글 읽기 → 뒤로', 'week', '?section=schedule&view=week&date=2026-10-28', weekTops[1], post, read, browserBack);
+        await trip(size + ' D ' + dayTops[0] + ' → 글 읽기 → 돌아가기', 'day', '?section=schedule&view=day&date=2026-10-28', dayTops[0], post, read, appReturn);
+        await trip(size + ' D ' + dayTops[1] + ' → 글 읽기 → 뒤로', 'day', '?section=schedule&view=day&date=2026-10-28', dayTops[1], post, read, browserBack);
+        // W's day heads stand under one another below 1101px, so one is on screen in the middle of the page.
+        if (width <= 1100) await trip(size + ' W ' + weekTops[0] + ' → D → 뒤로', 'week', '?section=schedule&view=week&date=2026-10-28', weekTops[0], head, dayShown, browserBack);
+        // A phone's ‹ goes one level up to the top of the parent (not to where it was left): exactly the top.
+        if (width <= 760) await trip(size + ' M ' + monthTops[1] + ' → D → ‹ 올라가기', 'month', '?section=schedule&view=month&date=2026-10-28', monthTops[1], cell, dayShown,
+          () => page.locator('#lifeApp .schedule-up').click(), { expected: 0, wait: () => page.waitForFunction(() => document.activeElement && document.activeElement !== document.body) });
+      }
+      report.restoreTrips = trips;
+      assert.deepEqual(misses, [], 'every return is within 1px of where the screen was left');
+      // The entries of 일정 are put back by the app alone; other screens keep the browser's restore.
+      await page.setViewportSize({ width: 1440, height: 600 });
+      const mode = () => page.evaluate(() => history.scrollRestoration);
+      const to = top => page.evaluate(top => scrollTo({ top, behavior: 'instant' }), top);
+      const dayFocus = () => page.waitForFunction(() => document.activeElement?.dataset.focusKey === 'schedule:day:2026-10-28');
+      // Pressed with the keyboard's focus on it and without moving the page (the return puts focus back on the cell).
+      const openDay = async () => {
+        await page.goto('about:blank'); await page.goto(base + '/index.html?section=schedule&view=month&date=2026-10-27'); await ready(page); await shown(page, 'month');
+        assert.equal(await mode(), 'manual', 'M');
+        await to(140); await page.evaluate(() => { const day = document.querySelector('[data-focus-key="schedule:day:2026-10-28"]'); day.focus({ preventScroll: true }); day.click(); }); await shown(page, 'day');
+        assert.equal(await mode(), 'manual', 'D');
+      };
+      // Back and forward land where each entry was left.
+      await openDay();
+      const dayEnd = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
+      assert.ok(dayEnd > 130, 'D scrolls (' + dayEnd + ')');
+      await to(110); await page.goBack(); await shown(page, 'month'); await dayFocus(); assert.equal(await rest(page), 140, 'back to M');
+      await page.goForward(); await shown(page, 'day'); await page.waitForFunction(() => document.activeElement && document.activeElement !== document.body);
+      assert.equal(await rest(page), 110, 'forward to D');
+      // A reload in D, then back: M's entry kept its position in history.state when D was opened from it.
+      await openDay();
+      await page.reload(); await ready(page); await shown(page, 'day'); assert.equal(await rest(page), 0, 'a reloaded D opens at its top');
+      await page.goBack(); await shown(page, 'month'); await dayFocus(); assert.equal(await rest(page), 140, 'back to M after a reload in D');
+      // A reload in M, then forward: the position of an entry left with the browser's back is kept in this page's memory
+      // only, so after the reload D opens at its top (not at the 90 M was at).
+      await page.reload(); await ready(page); await shown(page, 'month'); await to(90);
+      await page.goForward(); await shown(page, 'day'); await page.waitForFunction(() => document.activeElement && document.activeElement !== document.body);
+      assert.equal(await rest(page), 0, 'forward to D after a reload');
+      // 노트 and a post keep the browser's restore; coming back to 일정 is the app's again.
+      await page.locator(tab('notes')).click(); await shown(page, 'home'); assert.equal(await mode(), 'auto', '노트');
+      await page.locator('#homePostList .home-post-open').first().click(); await page.locator('.photo-article').waitFor(); assert.equal(await mode(), 'auto', '글 읽기');
+      await page.goBack(); await shown(page, 'home'); await page.goBack(); await shown(page, 'day'); assert.equal(await mode(), 'manual', 'back in 일정');
     });
 
     await check('a late post read cannot show account A\'s posts in 노트 after an account change', async ({ page, server, device }) => {
