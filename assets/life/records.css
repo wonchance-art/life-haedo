@@ -82,9 +82,9 @@ body.haedo-shell[data-haedo-section=records] .life-toolbar .life-feature-menu[op
 .records-row mark, .records-row-context mark { padding: 0 1px; border-radius: 3px; background: var(--haedo-mark, #fbefc0); color: var(--haedo-ink); font-weight: var(--haedo-weight-semibold); }
 .records-row-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* 꼬리표 줄: 원천·사실 표시(#F1F1EF, 12px, 모서리 4px)와 끝의 날짜·시각(13px 메타). */
-.records-badges { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 0; margin: 6px 0 0; padding: 0; }
-.records-badge { display: inline-flex; align-items: center; min-height: 22px; padding: 0 6px; border-radius: 4px; background: var(--records-badge, #f1f1ef); color: var(--haedo-muted); font-size: var(--haedo-text-badge); line-height: 1.4; }
-.records-badges > .records-when { margin-left: 2px; color: var(--haedo-meta); font-size: var(--haedo-text-meta); line-height: 1.5; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.records-badges { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; margin: 4px 0 0; padding: 0; }
+.records-badge { display: inline-flex; align-items: center; min-height: 24px; padding: 0 8px; border-radius: 4px; background: var(--records-badge, #f1f1ef); color: var(--haedo-muted); font-size: var(--haedo-text-badge); line-height: 1.4; }
+.records-badges > .records-when { margin-left: 4px; color: var(--haedo-meta); font-size: var(--haedo-text-meta); line-height: 1.5; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .records-row > .life-result-details { margin-top: 8px; }
 /* 인용: 3px 틸 세로 바(소유자 결정)를 본문 시작선에 두고 인용문은 그 안쪽에서 시작한다. */
 .records-quote, .records-row .life-record-notes .life-quote {

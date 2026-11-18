@@ -64,7 +64,11 @@ async function assign(page, control, folderId) {
   await control.locator('[data-source-folder-apply]').click();
   const saved = await waitSnapshot(page, value => value.sourceFolders.revision > before.revision); assert.equal(saved.sourceFolders.revision, before.revision + 1); await settle(page);
 }
-async function assignCard(page, sourceId, folderId) { await assign(page, page.locator('#lifeSearchResults .life-source-card[data-source-id="' + sourceId + '"] [data-source-folder-assignment]').first(), folderId); }
+async function assignCard(page, sourceId, folderId) {
+  await assign(page, page.locator('#lifeSearchResults .life-source-card[data-source-id="' + sourceId + '"] [data-source-folder-assignment]').first(), folderId);
+  // 2026-11-18 (노션 방향 W4): after 이동 from the row's ⋯, focus is on that material's title button (the row is redrawn), when it is still listed.
+  if (await page.locator('#lifeSearchResults .life-source-open[data-source-id="' + sourceId + '"]').count()) await page.waitForFunction(id => document.activeElement?.matches('#lifeSearchResults .life-source-open') && document.activeElement.dataset.sourceId === id, sourceId, { timeout: 5000 });
+}
 async function assignBulk(page, folderId) { await assign(page, page.locator('#lifeSelectionBar [data-source-folder-assignment]'), folderId); }
 async function deleteFolder(page, id) {
   await folderEditor(page, id); const before = await snapshot(page); await click(page, '#lifeFolderDelete'); await page.locator('#lifeFolderDeleteConfirm:not([hidden])').waitFor(); assert.ok((await page.locator('#lifeFolderDeleteConfirm').textContent()).includes('자료는 미분류로 남습니다.')); await click(page, '#lifeFolderDeleteCancel'); assert.deepEqual(await snapshot(page), before, 'Inline deletion cancellation must not write');

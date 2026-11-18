@@ -342,6 +342,19 @@ async function main() {
         assert(Math.abs(a2.iconRight - a2.moreRight) <= 1, 'header icon and card ⋯ on one vertical line: ' + a2.iconRight + ' / ' + a2.moreRight);
         if (width === 1440) assert.equal(a2.pane, 680, 'one 680px column');
         else assert.equal(a2.pane, a2.layout, 'the screen width is used');
+        // 2026-11-18 (노션 방향 W4): 뉴스 설정 is in the app heading, so the tab row holds the four tabs and 정렬·필터 only.
+        // At every width here (390 included) each tab is fully inside the scroller and clear of the filter icon.
+        const tabRow = await page.evaluate(() => {
+          const scroller = document.querySelector('.discovery-tab-scroller').getBoundingClientRect(), filter = document.querySelector('#discoveryFilterToggle').getBoundingClientRect();
+          const gear = document.querySelector('#discoveryNewsSettings'), find = document.querySelector('#lifeFindOpen');
+          return { tabs: [...document.querySelectorAll('.discovery-collection-tabs [role=tab]')].map(tab => { const rect = tab.getBoundingClientRect(), x = rect.left + rect.width / 2, y = rect.top + rect.height / 2, hit = document.elementFromPoint(x, y); return { name: tab.textContent, inside: rect.left >= scroller.left - 0.5 && rect.right <= scroller.right + 0.5, clear: rect.right <= filter.left + 0.5, hit: hit === tab || tab.contains(hit) }; }),
+            more: document.querySelector('.discovery-tab-scroller').dataset.more, gearInHeading: !!gear?.closest('.life-toolbar .haedo-heading-actions'), gearBeforeFind: !!(gear && find && gear.compareDocumentPosition(find) & Node.DOCUMENT_POSITION_FOLLOWING),
+            gearBox: gear ? [Math.round(gear.getBoundingClientRect().width), Math.round(gear.getBoundingClientRect().height)] : null, toolbarControls: document.querySelectorAll('.discovery-news-toolbar .discovery-list-tools > *').length };
+        });
+        assert.deepEqual(tabRow.tabs.map(tab => tab.name), ['전체 57', '담은 글 0', '좋아요 0', '제외한 글 0']);
+        for (const tab of tabRow.tabs) assert(tab.inside && tab.clear && tab.hit, width + ': tab fully shown and not covered: ' + JSON.stringify(tab));
+        assert.equal(tabRow.more, 'false', width + ': no tab is scrolled out of view');
+        assert.deepEqual({ heading: tabRow.gearInHeading, beforeFind: tabRow.gearBeforeFind, box: tabRow.gearBox, rowTools: tabRow.toolbarControls }, { heading: true, beforeFind: true, box: [44, 44], rowTools: 1 }, width + ': 뉴스 설정 in the heading before 통합 검색');
         await setImages(page, true); await page.waitForLoadState('networkidle'); await frames(page);
         assert.deepEqual(await targets(), [], 'image cards');
         const media = await page.locator('#discoveryList .discovery-card-media').first().evaluate(node => { const rect = node.getBoundingClientRect(), card = node.closest('.discovery-article').getBoundingClientRect(); return { ratio: rect.width / rect.height, width: Math.round(rect.width), card: Math.round(card.width), radius: getComputedStyle(node).borderRadius, fit: getComputedStyle(node.firstElementChild).objectFit }; });

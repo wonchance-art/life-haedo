@@ -77,6 +77,11 @@ async function pagination(page, count, size, capture) {
   await toggleRecordSelection(page); await page.locator('.life-source-select').first().click();
   const first = cards(page).first(); const selectedVersion = await first.getAttribute('data-version-id');
   // 자료 출처 정보 is an item of the row's ⋯ (2026-11-18 노션 방향 W4); afterwards focus is on the row's title button.
+  // Esc on the open row menu closes it and puts focus on the title button as well.
+  await first.locator('.records-row-more > summary').click(); assert.equal(await first.locator('.records-row-more').evaluate(el => el.open), true);
+  assert.deepEqual(await first.locator('.records-row-more .life-destination').evaluateAll(nodes => nodes.map(node => node.textContent)), ['자료 출처 정보', '폴더로 이동']);
+  await page.keyboard.press('Escape');
+  assert.deepEqual(await first.evaluate(el => ({ open: el.querySelector('.records-row-more').open, focus: document.activeElement === el.querySelector('.life-source-open') })), { open: false, focus: true }, 'Esc on the row menu returns focus to the row title');
   await (await recordRowMenuItem(first, '.life-result-info')).click();
   assert.equal(await first.locator('.life-source-open').evaluate(el => document.activeElement === el), true, 'after 자료 출처 정보 focus is on the row title');
   await first.evaluate(el => { window.__firstSearchCard = el; window.__firstSearchInfo = el.querySelector('.life-result-details'); });

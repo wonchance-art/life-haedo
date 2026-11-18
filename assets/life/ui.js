@@ -4477,7 +4477,15 @@
           rowPanel.append(info);
           let assignment = null;
           if (folders) {
-            assignment = folders.assignmentControl({ sourceIds: [source.id], buttonLabel: '폴더로 이동 · ' + sourceLabel(source), embedded: true, focusReturn: () => open });
+            // After 이동 the list is redrawn, so this row is gone: focus the same material's title button in the new
+            // list (the folder choice when the material is no longer listed), unless focus has already been placed.
+            const afterMove = () => requestAnimationFrame(() => {
+              if (disposed || state.mode !== 'sources' || state.bundle?.workspaceId !== workspaceId || !list.isConnected) return;
+              const active = document.activeElement;
+              if (active && active !== document.body && active.isConnected && !active.disabled) return;
+              ([...list.querySelectorAll('.life-source-open')].find(control => control.dataset.sourceId === source.id) || main.querySelector('#lifeFolderFilter'))?.focus({ preventScroll: true });
+            });
+            assignment = folders.assignmentControl({ sourceIds: [source.id], buttonLabel: '폴더로 이동 · ' + sourceLabel(source), embedded: true, focusReturn: () => open, onSaved: afterMove });
             assignment.id = 'lifeFolderMove-' + version.id;
             const move = menuItem('폴더로 이동', 'folder', () => {
               assignment.open = !assignment.open;
