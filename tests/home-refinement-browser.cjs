@@ -149,6 +149,47 @@ async function main() {
       assert.equal(await page.locator('#lifeHome .home-blog-description').count(), 0);
       assert.deepEqual(await page.evaluate(() => (async () => { const s = HaedoLife.Shell.storage; return (await s.readWorkbench(await s.getActive())).page; })().then(page => [page.intro, page.showIntro])), ['직접 설정한 한글 소개', true]);
     });
+    // 2026-11-18 (W2 review m-6): 노트 lost its profile row on 2026-11-16 (Designer default 2), and nothing asserted what
+    // 글 메뉴 → 프로필 편집 shows since. It shows the saved 블로그 이름, 소개 and 소개 표시; an edit is saved and shown again; a
+    // read that fails says so, changes nothing, and 다시 불러오기 brings the form back with the saved values.
+    await check('글 메뉴 → 프로필 편집 shows the saved name, intro and 소개 표시, recovers from a failed read with 다시 불러오기, and saves an edit', async page => {
+      await populate(page);
+      const saved = () => page.evaluate(() => (async () => { const s = HaedoLife.Shell.storage, profile = (await s.readWorkbench(await s.getActive())).page; return [profile.title, profile.intro, profile.showIntro]; })());
+      const shownProfile = async () => [await page.locator('#wbPageTitle').inputValue(), await page.locator('#wbPageIntro').inputValue(), await page.locator('#wbShowIntro').isChecked()];
+      const open = async () => { await openBlogMenu(page); await page.getByRole('button', { name: '프로필 편집', exact: true }).click(); await page.locator('#lifeMain[data-mode="page"]').waitFor(); };
+      const before = await saved();
+      assert.deepEqual(before, ['익명의 산책 기록', '직접 설정한 한글 소개', false], 'the saved profile of the fixture');
+      // The read fails (the profile's record has not been read in this page yet): no form, no empty fields to save over the profile.
+      await page.evaluate(() => { window.__refinementFailWorkbench = true; });
+      await open();
+      const retry = page.locator('#lifeMain').getByRole('button', { name: '다시 불러오기', exact: true }); await retry.waitFor();
+      assert.match(await page.locator('#lifeMain .life-workbench').innerText(), /구성을 불러오지 못했습니다\. 보관한 원문은 바뀌지 않았습니다\./);
+      assert.equal(await page.locator('#wbProfileSettings, #wbPageTitle, #wbPageIntro, #wbShowIntro, #wbProfileDone').count(), 0, 'no profile form after a failed read');
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), 0, 'no horizontal overflow');
+      await page.evaluate(() => { window.__refinementFailWorkbench = false; });
+      assert.deepEqual(await saved(), before, 'the failed read changed nothing');
+      await retry.click(); await page.locator('#wbProfileSettings').waitFor();
+      // The form: each field is shown, named and holds the saved value.
+      assert.equal(await page.locator('#wbProfileSettings').getAttribute('aria-label'), '프로필 편집');
+      assert.equal(await page.getByRole('heading', { level: 1, name: '프로필 편집', exact: true }).count(), 1);
+      for (const [id, label] of [['wbPageTitle', '블로그 이름'], ['wbPageIntro', '소개'], ['wbShowIntro', '소개 표시']]) {
+        const field = page.locator('#' + id); assert.equal(await field.isVisible(), true, label + ' is shown');
+        assert.equal(await page.locator('#wbProfileSettings').getByLabel(label, { exact: true }).evaluate(node => node.id), id, label + ' names its field');
+      }
+      assert.deepEqual(await shownProfile(), before, 'the form shows the saved name, intro and 소개 표시');
+      assert.equal(await page.locator('.wb-error:visible, .life-error:visible').count(), 0, 'no error is left after the retry');
+      // An edit is saved, and shown again when the screen is opened again.
+      await page.locator('#wbPageTitle').fill('고친 익명 블로그'); await page.locator('#wbPageIntro').fill('고친 한글 소개 🌱'); await page.locator('#wbShowIntro').check();
+      await page.getByRole('button', { name: '저장하고 돌아가기', exact: true }).click(); await homeReady(page);
+      assert.deepEqual(await saved(), ['고친 익명 블로그', '고친 한글 소개 🌱', true]);
+      await open(); await page.locator('#wbProfileSettings').waitFor();
+      assert.deepEqual(await shownProfile(), ['고친 익명 블로그', '고친 한글 소개 🌱', true], 'the saved edit is shown again');
+      // After a reload at the screen's own address too.
+      await page.reload(); await ready(page); await page.locator('#wbProfileSettings').waitFor();
+      assert.deepEqual(await shownProfile(), await saved(), 'after a reload');
+      await page.getByRole('button', { name: '저장하고 돌아가기', exact: true }).click(); await homeReady(page);
+      assert.deepEqual(await saved(), ['고친 익명 블로그', '고친 한글 소개 🌱', true], 'leaving without a change keeps the profile');
+    });
     await check('search reveals accessibly and preserves exact archived result/tab/query on return', async page => {
       const refs = await populate(page); const toggle = page.locator('.home-search-toggle'), input = page.locator('#homePostSearch');
       assert.equal(await input.isVisible(), false); assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
