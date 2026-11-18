@@ -19,7 +19,7 @@ body.haedo-shell[data-haedo-section=records] .life-toolbar .life-feature-menu[op
 #lifeRecordsMenu > .life-feature-menu-panel { max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 5rem); }
 #lifeRecordsMenu > .life-feature-menu-panel h2 { margin: 4px 12px 0; }
 #lifeRecordsMenu > .life-feature-menu-panel section + section { margin-top: 4px; padding-top: 4px; }
-#lifeRecordsMenu > .life-feature-menu-panel[data-more=true]::after { content: ""; position: sticky; bottom: -8px; display: block; height: 40px; margin: -40px -8px -8px; background: linear-gradient(to bottom, rgba(255, 255, 255, 0), var(--haedo-paper, #fff)); pointer-events: none; }
+#lifeRecordsMenu > .life-feature-menu-panel[data-more=true]::after { content: ""; position: sticky; bottom: -8px; display: block; height: 40px; margin: -40px -8px 0; background: linear-gradient(to bottom, rgba(255, 255, 255, 0), var(--haedo-paper, #fff)); pointer-events: none; }
 @media (max-width: 760px) {
   #lifeRecordsMenu > .life-feature-menu-panel { inset-inline-end: -36px; max-height: calc(100dvh - env(safe-area-inset-top, 0px) - var(--haedo-dock-clearance, 0px) - 3rem); }
 }
