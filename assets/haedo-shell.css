@@ -26,6 +26,10 @@ body.haedo-shell:not(.haedo-timeline) {
   --mint:var(--haedo-soft); --mint-ink:var(--haedo-muted); --sky:var(--haedo-soft); --sky-ink:var(--haedo-muted);
   /* ui.css's own :root keeps the old values for the public pages, which do not load this file. */
   --canvas:var(--haedo-canvas); --soft:var(--haedo-selected); --field-line:#8a8984;
+  /* W5 (2026-11-16): ui.css also serves the public pages, so its old weights and radii read these app-only
+     values and fall back to the old ones elsewhere (public pages stay as they are). */
+  --ui-link-color:var(--haedo-link); --ui-label-weight:var(--haedo-weight-medium); --ui-strong-weight:var(--haedo-weight-semibold); --ui-title-weight:var(--haedo-weight-bold);
+  --ui-panel-radius:var(--haedo-radius); --ui-tile-radius:var(--haedo-control-radius); --ui-item-radius:var(--haedo-control-radius); --ui-pill-radius:var(--haedo-control-radius);
   --control-radius:var(--haedo-control-radius); --surface-radius:var(--haedo-radius);
 }
 .haedo-shell *, .haedo-shell *::before, .haedo-shell *::after{box-sizing:border-box}
@@ -138,6 +142,8 @@ body.haedo-shell::before{display:none}
 .haedo-account-panel .p-account{margin:0;color:var(--haedo-muted);font-size:var(--haedo-text-meta)}
 .haedo-account-host{position:absolute;z-index:45;top:12px;right:max(48px,calc((100% - var(--haedo-nav-width) - 720px)/2));width:44px}
 body.haedo-shell:not([data-haedo-section=manage]) #lifeAccountHost{display:none}
+/* A link drawn as a bordered button (로그인 and the like) is a button: its border is the cue, not an underline (W5). */
+.haedo-shell a.life-button{text-decoration:none}
 .haedo-shell .life-primary,.haedo-shell .p-button.primary{background:var(--haedo-accent);color:#fff;border-color:var(--haedo-accent);border-radius:var(--haedo-control-radius);font-weight:600}
 .haedo-shell .life-primary:hover:not(:disabled),.haedo-shell .p-button.primary:hover:not(:disabled){background:var(--haedo-accent-hover);border-color:var(--haedo-accent-hover);color:#fff}
 .haedo-shell .life-primary:active:not(:disabled),.haedo-shell .p-button.primary:active:not(:disabled){background:var(--haedo-accent-active);color:#fff}

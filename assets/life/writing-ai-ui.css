@@ -9,7 +9,7 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   border: 1px solid var(--line, #e3e9e6);
-  border-radius: 16px;
+  border-radius: var(--haedo-radius, 8px);
   background: var(--paper, #fff);
   color: var(--ink, #182522);
   font-family: var(--haedo-font, inherit);
@@ -108,6 +108,6 @@
     max-height: 90dvh;
     margin: auto 0 0;
     padding: 0 20px max(20px, env(safe-area-inset-bottom, 0px));
-    border-radius: 16px 16px 0 0;
+    border-radius: var(--haedo-radius, 8px) var(--haedo-radius, 8px) 0 0;
   }
 }
