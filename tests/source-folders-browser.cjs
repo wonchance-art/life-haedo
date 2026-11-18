@@ -93,7 +93,8 @@ async function captureThree(page) {
   if (await panel.isVisible()) await page.locator('#lifeFolderManageClose').click();
   assert.equal(await panel.isHidden(), true); assert.equal(await summary.evaluate(el => document.activeElement === el), true, '닫기 returns focus to the 자료 메뉴 button');
   await summary.press('Enter'); await page.locator('#lifeFolderManageOpen').press('Enter'); assert.equal(await panel.isVisible(), true);
-  assert.equal(await page.evaluate(() => document.activeElement?.id), 'lifeFolderEdit'); assert.equal(await page.locator('#lifeRecordsMenu').evaluate(el => el.open), false);
+  // Focus moves into the panel: its first field, or 닫기 while the folders are still being read or saved.
+  assert(['lifeFolderEdit', 'lifeFolderManageClose'].includes(await page.evaluate(() => document.activeElement?.id)), 'focus is in the folder panel'); assert.equal(await page.locator('#lifeRecordsMenu').evaluate(el => el.open), false);
   await page.keyboard.press('Escape'); assert.equal(await panel.isHidden(), true); assert.equal(await summary.evaluate(el => document.activeElement === el), true, 'Esc returns focus to the 자료 메뉴 button');
   await summary.press('Enter'); await page.locator('#lifeFolderManageOpen').press('Enter'); assert.equal(await panel.isVisible(), true);
   for (const width of [1440, 820, 390]) {

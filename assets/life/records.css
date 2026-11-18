@@ -21,7 +21,7 @@ body.haedo-shell[data-haedo-section=records] .life-toolbar .life-feature-menu[op
 /* 종류 탭: 글자 탭, 현재 탭은 먹색 600 + 아래 2px 먹색 선. 목록 화면에서는 오른쪽에 폴더 선택이 같은 줄에 온다. */
 .records-kind-host { min-width: 0; margin: 4px 0 0; }
 .records-tab-row { display: flex; align-items: stretch; gap: 8px; min-width: 0; margin: 4px 0 0; box-shadow: inset 0 -1px 0 var(--haedo-line); }
-.records-tab-row > .records-kind-host { flex: 1 1 auto; margin: 0; }
+.records-tab-row > .records-kind-host { flex: 0 1 auto; margin: 0; }
 .records-tab-row .records-tabs { box-shadow: none; }
 .records-tabs { display: flex; gap: 4px; min-width: 0; overflow-x: auto; scrollbar-width: none; box-shadow: inset 0 -1px 0 var(--haedo-line); }
 .records-tabs::-webkit-scrollbar { display: none; }
@@ -33,12 +33,22 @@ body.haedo-shell[data-haedo-section=records] .life-toolbar .life-feature-menu[op
 .records-tab:focus-visible { outline-offset: -3px; }
 .records-tab-count { font-variant-numeric: tabular-nums; }
 @media (hover: hover) and (pointer: fine) { .records-tab:hover { color: var(--haedo-ink); } }
-.records-folder-filter { display: flex; flex: 0 1 auto; align-items: center; min-width: 0; max-width: 46%; }
+.records-folder-filter { display: flex; flex: 1 1 0; align-items: center; justify-content: flex-end; min-width: 72px; }
 .records-folder-filter:empty { display: none; }
 .records-folder-filter .sf-filter-label { position: relative; display: flex; align-items: center; min-width: 0; max-width: 100%; }
 .records-folder-filter select { appearance: none; -webkit-appearance: none; width: auto; min-width: 44px; max-width: 100%; min-height: 44px; margin: 0; padding: 0 24px 0 8px; border: 0; border-radius: var(--haedo-control-radius); background: transparent; color: var(--haedo-muted); font: inherit; font-size: var(--haedo-text-input); line-height: 1.5; text-align: right; text-align-last: right; text-overflow: ellipsis; cursor: pointer; }
 .records-folder-filter .sf-filter-label > .life-glyph { position: absolute; right: 2px; width: 16px; height: 16px; color: var(--haedo-muted); pointer-events: none; }
 @media (hover: hover) and (pointer: fine) { .records-folder-filter select:hover:not(:disabled) { background: var(--haedo-hover); color: var(--haedo-ink); } }
+/* 360px 이하: 네 탭이 잘리지 않게 탭 사이를 줄이고 폴더 선택이 남는 폭을 쓴다(이름이 길면 말줄임). */
+@media (max-width: 360px) {
+  .records-tab-row { gap: 4px; }
+  .records-tab-row .records-tabs { gap: 0; }
+  .records-tab-row .records-tab { padding: 0 8px; }
+  .records-tab-row .records-tab:first-child { padding-left: 0; }
+  .records-tab-row .records-tab[aria-selected=true]::after { left: 8px; right: 8px; }
+  .records-tab-row .records-tab:first-child[aria-selected=true]::after { left: 0; }
+  .records-folder-filter select { padding: 0 20px 0 4px; }
+}
 
 /* 행 */
 .life-card.records-row, .records-row {
