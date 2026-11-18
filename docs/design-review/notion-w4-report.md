@@ -97,7 +97,7 @@
 
 ## unslop 지침을 참고한 수동 점검
 
-- 고친 것: 탭 줄과 행의 간격을 4px 단위로 맞춤, 모서리 값 10·12·14·16px 섞임 → 6px(조작)·8px(면), 굵기 650·700·730·750 → 600(글 제목만 700), 뉴스 화면의 틸 글자 단추·호버 → 먹색, 메뉴 그림자 한 가지.
+- 고친 것: 자료 검색 칸의 겹친 초점 링 두 개(칸 + 입력) → 하나, 브라우저 기본 검색 지우기 표시와 `검색어 지우기` 단추가 함께 보이던 것 → 단추 하나(둘 다 기준판에도 있던 것), 탭 줄과 행의 간격을 4px 단위로 맞춤, 모서리 값 10·12·14·16px 섞임 → 6px(조작)·8px(면), 굵기 650·700·730·750 → 600(글 제목만 700), 뉴스 화면의 틸 글자 단추·호버 → 먹색, 메뉴 그림자 한 가지.
 - 일부러 남긴 것: 인용의 틸 3px 바와 체크의 틸(소유자 결정), 아이콘 선 굵기 1.8·20px(11-02 결정), 폴더 선택 글자 16px(시안은 더 작다. iPhone에서 선택 상자를 누를 때 화면이 확대되지 않게 하는 기존 규칙).
 
 ## 시안과 다른 점 (의도)
@@ -110,7 +110,8 @@
 
 로컬 Chromium 1243, 가짜 인증, 익명 샘플. 한 번에 하나씩 돌렸다.
 
-- `npm test`: 0 · `npm run check`: 0 · `node scripts/check-markdown-links.cjs`: 0 (마지막 커밋 기준, 아래 표의 끝)
+- `npm test`: 0 (2888/2888) · `npm run check`: 0 (22 HTML, 202 JS, 803 로컬 참조) · `node scripts/check-markdown-links.cjs`: 0 — 마지막 코드 상태에서 다시 돌린 결과다.
+- 마지막 코드 상태에서 다시 돌린 브라우저 검사(모두 0): `record-arrange`·`search-quality`·`source-folders`·`account-library`·`records-reader-small`·`records-split-resize`·`records-news`·`purpose-workflow`. 그 직전 상태(이후 바뀐 것은 `records.css`의 폴더 선택 정렬·검색 칸 초점 링뿐)에서 돌린 것: `settings`·`news-card-feed`·`obsidian-reading-scale`·`life-news`·`purpose-news`·`home-entry`·`source-merge`. 나머지는 각 묶음을 고친 직후에 한 번씩 돌렸고, 그 뒤 바뀐 것은 자료 행의 폴더 이동 뒤 초점(`ui.js`), 자료 CSS, 뉴스 메뉴 항목의 밑줄 제거(`discovery.css`)다. 통합본에서 전체를 다시 돌려야 한다.
 - 브라우저(`BASE_URL=http://127.0.0.1:4641 node tests/<이름>.cjs`), 모두 0:
   - 계약 W4 표: `search-quality-browser`, `obsidian-reading-scale-browser`, `source-merge-browser`, `news-card-feed-browser`, `settings-browser`
   - 자료·폴더·검색: `source-folders-browser`, `account-library-browser`, `record-arrange-browser`, `records-news-browser`, `records-split-resize-browser`, `records-reader-small-browser`, `purpose-workflow-browser`, `feature-flow-browser`, `home-entry-browser`, `core-experience-browser`, `subview-navigation-browser`, `startup-performance-browser`, `product-flow-quality-browser`, `unified-home-browser`, `reading-resume-browser`, `reader-position-resize-browser`, `input-output-quality-browser`, `book-workshop-browser`, `book-workshop-recovery-browser`, `original-attachments-browser`, `source-reader-compose-browser`, `sns-blog-experience-browser`, `reading-quality-browser`, `obsidian-vault-browser`, `local-post-finder-browser`, `life-search-browser`, `life-naver-capture-browser`, `account-materials-browser`, `reading-writing-quality-browser`, `reader-panels-browser`, `material-library-browser`, `structure-baseline-browser`, `source-reimport-browser`, `source-edit-draft-browser`, `minor-defects-ui-browser`, `integrated-release-entry-browser`, `import-flow-quality-browser`, `app-motion-browser`, `life-sync-browser`, `obsidian-markdown-browser`, `reader-markdown-excerpt-browser`, `material-writing-sources-browser`, `sync-common-mixed-browser`, `schedule-exits-browser`, `life-annual-plan-browser`
