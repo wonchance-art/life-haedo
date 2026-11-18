@@ -27,7 +27,7 @@
 | --- | --- | --- | --- | --- |
 | `기록 선택` `#lifeSelectionToggle`(`aria-pressed` 유지) | 자료 머리줄 아이콘 단추 | `자료 메뉴(⋯)` › `목록` › `기록 선택` | 메뉴가 닫히고 `⋯`(`#lifeRecordsMenu > summary`) | 열린 메뉴에서 Esc: `⋯` |
 | `선택 취소`(선택 막대) | 그대로 | 그대로 | 전에는 머리의 `기록 선택` → 지금은 `⋯` | — |
-| `폴더 관리` | 검색 칸 아래 접힌 줄(`details` 요약) | `자료 메뉴(⋯)` › `목록` › `폴더 관리` `#lifeFolderManageOpen`. 누르면 검색 칸 아래 `폴더 관리` 칸 `#lifeFolderManage`가 열린다(내용·id 그대로, 오른쪽 위 `폴더 관리 닫기`) | 칸 안의 `편집할 폴더`(폴더를 읽거나 보관하는 중이면 `폴더 관리 닫기`) | 칸 안에서 Esc·`폴더 관리 닫기`: `⋯`. 열린 메뉴에서 Esc: `⋯` |
+| `폴더 관리` | 검색 칸 아래 접힌 줄(`details` 요약) | `자료 메뉴(⋯)` › `목록` › `폴더 관리` `#lifeFolderManageOpen`. 누르면 검색 칸 아래 `폴더 관리` 칸 `#lifeFolderManage`가 열린다(내용·id 그대로, 오른쪽 위 `폴더 관리 닫기`) | 칸 안의 `편집할 폴더`. 폴더가 아직 없으면 `이름`, 폴더를 읽거나 보관하는 중이면 `폴더 관리 닫기`(검수 MINOR-1 반영) | 칸 안에서 Esc·`폴더 관리 닫기`: `⋯`. 열린 메뉴에서 Esc: `⋯` |
 | 폴더 선택 `#lifeFolderFilter`(이름 그대로) | 검색 칸 아래 한 줄 | 종류 탭 줄 오른쪽 끝 | 선택 상자 그대로 | — |
 | `자료 출처 정보 · 〈제목〉` `.life-result-info`(`aria-expanded` 유지) | 행 꼬리표 줄 오른쪽 아이콘 단추 | 행 `⋯`(`자료 동작 · 〈제목〉`) › `자료 출처 정보`. 정보는 전처럼 행 아래에 펼친다 | 그 행의 제목 단추 | 열린 행 메뉴에서 Esc: 제목 단추. 펼친 정보 안에서 Esc: 접고 제목 단추 |
 | `폴더로 이동 · 〈제목〉` | 행 꼬리표 줄 오른쪽 폴더 단추 | 행 `⋯` › `폴더로 이동`. 양식은 전처럼 행 아래에 열린다 | 양식의 `이동할 폴더`. `이동`·`취소` 뒤에는 그 자료의 제목 단추 | 양식 안에서 Esc: 닫고 제목 단추 |
@@ -43,9 +43,82 @@
 ## 뉴스 390px 탭 겹침
 
 - 원인: 네 탭(글자 226px) + 아이콘 두 개(88px)는 390px 화면의 350px에 들어가지 않아, 넘치는 `제외한 글`이 끝의 흐림 처리와 겹쳐 `제오`처럼 보였다. 탭 사이를 줄여서는 맞출 수 없었다(남는 폭 36px ÷ 3).
-- 고침: `뉴스 설정`을 머리줄로 옮기고 탭 사이를 10px로 맞췄다. 390px에서 탭 296 + `정렬·필터` 44 = 340px ≤ 350px.
-- 단언: `news-card-feed-browser`가 1440·820·390에서 네 탭이 모두 탭 줄 안에 있고 `정렬·필터`와 겹치지 않으며 가운데를 누를 수 있음을 본다.
-- 남는 한계: 320px(또는 개수가 네 자리)에서는 전처럼 탭을 가로로 밀어 본다. 끝의 흐림 처리도 그대로다.
+- 고침: `뉴스 설정`을 머리줄로 옮기고, 760px 이하에서 탭 사이를 16px로 줄였다(검수 MINOR-4 반영, 처음에는 20px).
+- 단언: `news-card-feed-browser`가 1440·820·390에서 네 탭(`전체 57 · 담은 글 0 · 좋아요 0 · 제외한 글 0`)이 모두 탭 줄 안에 있고 `정렬·필터`와 겹치지 않으며 가운데를 누를 수 있음을 본다. 320px에서는 줄이 옆으로 밀리고 끝이 흐려지며, 밀기와 키보드(End)로 `제외한 글`에 닿는지 본다.
+- **"390px에서 모두 보인다"의 조건(실측, 탭 글자 폭 / 탭 줄 폭 / 여유):**
+
+  | 화면 폭 | `전체 57 · 0 · 0 · 0` | `전체 125 · 0 · 0 · 0` | `전체 57 · 담은 글 12 · 좋아요 34 · 0` | `전체 125 · 담은 글 12 · 좋아요 34 · 0` |
+  | --- | --- | --- | --- | --- |
+  | 430 | 281 / 346 / +65 | +55 | +46 | +37 |
+  | 393 | 281 / 309 / +28 | +18 | +9 | 0 (꼭 맞음) |
+  | 390 | 281 / 306 / +25 | +15 | +6 | −3 (넘침) |
+  | 375 | 281 / 291 / +10 | 0 (꼭 맞음) | −9 (넘침) | −18 (넘침) |
+  | 360 | 281 / 276 / −5 (넘침) | −15 | −24 | −33 |
+  | 320 | 281 / 236 / −45 (넘침) | −55 | −64 | −73 |
+
+  개수 글자는 화면에서 표본 값으로 바꿔 쟀다(실제 담기·좋아요를 그만큼 만든 것은 아니다). 측정 원본은 scratchpad의 `logs/news-tabs-measure.txt`다.
+- 넘칠 때: 탭 줄을 옆으로 밀어 본다(끝 흐림). 반쯤 잘린 탭을 누르거나 키보드로 옮겨도 탭이 줄 안으로 오지 않던 것을 고쳐, 고른 탭은 줄 안으로 들어온다.
+- 문구를 `제외`로 줄이면 390px에서 약 30px, 375px에서도 두 자리 개수까지 여유가 생긴다. 문구 판정은 Designer 몫이라 하지 않았다.
+
+## 독립 검수 반영 (`63580b3` 검수: BLOCKER 0, MAJOR 1, MINOR 6, NIT 7)
+
+| 항목 | 고친 것 | 단언과 수정 전 실패 확인 |
+| --- | --- | --- |
+| MAJOR-1 | `ui.js`의 보호 선택자 `#lifeFolderManage[open]`이 죽어 있었다(칸이 `details`가 아니게 됨). 열린 것을 한 곳(`listHeld`)에서 판단하고 폴더 관리 칸(`:not([hidden])`)·행 폴더 양식·행 정보·행 `⋯` 메뉴를 모두 넣었다 | `account-library-browser` "another device's change does not redraw…": 네 경우에서 열린 요소·입력·목록이 그대로이고 `최신 내용 확인`이 뜬다. 수정 전: 폴더 관리 칸에서 실패. 선택자만 고친 뒤: 행 정보에서 실패(기준판도 행 정보는 보호하지 않았다). 행 메뉴·행 정보를 선택자에서 빼면 실패 |
+| MINOR-1 | 폴더 관리를 열면 초점이 `편집할 폴더`(폴더 0개면 `이름`)로 간다. 메뉴 항목의 실행 동안 입력칸이 꺼져 있어 닫기 단추로 떨어졌다. 다음 프레임에 초점을 둔다 | `source-folders-browser`: 둘 중 하나 허용 → 하나로. 폴더 0개일 때 `이름`. 수정 전 4개 검사 모두 실패 |
+| MINOR-2 | 자료 메뉴 13개 항목이 1440×900·820×1000·390×844에서 모두 보인다(칸 높이를 화면에 맞추고 묶음 사이를 줄임). 더 낮으면 칸 안에서 밀고 끝을 흐린다. 320px에서 칸이 화면 왼쪽 밖으로 20px 나가던 것을 고쳤다 | `records-news-browser` "자료 메뉴 shows every item…": 다섯 크기. 높이 규칙·위치 규칙·끝 흐림을 각각 지우면 실패 |
+| MINOR-3 | 행 제목 단추에는 공통 누름 축소(`transform`)를 쓰지 않는다. `transform`이 걸리면 행 전체로 늘린 `::after`가 단추 크기로 줄어 꼬리표 줄·발췌·여백 누름이 원문을 열지 못했다(기준판 동일) | `records-news-browser`: 실제 마우스(누름 160ms 유지)와 터치로 꼬리표·날짜·발췌·아래 여백·제목 옆·빈 곳을 눌러 원문이 열리고, 행 `⋯`·선택 단추는 열지 않는다. 규칙을 지우면 마우스·터치 둘 다 실패 |
+| MINOR-4 | 위 "뉴스 390px 탭 겹침"의 조건 표, 탭 사이 16px, 고른 탭을 줄 안으로 | `news-card-feed-browser` 320px 검사. 고른 탭을 줄 안으로 옮기는 코드를 넣기 전에는 키보드(End) 단계에서 실패 |
+| MINOR-5 | (검사만) | `records-news-browser` "검색어 지우기 hides…": 빈 칸에서 숨음, 입력·한글 조합 중 보임, 지운 뒤 초점은 입력칸. 숨김 규칙을 지우면 실패 |
+| MINOR-6 | forced-colors에서 사라지는 box-shadow 표시를 outline·테두리로: 열린 `⋯`·검색 필터·정렬·필터의 테, 켜진 `기록 선택`, 폴더 관리 칸 테두리, 설정 행 구분선, 탭 줄 선, 읽는 중인 행 | `records-news-browser` "forced colours keep…"(Chromium `forcedColors: 'active'` 모사). 자료·설정·폴더·뉴스 규칙을 각각 지우면 실패 |
+| NIT | `discovery.css` 숫자 굵기 → 토큰. `::selection` 복사본 두 줄을 지워 셸의 규칙 하나를 따른다. 분할 손잡이 호버의 틸 → 보조색 선·먹색 손잡이(초점·끌기 중은 초점색 유지). 폴더 초점 링 → `--haedo-focus` | — |
+
+- **노트 행·뉴스 카드의 같은 결함 여부(MINOR-3, 측정만):** 실제 마우스 누름(160ms 유지)으로 노트 행의 메타 줄·제목 옆·아래 여백, 뉴스 카드의 메타 줄·아래쪽을 눌러 모두 열렸다. 같은 결함이 없다. 자료 읽기 칸의 목록 행은 이번 규칙이 함께 덮는다(따로 재지 않음).
+- **`details`에서 다른 요소로 바꾼 것의 선택자 전수 확인:** 아래 "죽은 선택자 확인".
+- **잘린 행 제목의 `title`:** 넣지 않았다(접근 이름이 온전하다).
+
+### `news-wide-search-browser` 간헐 실패 — 근본 원인 수정 (`d31de9d`, 따로 되돌릴 수 있는 커밋)
+
+- 증상: `the screen's own scrolls are not a use` 검사가 느린 기계에서 `nothing to announce: the list took them`으로 실패. W4 회귀가 아니다(기준판도 실패).
+- 재현: CDP `Emulation.setCPUThrottlingRate`, 한 번에 하나. 수정 전 4배 3/6 실패, 8배 1/6 실패.
+- 원인은 둘이었다.
+  1. `새 글 n건`(과 `AI 추천 보기`)을 누르면 목록을 다시 그리는데, 그때 문서가 잠깐 짧아져 페이지가 스스로 움직인다(기록한 값: `scrollY` 300 → 0). 이 스크롤은 `placing()`으로 표시되지 않았고, 직전 `placing()`에서 250ms 안일 때만 우연히 화면의 것으로 넘어갔다. 검수 가설(복귀 스크롤이 창 밖으로 나감)과 다른 지점이다.
+  2. `placing()` 뒤 250ms 시계만으로 판정해, 느린 기계에서는 화면이 건 스크롤의 `scroll` 이벤트가 그보다 늦게 왔다.
+- 수정: (1) 다시 그리기 전에 `placing()`을 부른다. (2) `placing()`이 애니메이션 프레임 4개를 연다. `scroll` 이벤트는 그 렌더링 갱신의 프레임 콜백보다 먼저 나가므로, `placing()` 직후에 건 이동의 이벤트는 갱신이 아무리 늦어도 프레임이 남아 있을 때 도착한다. 그런 이벤트가 한 번 오면 그 움직임의 `scrollend`까지는 같은 움직임이다(부드러운 스크롤). `scrollend`가 없는 브라우저는 프레임과 기존 250ms 규칙을 이어 쓴다. 기존 250ms 규칙은 둘째 판정으로 남겨, 전에 화면의 것이던 스크롤이 사람의 것으로 바뀌는 경우가 없다. 휠·터치는 화면의 주장을 바로 끝낸다.
+- 확인(같은 검사, 한 번에 하나, 실제 종료 코드):
+
+  | 판 | 4배 | 8배 | 16배 | 스로틀 없음 |
+  | --- | --- | --- | --- | --- |
+  | 수정 전 | 3/6 실패 | 1/6 실패 | — | — |
+  | (2)만(프레임·`scrollend`) | 8/10 실패 | 0/10 실패 | — | — |
+  | (1)만(다시 그리기 전 `placing()`, 시계 그대로) | 2/10 실패 | 0/10 실패 | 3/6 실패 | — |
+  | 둘 다(지금) | 10/10 통과 | 10/10 통과 | 6/6 통과 | 10/10 통과 |
+
+- 반대 방향 단언: 화면의 스크롤이 끝난(`scrollend`) 뒤 입력 없는 스크롤(스크롤 막대·화면 읽기 프로그램)은 사람의 것이라, 뉴스를 다시 열 때 온 답이 `새 글 n건`으로 안내되고 그려진 카드가 제자리에 남는다. `scrollend`에서 표시를 걷지 않게 바꾸면 실패한다.
+- 검사에 더한 것: CPU를 늦추는 `NEWS_WIDE_THROTTLE` 환경 값(단언·대기 변경 없음). 제한시간과 기존 단언은 그대로다.
+- 남는 한계: `scrollend`가 없는 브라우저(구형 Safari)에서는 부드러운 스크롤의 뒷부분을 여전히 프레임·시계로 본다. 실기 Safari에서 재지 않았다. `placing()` 없이 화면을 다시 그리는 다른 경로가 페이지를 움직이는 경우는 이번에 확인한 두 단추 말고는 찾지 않았다.
+
+### 죽은 선택자 확인 (`assets/`·`tests/`·`scripts/` 전체 grep)
+
+`details`나 아이콘 단추에서 다른 요소·자리로 바꾼 것마다 `[open]`·`summary`·`details`·직접 누름을 찾았다. 원본은 scratchpad의 `dead-selector-grep.txt`(141줄)다.
+
+| 바꾼 것 | 지금 요소 | 남아 있던 옛 전제 | 상태 |
+| --- | --- | --- | --- |
+| `#lifeFolderManage` (`details` → `section[hidden]`) | 칸 | `ui.js` 보호 선택자 `#lifeFolderManage[open]` 2곳 | **죽어 있었음 → 고침(MAJOR-1)** |
+| 〃 | 〃 | `tests`의 `el.open`·`> summary` 누름(`source-folders`·`account-library`) | 첫 판에서 메뉴 경로로 고침. 지금 `#lifeFolderManage`에 `open`·`summary`를 쓰는 곳 0 |
+| 〃 | 〃 | `source-folders.css`의 `.sf-manage > summary` | 첫 판에서 지움. 0 |
+| 행 폴더 양식 `.source-folder-assignment` | 여전히 `details`(요약은 숨김, `data-embedded`) | `ui.js` `[open]` 3곳(보호·지연 갱신·toggle), `records.css`·`source-folders.css`의 `[open]` | 살아 있음(행 메뉴가 `open`을 켠다). 선택 막대의 양식은 요약 그대로 |
+| 〃 | 〃 | `tests`의 `> summary` 누름 | `source-folders`의 `assign()`은 `data-embedded`면 행 메뉴로, 아니면 요약으로. `account-library`는 행 메뉴로. 0 |
+| 행 정보 `.life-result-info` (아이콘 단추 → 행 메뉴 항목) | 메뉴 항목 | `search-quality`의 직접 누름 | 첫 판에서 고침. 보호 선택자에는 없었음 → 넣음(MAJOR-1) |
+| 〃 | 〃 | `scripts/check-life-feed-design.cjs:111` `getByRole('button', { name: /^자료 출처 정보/ })`, `:65` `.life-feed-footer .life-icon-button` | **죽음. 고치지 않음** — `scripts/`는 작업 범위 밖이고 `pages.yml`에 없는 수동 디자인 점검이다 |
+| `#lifeSelectionToggle` (머리 단추 → 메뉴 항목) | 메뉴 항목 | `tests`의 직접 누름 7개 파일 | 첫 판에서 메뉴 경로로 고침. `home-entry-browser`는 `aria-label`만 읽어 그대로 통과 |
+| 〃 | 〃 | `scripts/check-app-feel-design.cjs:23` `#lifeSelectionToggle`에 초점 → Space | **죽음. 고치지 않음** — 위와 같은 이유 |
+| `.records-when` (행의 첫 자식 → 꼬리표 줄 끝) | `time` | `records-news`의 `:scope > .records-when` | 첫 판에서 고침. 0 |
+| `.records-row-tools` (`role=toolbar` 두 단추 → `⋯` 하나) | `div` | 참조 없음 | 0 |
+| `#discoveryNewsSettings` (탭 줄 → 머리줄) | 같은 단추 | `ui.js`의 `main.querySelector('#discoveryNewsSettings')` | 첫 판 검사에서 잡아 고침. `tests`는 id로 눌러 그대로 통과(1100px 이하 읽기 중·설정 화면 중에는 전처럼 보이지 않음) |
+| 폴더 선택 `#lifeFolderFilter` (폴더 묶음 안 → 탭 줄) | 같은 `select` | `source-folders-ui.js`의 `element.contains(select)` 가드 | 첫 판 검사에서 잡아 고침 |
+
+`scripts/`의 두 점검 스크립트는 총괄이 정한다(고치거나 지금 화면에 맞게 다시 쓰기).
 
 ## 바꾼 단언 (규칙 변경, 약화 아님)
 
@@ -111,6 +184,7 @@
 로컬 Chromium 1243, 가짜 인증, 익명 샘플. 한 번에 하나씩 돌렸다.
 
 - `npm test`: 0 (2888/2888) · `npm run check`: 0 (22 HTML, 202 JS, 803 로컬 참조) · `node scripts/check-markdown-links.cjs`: 0 — 마지막 코드 상태에서 다시 돌린 결과다.
+- 검수 반영 뒤 최종 head의 결과는 인계 보고(총괄에 보낸 글)와 scratchpad의 `results.txt`에 있다. 아래는 첫 판(`63580b3`) 때의 기록이다.
 - 마지막 코드 상태에서 다시 돌린 브라우저 검사(모두 0): `record-arrange`·`search-quality`·`source-folders`·`account-library`·`records-reader-small`·`records-split-resize`·`records-news`·`purpose-workflow`. 그 직전 상태(이후 바뀐 것은 `records.css`의 폴더 선택 정렬·검색 칸 초점 링뿐)에서 돌린 것: `settings`·`news-card-feed`·`obsidian-reading-scale`·`life-news`·`purpose-news`·`home-entry`·`source-merge`. 나머지는 각 묶음을 고친 직후에 한 번씩 돌렸고, 그 뒤 바뀐 것은 자료 행의 폴더 이동 뒤 초점(`ui.js`), 자료 CSS, 뉴스 메뉴 항목의 밑줄 제거(`discovery.css`)다. 통합본에서 전체를 다시 돌려야 한다.
 - 브라우저(`BASE_URL=http://127.0.0.1:4641 node tests/<이름>.cjs`), 모두 0:
   - 계약 W4 표: `search-quality-browser`, `obsidian-reading-scale-browser`, `source-merge-browser`, `news-card-feed-browser`, `settings-browser`
