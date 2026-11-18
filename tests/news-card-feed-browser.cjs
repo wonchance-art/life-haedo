@@ -66,7 +66,7 @@ async function setImages(page, on) {
   await until(page, async on => HaedoLife.DiscoverySettings.showImages(await HaedoLife.Shell.storage.readDiscoverySettings(await HaedoLife.Shell.storage.getActive())) === on, on, 'image setting saved');
   await page.locator('#discoveryNewsSettingsBack').click(); await idle(page); await frames(page);
 }
-const sizes = { 1440: 960, 820: 1180, 390: 844 };
+const sizes = { 1440: 960, 820: 1180, 390: 844, 320: 700 };
 // NEWS_CARD_FEED_ONLY=<part of a check name> runs just those checks (used for mutation checks while developing).
 const only = process.env.NEWS_CARD_FEED_ONLY || '';
 
@@ -381,6 +381,32 @@ async function main() {
       }, { width });
     }
 
+    // 2026-11-18 (노션 방향 W4 검수 MINOR-4): the four tabs fit beside 정렬·필터 at 390px only while the counts are
+    // short. When they do not fit (here 320px), the row is moved sideways: its end is faded while tabs remain, and
+    // 제외한 글 is reached with a sideways scroll and with the keyboard, never covered by the filter icon.
+    await check('S2 when the tabs do not fit (320px) the row scrolls sideways with its end fade, and 제외한 글 is reached by scrolling and by the keyboard', async ({ page }) => {
+      const read = () => page.evaluate(() => {
+        const scroller = document.querySelector('.discovery-tab-scroller'), s = scroller.getBoundingClientRect(), last = document.querySelector('#discoveryExcluded'), r = last.getBoundingClientRect(), filter = document.querySelector('#discoveryFilterToggle').getBoundingClientRect(), style = getComputedStyle(scroller);
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return { more: scroller.dataset.more, fade: /gradient/.test(style.maskImage || style.webkitMaskImage || ''), lastInside: r.left >= s.left - 0.5 && r.right <= s.right + 0.5, lastHit: hit === last || last.contains(hit), scrollable: scroller.scrollWidth > scroller.clientWidth + 1,
+          rowEndsBeforeFilter: s.right <= filter.left + 0.5, pageOverflow: document.documentElement.scrollWidth > innerWidth + 1, selected: last.getAttribute('aria-selected'), focused: document.activeElement === last };
+      });
+      const start = await read();
+      assert.deepEqual({ more: start.more, fade: start.fade, lastInside: start.lastInside, scrollable: start.scrollable, rowEndsBeforeFilter: start.rowEndsBeforeFilter, pageOverflow: start.pageOverflow },
+        { more: 'true', fade: true, lastInside: false, scrollable: true, rowEndsBeforeFilter: true, pageOverflow: false }, 'the row scrolls inside itself, faded at its end, clear of the filter icon');
+      // Sideways, as a finger or a trackpad moves it.
+      const box = await page.locator('.discovery-tab-scroller').boundingBox(); await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.wheel(400, 0);
+      await until(page, () => document.querySelector('.discovery-tab-scroller').dataset.more === 'false', null, 'the end of the tab row');
+      const end = await read(); assert.deepEqual({ fade: end.fade, lastInside: end.lastInside, lastHit: end.lastHit }, { fade: false, lastInside: true, lastHit: true }, '제외한 글 is fully shown at the end, with no fade over it');
+      await page.locator('#discoveryExcluded').click(); await idle(page); assert.equal(await page.locator('#discoveryExcluded').getAttribute('aria-selected'), 'true');
+      // By keyboard: from the first tab, End moves to the last one and brings it into view.
+      await page.locator('#discoveryDiscover').click(); await idle(page);
+      await page.locator('.discovery-tab-scroller').evaluate(el => el.scrollTo({ left: 0, behavior: 'instant' })); await frames(page); assert.equal((await read()).lastInside, false);
+      await page.locator('#discoveryDiscover').focus(); await page.keyboard.press('End'); await idle(page);
+      await until(page, () => { const s = document.querySelector('.discovery-tab-scroller').getBoundingClientRect(), r = document.querySelector('#discoveryExcluded').getBoundingClientRect(); return r.left >= s.left - 0.5 && r.right <= s.right + 0.5; }, null, '제외한 글 in view after End');
+      const keyed = await read(); assert.deepEqual({ selected: keyed.selected, focused: keyed.focused }, { selected: 'true', focused: true });
+      await capture(page, 'tabs-320-end');
+    }, { width: 320 });
     // ---- S3 -------------------------------------------------------------------------------------
     await check('S3 off by default: one same-origin catalog request, no image element and no image request', async ({ page, state }) => {
       assert.equal(await page.evaluate(async () => { const s = HaedoLife.Shell.storage; return HaedoLife.DiscoverySettings.showImages(await s.readDiscoverySettings(await s.getActive())); }), false);

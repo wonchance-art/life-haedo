@@ -265,12 +265,19 @@
 }
 .discovery-news .discovery-collection-tabs .discovery-mode { padding: 0 10px; }
 .discovery-news .discovery-collection-tabs .discovery-mode:first-child { padding-left: 0; }
-@media (max-width: 760px) { .discovery-news .discovery-collection-tabs { gap: 0; } }
+/* 760px 이하: 탭 사이를 16px로 줄인다. 390px에서 개수 두 개가 두 자리(담은 글 12 · 좋아요 34)여도 네 탭과 정렬·필터가 한 줄에 들어가고,
+ * 375px에서는 개수가 한 자리일 때 들어간다. 그보다 길면 탭 줄을 옆으로 밀어 보고(끝 흐림), 고른 탭은 줄 안으로 들어온다(discovery-ui.js revealTab). */
+@media (max-width: 760px) {
+  .discovery-news .discovery-collection-tabs { gap: 0; }
+  .discovery-news .discovery-collection-tabs .discovery-mode { padding: 0 8px; }
+  .discovery-news .discovery-collection-tabs .discovery-mode:first-child { padding-left: 0; }
+}
 .discovery-news .discovery-collection-tabs .discovery-mode:hover { background: transparent; color: var(--haedo-ink, #37352f); }
 .discovery-news .discovery-collection-tabs .discovery-mode[aria-selected=true] { color: var(--haedo-ink, #37352f); font-weight: var(--haedo-weight-semibold, 600); background: transparent; box-shadow: none; }
 .discovery-news .discovery-collection-tabs .discovery-mode { position: relative; }
 .discovery-news .discovery-collection-tabs .discovery-mode[aria-selected=true]::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: 0; height: 2px; background: var(--haedo-ink, #37352f); }
 .discovery-news .discovery-collection-tabs .discovery-mode:first-child[aria-selected=true]::after { left: 0; }
+@media (max-width: 760px) { .discovery-news .discovery-collection-tabs .discovery-mode[aria-selected=true]::after { left: 8px; right: 8px; } .discovery-news .discovery-collection-tabs .discovery-mode:first-child[aria-selected=true]::after { left: 0; } }
 .discovery-news .discovery-collection-tabs .discovery-mode:focus-visible { outline-offset: -3px; }
 .discovery-news .discovery-tab-count { font-variant-numeric: tabular-nums; }
 .discovery-news .discovery-list-tools { display: flex; flex: none; align-items: center; }

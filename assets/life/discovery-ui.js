@@ -266,6 +266,18 @@
       const fromSettings = current.settingsScreen;
       capture(); current.settingsScreen = false; current.collection = collection; current.collectionUrls = null; current.memory = null; resetList(); current.confirmForget = null; current.toast = null; current.selected = null; readerHistoryClosed(); draw();
       if (fromSettings) { placing(); surface.querySelector('#discoveryDiscover')?.focus(); surface.scrollIntoView({ block: 'start' }); }
+      revealTab(collection);
+    }
+    // The chosen tab is brought fully into its row when the row is wider than the screen (a narrow phone, long
+    // counts). Focusing or pressing a tab that is half out of the row does not scroll it by itself, so it stayed cut
+    // under the row's end fade. Only the tab row moves; the page does not.
+    function revealTab(collection) {
+      const tab = current?.header?.collections.find(item => item.collection === collection)?.control, scroller = tab?.closest('.discovery-tab-scroller');
+      if (!scroller || !tab.getClientRects().length) return;
+      const row = scroller.getBoundingClientRect(), box = tab.getBoundingClientRect();
+      if (box.right > row.right) scroller.scrollLeft += box.right - row.right;
+      else if (box.left < row.left) scroller.scrollLeft -= row.left - box.left;
+      current.header.hint();
     }
     function showSettings(value) {
       if (value === !!current.settingsScreen) return;
