@@ -20,6 +20,9 @@
   function create({ container, storage, getBundle, isCurrent, onImport, onOpenInterests, onOpenOriginal, onReaderHistory, privateReader = null }) {
     let active = false, disposed = false, generation = 0, workspaceId = null, surface = null;
     let current = null, client = null, unsubscribe = null, aborter = null, pendingWrite = null;
+    // 뉴스 설정 (노션 방향 W4): one control for the whole screen. The app heading takes it through settingsControl()
+    // (ui.js renderHeader) so the tab row keeps its tabs and 정렬·필터 only; a host that never asks keeps it in the tab row.
+    let settingsToggle = null, settingsHosted = false;
     const downloadUrls = new Set();
     let splitDispose = null, splitLayout = null;
     let settingsWrite = null, topicWrite = null, actionWrite = null, languageWrite = null, timer = null, fetchEpoch = 0, suspended = false;
@@ -268,9 +271,23 @@
       if (value === !!current.settingsScreen) return;
       if (value) capture();
       current.settingsScreen = value; draw();
+      if (settingsHosted && settingsToggle) { settingsToggle.hidden = value; settingsToggle.setAttribute('aria-expanded', String(value)); }
       placing();
       if (value) { current.settingsBack.focus({ preventScroll: true }); surface.scrollIntoView({ block: 'start' }); }
-      else { surface.querySelector('#discoveryNewsSettings')?.focus({ preventScroll: true }); root.scrollTo({ top: current.memory?.scrollY || 0, behavior: 'instant' }); }
+      else { settingsButton().focus({ preventScroll: true }); root.scrollTo({ top: current.memory?.scrollY || 0, behavior: 'instant' }); }
+    }
+    function settingsButton() {
+      if (settingsToggle) return settingsToggle;
+      settingsToggle = button(null, 'discoveryNewsSettings', () => { if (current?.settingsPanel) showSettings(true); }, 'life-icon-button discovery-news-settings-toggle');
+      settingsToggle.setAttribute('aria-label', '뉴스 설정'); settingsToggle.title = '뉴스 설정'; settingsToggle.setAttribute('aria-controls', 'discoveryNewsSettingsPanel'); settingsToggle.setAttribute('aria-expanded', 'false');
+      settingsToggle.append(icon('settings'));
+      return settingsToggle;
+    }
+    // The heading's 뉴스 설정. While the settings screen is open it is not shown (its ‹ returns); closing focuses it again.
+    function settingsControl() {
+      settingsHosted = true; const control = settingsButton(); control.hidden = !!current?.settingsScreen;
+      if (current?.header && control.parentNode === current.header.listTools) control.remove();
+      return control;
     }
     function setMode(mode) {
       if (!['latest', 'related', 'personal', 'pick'].includes(mode) || mode === 'personal' && (!current.actions?.personalizationEnabled || current.personalBlocked) || mode === 'pick' && !pickSaved()) return;
@@ -420,12 +437,11 @@
       const outside = event => { if (filter.open && !filter.contains(event.target)) filter.open = false; };
       filter.addEventListener('toggle', () => { if (filter.open) root.document.addEventListener('pointerdown', outside, true); else root.document.removeEventListener('pointerdown', outside, true); });
       filter.addEventListener('keydown', event => { if (event.key === 'Escape' && filter.open) { event.preventDefault(); event.stopPropagation(); filter.open = false; filterSummary.focus({ preventScroll: true }); } });
-      const settings = button(null, 'discoveryNewsSettings', () => showSettings(true), 'discovery-news-settings-toggle');
-      settings.setAttribute('aria-label', '뉴스 설정'); settings.title = '뉴스 설정'; settings.setAttribute('aria-controls', 'discoveryNewsSettingsPanel'); settings.append(icon('settings'));
-      // Filter and settings end the tab row on the same right edge as each row's 담기.
+      const settings = settingsButton();
+      // 정렬·필터 ends the tab row on the same right edge as each row's 담기. 뉴스 설정 is in the app heading when hosted.
       const listTools = node('div', null, 'discovery-list-tools');
-      listTools.append(filter, settings); toolbar.append(scroller, listTools); section.append(statusRow, toolbar);
-      current.header = { section, statusRow, progress, failed, refresh, toolbar, collections, sort, filter, filterSummary, filterCount, settings, hint };
+      listTools.append(filter); if (!settingsHosted) listTools.append(settings); toolbar.append(scroller, listTools); section.append(statusRow, toolbar);
+      current.header = { section, statusRow, progress, failed, refresh, toolbar, collections, sort, filter, filterSummary, filterCount, settings, hint, listTools };
       return current.header;
     }
     function recommendationControls() {
@@ -456,6 +472,7 @@
       }
       if (sort.value !== current.mode && [...sort.options].some(option => option.value === current.mode)) sort.value = current.mode;
       sort.hidden = current.collection !== 'discover'; settings.setAttribute('aria-expanded', String(!!current.settingsScreen));
+      if (settingsHosted) settings.hidden = !!current.settingsScreen;
       const changed = filterChanges(); filterCount.textContent = changed ? String(changed) : '';
       filterSummary.setAttribute('aria-label', '정렬·주제·언어 (' + (changed ? '적용 ' + changed : '기본값') + ')'); filterSummary.title = '정렬·주제·언어';
       // The prepared catalog arrives as one file, so there is no per-source progress to count.
@@ -2005,7 +2022,7 @@
     root.addEventListener('scroll', pageScrolled, { passive: true });
     root.document.addEventListener('haedo:page-suspend', pageSuspend); root.document.addEventListener('haedo:page-ready', pageReady); root.document.addEventListener('visibilitychange', lifecycle); root.addEventListener('online', lifecycle); root.addEventListener('offline', lifecycle);
     function dispose() { leave(); readingUI?.dispose(); readingUI = null; disposed = true; downloadUrls.forEach(address => URL.revokeObjectURL(address)); downloadUrls.clear(); dropImages(); wideClient?.dispose(); wideClient = null; wideUnlisten?.(); wideUnlisten = null; if (current?.wide) current.wide.items = []; root.document.removeEventListener('pointerdown', closeCardMenus, true); for (const type of ['wheel', 'touchmove', 'keydown']) root.removeEventListener(type, pageScrollIntent); root.removeEventListener('scroll', pageScrolled); root.document.removeEventListener('haedo:page-suspend', pageSuspend); root.document.removeEventListener('haedo:page-ready', pageReady); root.document.removeEventListener('visibilitychange', lifecycle); root.removeEventListener('online', lifecycle); root.removeEventListener('offline', lifecycle); client?.dispose(); client = null; current = null; workspaceId = null; }
-    return Object.freeze({ render, refresh: render, leave, dispose, flush, dirty, showArticle });
+    return Object.freeze({ render, refresh: render, leave, dispose, flush, dirty, showArticle, settingsControl });
   }
   root.HaedoLife ||= {}; root.HaedoLife.DiscoveryUI = Object.freeze({ create });
 })(globalThis);
