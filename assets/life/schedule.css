@@ -417,8 +417,9 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
  * at 28px) and W's "12.21 – 12.27" (162px) took two lines.
  * - To 374px D shows its weekday short, "12월 25일 (금)" (169px at 28px; the whole title needs 195px). The heading is
  *   still named by the whole date: the short text is aria-hidden and the whole one is hidden from sight only.
- * - Under 350px the title's size follows that column. 6.3em holds the widest title of this year (6.04em), so it is one
- *   line at 23px on a 320px screen and 28px again from 350px. A date of another year still takes two lines there. */
+ * - To 350px the title's size follows that column. 6.3em holds the widest title measured for this year (6.04em), so it
+ *   is one line at 23px on a 320px screen and 28px again from 351px (27.9px at 350px). A date of another year still
+ *   takes two lines there. */
 @media (max-width: 374px) {
   .life-toolbar[data-schedule] .schedule-title-full { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .life-toolbar[data-schedule] .schedule-title-short { display: inline; }

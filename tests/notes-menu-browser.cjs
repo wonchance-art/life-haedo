@@ -523,14 +523,14 @@ async function main() {
     });
     // 2026-11-18 (W2 review m-5; contract 일정 iPhone: the title and 오늘 ‹ › share one row). On 8c3c54f at 320px D's
     // "11월 3일 화요일" and W's "12.21 – 12.27" took two lines in the 146px the row leaves the title. To 374px D shows its
-    // weekday short and under 350px the title's size follows its column (schedule.css). The heading keeps its whole name.
+    // weekday short and to 350px the title's size follows its column (schedule.css). The heading keeps its whole name.
     // A date of another year is longer than the row at these widths and still takes two lines (not asserted).
     await check('a phone\'s 일정 title is one line beside 오늘 ‹ › at 320–390; D shows its weekday short to 374px and is named by the whole date', async ({ page }) => {
       await page.goto(base + '/index.html'); await ready(page);
       // [unit, date, title, the short title shown to 374px]
       const cases = [['day', '2026-11-03', '11월 3일 화요일', '11월 3일 (화)'], ['day', '2026-12-25', '12월 25일 금요일', '12월 25일 (금)'], ['week', '2026-11-03', '11.2 – 11.8'],
         ['week', '2026-12-23', '12.21 – 12.27'], ['month', '2026-11-03', '11월'], ['quarter', '2026-11-03', '2026년 4분기'], ['tools', '2026-11-03', '2026년']];
-      for (const width of [320, 349, 360, 374, 375, 390]) {
+      for (const width of [320, 350, 351, 360, 374, 375, 390]) {
         await page.setViewportSize({ width, height: 640 });
         for (const [unit, date, title, short] of cases) {
           await page.goto(base + '/index.html?section=schedule&view=' + unit + '&date=' + date); await ready(page); await shown(page, unit);
@@ -545,7 +545,7 @@ async function main() {
           assert.equal(head.seen, short && width <= 374 ? short : title, scene + ': the title shown');
           assert.equal(head.lines, 1, scene + ': one line (' + JSON.stringify(head) + ')');
           assert.deepEqual([head.inside, head.row, head.overflow], [true, true, 0], scene + ': whole, on the row of 오늘 ‹ ›, no horizontal overflow');
-          assert.ok(head.size >= 22 && head.size <= 28 && (width < 350 || head.size === 28), scene + ': 28px from 350px, never under 22px (' + head.size + ')');
+          assert.ok(head.size >= 22 && head.size <= 28 && (width <= 350 ? head.size < 28 : head.size === 28), scene + ': 28px from 351px, smaller to 350px, never under 22px (' + head.size + ')');
           assert.equal(await page.getByRole('heading', { level: 1, name: title, exact: true }).count(), 1, scene + ': the heading is named ' + title);
           if (width === 320 && (unit === 'day' || unit === 'week')) { const file = 'schedule-title-' + unit + '-' + date + '-320.png'; await page.screenshot({ path: path.join(output, file) }); report.screenshots.push(file); }
         }
