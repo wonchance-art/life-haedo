@@ -144,6 +144,10 @@ body.haedo-shell::before{display:none}
 body.haedo-shell:not([data-haedo-section=manage]) #lifeAccountHost{display:none}
 /* A link drawn as a bordered button (로그인 and the like) is a button: its border is the cue, not an underline (W5). */
 .haedo-shell a.life-button{text-decoration:none}
+/* Links inside text take the body ink, so the underline is their only cue: it uses the field-line token (3.50:1 on white,
+   ≥3:1 on the soft surface; 총괄 결정 11-18, same value as the W3 reader). Hover draws it in ink. */
+.haedo-shell a:not([class]){text-decoration-color:var(--field-line,#8a8984)}
+@media(hover:hover) and (pointer:fine){.haedo-shell a:not([class]):hover{text-decoration-color:currentColor}}
 .haedo-shell .life-primary,.haedo-shell .p-button.primary{background:var(--haedo-accent);color:#fff;border-color:var(--haedo-accent);border-radius:var(--haedo-control-radius);font-weight:600}
 .haedo-shell .life-primary:hover:not(:disabled),.haedo-shell .p-button.primary:hover:not(:disabled){background:var(--haedo-accent-hover);border-color:var(--haedo-accent-hover);color:#fff}
 .haedo-shell .life-primary:active:not(:disabled),.haedo-shell .p-button.primary:active:not(:disabled){background:var(--haedo-accent-active);color:#fff}
