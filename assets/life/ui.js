@@ -3389,7 +3389,7 @@
           // 뉴스 목록을 기다리며 전역 이동을 막지 않는다. 다른 화면으로 옮겼으면 열지 않는다.
           Promise.resolve(mainRenderPromise).then(() => {
             if (disposed || token !== navigationGeneration || state.mode !== 'external-discovery') return;
-            const toggle = main.querySelector('#discoveryNewsSettings');
+            const toggle = toolbar.querySelector('#discoveryNewsSettings') || main.querySelector('#discoveryNewsSettings');
             if (toggle && !main.querySelector('#discoveryNewsSettingsPanel')?.checkVisibility?.()) toggle.click();
           }).catch(failure);
         }),

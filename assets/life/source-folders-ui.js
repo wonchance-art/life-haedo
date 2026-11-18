@@ -220,7 +220,8 @@
       const mount = { owner, token, host, element, filterLabel, filter: select, filterValue: filter, onFilter, edit, name, parent, save, remove, children, confirm, unavailable, status, error, reload, initialized: false, released: false };
       mounts.add(mount); host.append(element); updateMount(mount, true);
       const fieldLive = target => live(token, owner, target) && element.contains(target);
-      select.addEventListener('change', () => { if (!fieldLive(select)) return; mount.filterValue = select.value; onFilter(select.value); });
+      // The folder choice may sit in `filterHost`, outside `element`.
+      select.addEventListener('change', () => { if (mount.released || !live(token, owner, select)) return; mount.filterValue = select.value; onFilter(select.value); });
       details.addEventListener('keydown', event => {
         if (event.key !== 'Escape' || event.isComposing || owner.editor.composing || details.hidden || !fieldLive(details)) return;
         event.preventDefault(); event.stopPropagation(); closeManage();
