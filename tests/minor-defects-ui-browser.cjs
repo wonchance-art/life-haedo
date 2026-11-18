@@ -134,6 +134,25 @@ async function header(page, width) {
   const titleBox = async selector => page.locator(selector).evaluate(el => { const r = el.getBoundingClientRect(); return { top: r.top + scrollY, left: r.left, width: r.width, height: r.height }; });
   const edit = await titleBox('#photoTitle');
   const editBar = await titleBox('.photo-editor-tools');
+  // Review m8: the editor's ⋯ menu stays on screen down to 320px with no item cut short, and opening it moves
+  // neither the command row nor the title (D1). Esc returns focus to ⋯.
+  for (const screen of width === 390 ? [390, 360, 320] : [width]) {
+    await page.setViewportSize({ width: screen, height: 1000 }); await paint(page);
+    const place = async () => ({ bar: await titleBox('.photo-editor-tools'), title: await titleBox('#photoTitle') });
+    const closed = await place(), editorMore = page.locator('.photo-commandbar .photo-more > summary');
+    await editorMore.click();
+    const menu = await page.locator('.photo-commandbar .photo-more-menu').evaluate(el => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right, width: r.width,
+      cut: [...el.querySelectorAll(':scope > button')].filter(item => item.scrollWidth > item.clientWidth || item.getBoundingClientRect().left < r.left || item.getBoundingClientRect().right > r.right).map(item => item.textContent) }; });
+    assert.ok(menu.left >= 0 && menu.right <= screen, screen + ': the editor menu stays on screen: ' + JSON.stringify(menu));
+    assert.ok(menu.width >= 240, screen + ': the editor menu is at least 240px wide: ' + JSON.stringify(menu));
+    assert.deepEqual(menu.cut, [], screen + ': no editor menu item is cut short');
+    assert.deepEqual(await place(), closed, screen + ': opening the editor menu moves neither the command row nor the title');
+    if (screen === 320) await capture(page, 'editor-menu-320');
+    await page.keyboard.press('Escape');
+    assert.equal(await editorMore.evaluate(el => el === document.activeElement && !el.parentElement.open), true, screen + ': Esc closes the editor menu and returns focus to ⋯');
+  }
+  await page.setViewportSize({ width, height: 1000 }); await paint(page);
+  assert.deepEqual({ edit: await titleBox('#photoTitle'), editBar: await titleBox('.photo-editor-tools') }, { edit, editBar }, 'the editor is where it was after the menu checks');
   await capture(page, 'editor-' + width);
   await page.getByRole('button', { name: '글 저장', exact: true }).click();
   await page.locator('.photo-read-heading').waitFor(); await paint(page);
