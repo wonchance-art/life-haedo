@@ -24,7 +24,7 @@
 .photo-status {
   position: relative;
   min-height: 1.6em;
-  border-radius: 8px;
+  border-radius: var(--haedo-control-radius, 6px);
   transition: color 140ms ease, background-color 140ms ease;
 }
 .photo-status-check { display: none; width: 18px; height: 18px; flex: none; }
@@ -78,7 +78,7 @@
   width: 96px;
   height: 72px;
   object-fit: cover;
-  border-radius: 12px;
+  border-radius: var(--haedo-radius, 8px);
 }
 .wb-post-feed {
   max-width: 680px;
@@ -354,8 +354,8 @@
 .photo-entry > strong {
   font-size: 21px;
   line-height: 1.5;
-  font-weight: 650;
-  letter-spacing: -.025em;
+  font-weight: var(--haedo-weight-semibold, 600);
+  letter-spacing: -.01em;
   overflow-wrap: anywhere;
 }
 .photo-retained > summary {
@@ -610,7 +610,9 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
 }
 .photo-posts .ql-snow .ql-active .ql-fill { fill: #3156d3; }
 .photo-posts .ql-toolbar button.ql-active { background: #edf1ff; }
-.photo-posts .ql-editor a, .photo-article a { color: #3156d3; text-underline-offset: 3px; }
+/* A link inside a post is ink with a soft underline, in the editor and the reader alike (W1 table: 글 안 링크). */
+.photo-posts .ql-editor a, .photo-article a { color: var(--haedo-link, var(--ink, #37352f)); text-decoration: underline; text-decoration-color: rgba(55, 53, 47, .4); text-underline-offset: 4px; }
+.photo-posts .ql-editor a:hover, .photo-article a:hover { text-decoration-color: currentColor; }
 /* Private AI authorship mark in the editor (D1, 2026-11-04): the same mark as the
    owner's reading views' .blog-ai-text (blog-public.css). The dots are a background
    along the bottom edge, so an underline or a link drawn as text decoration never
@@ -638,7 +640,7 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
   height: auto;
   margin-inline: auto;
   image-orientation: from-image;
-  border-radius: 16px;
+  border-radius: var(--haedo-radius, 8px);
 }
 .photo-block {
   min-height: 44px;
@@ -803,7 +805,7 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
   max-height: 94dvh;
   padding: 20px;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: var(--haedo-radius, 8px);
   background: var(--paper, #fff);
   color: var(--ink, #20212a);
 }
@@ -938,16 +940,17 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
   overflow-y: auto;
   overscroll-behavior: contain;
   border: 1px solid var(--line, #e3e9e6);
-  border-radius: 16px;
+  border-radius: var(--haedo-radius, 8px);
   background: var(--paper, #fff);
-  color: var(--ink, #182522);
+  box-shadow: 0 0 0 1px rgba(15, 15, 15, .05), 0 3px 6px rgba(15, 15, 15, .1), 0 9px 24px rgba(15, 15, 15, .2);
+  color: var(--ink, #37352f);
   font-family: var(--haedo-font, inherit);
 }
-.photo-info::backdrop { background: rgb(24 37 34 / .32); }
+.photo-info::backdrop { background: rgb(55 53 47 / .32); }
 .photo-info-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 8px 0 20px; }
-.photo-info-head h2 { margin: 0; font-size: var(--haedo-text-body, 17px); font-weight: 700; line-height: 1.4; }
-.photo-info-head .photo-icon-button { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 12px; border: 0; border-radius: 50%; background: transparent; color: var(--ink, #182522); cursor: pointer; }
-.photo-info-head .photo-icon-button:hover { background: var(--soft, #eaf1ed); }
+.photo-info-head h2 { margin: 0; font-size: var(--haedo-text-body, 17px); font-weight: var(--haedo-weight-semibold, 600); line-height: 1.4; }
+.photo-info-head .photo-icon-button { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 12px; border: 0; border-radius: var(--haedo-control-radius, 6px); background: transparent; color: var(--ink-soft, #5f5e5b); cursor: pointer; }
+.photo-info-head .photo-icon-button:hover { background: var(--haedo-hover, rgba(55, 53, 47, .04)); color: var(--ink, #37352f); }
 .photo-info-head .photo-icon-button svg { width: 20px; height: 20px; }
 .photo-info-rows { margin: 0; padding: 4px 20px 20px; }
 .photo-info-row { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 12px; padding: 12px 0; border-top: 1px solid var(--line, #e3e9e6); }
@@ -958,7 +961,7 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
 .photo-info-line > svg { flex: none; width: 16px; height: 16px; }
 .photo-info-row > dd[data-state="error"] > .photo-info-value { color: var(--color-error, #a3243d); }
 .photo-info-note { margin: 4px 0 0; font-size: var(--haedo-text-meta, 13px); line-height: 1.6; color: var(--ink-soft, #5d6b65); }
-.photo-info-action { display: inline-flex; align-items: center; min-height: 44px; margin-top: 8px; }
+.photo-info-action { display: inline-flex; align-items: center; min-height: 44px; margin-top: 8px; border-radius: var(--haedo-control-radius, 6px); font-weight: var(--haedo-weight-medium, 500); }
 .photo-info :focus-visible { outline: 2px solid var(--haedo-focus, var(--color-primary, #145b50)); outline-offset: 2px; }
 @media (max-width: 760px) {
   .photo-info {
@@ -967,7 +970,7 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
     max-height: 85dvh;
     margin: auto 0 0;
     border-width: 1px 0 0;
-    border-radius: 16px 16px 0 0;
+    border-radius: var(--haedo-radius, 8px) var(--haedo-radius, 8px) 0 0;
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 }
