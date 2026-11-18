@@ -161,7 +161,9 @@
       entry.append(mark, el("span", null, text));
       legend.append(entry);
     }
-    table.append(head, list, legend);
+    // The table only shows (decision 13, 2026-11-16 노션 방향): where the days are checked.
+    const note = el("p", "habit-compact-note", "보기 전용 · 체크는 하루·주 보기에서");
+    table.append(head, list, legend, note);
     container.replaceChildren(table);
   }
   // Focus the same control after a repaint (data-focus-key), without scrolling the page.

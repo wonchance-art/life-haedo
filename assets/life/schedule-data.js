@@ -86,6 +86,12 @@
     const { year, month, day } = parts(value);
     return (year !== parts(now).year ? year + '년 ' : '') + month + '월 ' + day + '일 ' + WEEKDAYS[weekday(value)] + '요일';
   }
+  // The same day with the weekday short, "11월 3일 (화)": shown where the whole title does not fit one line (a narrow
+  // phone's D heading, schedule.css). The heading's name stays dayTitle.
+  function dayTitleShort(value, now = today()) {
+    const { year, month, day } = parts(value);
+    return (year !== parts(now).year ? year + '년 ' : '') + month + '월 ' + day + '일 (' + WEEKDAYS[weekday(value)] + ')';
+  }
   function title(unit, value, now = today()) {
     const { year, month } = parts(value);
     const thisYear = year === parts(now).year;
@@ -144,5 +150,5 @@
   }
   return Object.freeze({ UNITS, WEEKDAYS, valid, civil, toDate, today, dayOf, timeOf, addDays, addMonths, parts, weekday,
     startOfWeek, weekOf, monthStart, daysInMonth, monthDays, monthWeeks, quarterOf, quarterWeeks, step, shortDay,
-    dayTitle, title, group, count, level, summary, lead, countLabel });
+    dayTitle, dayTitleShort, title, group, count, level, summary, lead, countLabel });
 });

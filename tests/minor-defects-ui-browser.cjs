@@ -1,6 +1,6 @@
 /* E2/E3/E5: real application/IndexedDB with synthetic Auth; no production writes.
  * BASE_URL=http://127.0.0.1:4173 node tests/minor-defects-ui-browser.cjs
- * E_UI_CASE=workspace|header|source selects one mutation target. */
+ * E_UI_CASE=workspace|header|reader|source selects one mutation target. */
 'use strict';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -14,7 +14,9 @@ const report = { scope: 'Synthetic Auth and real IndexedDB, Linux Chromium at 14
 async function paint(page) {
   await page.evaluate(async () => {
     await document.fonts.ready;
-    await Promise.all(document.getAnimations().filter(a => Number.isFinite(a.effect?.getComputedTiming().endTime)).map(a => a.finished.catch(() => {})));
+    // A press transition of an item inside a closed ⋯ (사진 포함 백업 since 2026-11-18) does not advance while the
+    // menu is closed, so its `finished` never settles: only transitions of rendered elements are awaited.
+    await Promise.all(document.getAnimations().filter(a => Number.isFinite(a.effect?.getComputedTiming().endTime) && a.effect.target?.checkVisibility?.() !== false).map(a => a.finished.catch(() => {})));
     await new Promise(requestAnimationFrame);
   });
 }
@@ -95,6 +97,29 @@ async function workspace(page, width) {
   await capture(page, 'workspace-startup-error-' + width);
   report.checks.push(width + ': corrupt workspace gives recovery guidance and preserves both spaces on switch and reload');
 }
+// The reading row's visible controls with their boxes, and where 글쓰기 sits.
+const readRow = page => page.locator('.photo-read-actions').evaluate(bar => {
+  const compose = [...document.querySelectorAll('[data-haedo-compose]')].find(el => el.getClientRects().length).getBoundingClientRect();
+  return { composeLeft: compose.left, overflow: document.documentElement.scrollWidth - innerWidth, items: [...bar.querySelectorAll('button, summary')]
+    .filter(el => el.getClientRects().length && !el.closest('.photo-more-menu'))
+    .map(el => { const r = el.getBoundingClientRect(); return { name: el.getAttribute('aria-label') || el.textContent.trim(), left: r.left, right: r.right, top: r.top, width: r.width, height: r.height }; }) };
+});
+async function assertOneLine(row, names, where) {
+  assert.deepEqual(row.items.map(item => item.name), names, where + ': names');
+  assert.ok(row.items.every((item, index) => item.width >= 44 && item.height >= 44 && item.top === row.items[0].top && (!index || item.left >= row.items[index - 1].right)),
+    where + ': 44px controls on one line: ' + JSON.stringify(row));
+  assert.ok(row.items.at(-1).right <= row.composeLeft && row.items[0].left >= 0 && row.overflow <= 0, where + ': beside 글쓰기, nothing off screen: ' + JSON.stringify(row));
+}
+// Publication and the account state are read from BlogSync: window.__minorForcePublic makes that read say the
+// post is public, window.__minorForceStatus gives it an account state (error: 계정에 올리지 못함 + 다시 시도).
+async function configurePublication(context) {
+  await context.route(base + '/assets/life/blog-sync.js', async route => {
+    const response = await route.fetch(), source = await response.text();
+    await route.fulfill({ response, contentType: 'application/javascript', body: source + `
+      ;(()=>{const B=HaedoLife.BlogSync;if(!B)return;HaedoLife.BlogSync=Object.freeze({...B,create(...args){const s=B.create(...args);
+      return Object.freeze({...s,async getState(...a){const state=await s.getState(...a);return {...state,...(window.__minorForcePublic?{publication:{active:true}}:{}),...(window.__minorForceStatus?{status:window.__minorForceStatus}:{})};}});}});})();` });
+  });
+}
 async function header(page, width) {
   await page.goto(base + '/index.html?compose=1'); await ready(page);
   await page.locator('#photoTitle').waitFor();
@@ -110,6 +135,25 @@ async function header(page, width) {
   const titleBox = async selector => page.locator(selector).evaluate(el => { const r = el.getBoundingClientRect(); return { top: r.top + scrollY, left: r.left, width: r.width, height: r.height }; });
   const edit = await titleBox('#photoTitle');
   const editBar = await titleBox('.photo-editor-tools');
+  // Review m8: the editor's ⋯ menu stays on screen down to 320px with no item cut short, and opening it moves
+  // neither the command row nor the title (D1). Esc returns focus to ⋯.
+  for (const screen of width === 390 ? [390, 360, 320] : [width]) {
+    await page.setViewportSize({ width: screen, height: 1000 }); await paint(page);
+    const place = async () => ({ bar: await titleBox('.photo-editor-tools'), title: await titleBox('#photoTitle') });
+    const closed = await place(), editorMore = page.locator('.photo-commandbar .photo-more > summary');
+    await editorMore.click();
+    const menu = await page.locator('.photo-commandbar .photo-more-menu').evaluate(el => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right, width: r.width,
+      cut: [...el.querySelectorAll(':scope > button')].filter(item => item.scrollWidth > item.clientWidth || item.getBoundingClientRect().left < r.left || item.getBoundingClientRect().right > r.right).map(item => item.textContent) }; });
+    assert.ok(menu.left >= 0 && menu.right <= screen, screen + ': the editor menu stays on screen: ' + JSON.stringify(menu));
+    assert.ok(menu.width >= 240, screen + ': the editor menu is at least 240px wide: ' + JSON.stringify(menu));
+    assert.deepEqual(menu.cut, [], screen + ': no editor menu item is cut short');
+    assert.deepEqual(await place(), closed, screen + ': opening the editor menu moves neither the command row nor the title');
+    if (screen === 320) await capture(page, 'editor-menu-320');
+    await page.keyboard.press('Escape');
+    assert.equal(await editorMore.evaluate(el => el === document.activeElement && !el.parentElement.open), true, screen + ': Esc closes the editor menu and returns focus to ⋯');
+  }
+  await page.setViewportSize({ width, height: 1000 }); await paint(page);
+  assert.deepEqual({ edit: await titleBox('#photoTitle'), editBar: await titleBox('.photo-editor-tools') }, { edit, editBar }, 'the editor is where it was after the menu checks');
   await capture(page, 'editor-' + width);
   await page.getByRole('button', { name: '글 저장', exact: true }).click();
   await page.locator('.photo-read-heading').waitFor(); await paint(page);
@@ -118,16 +162,90 @@ async function header(page, width) {
   report.geometry.push({ width, edit, read, editBar, readBar });
   const commonVisible = await page.locator('.life-app > .life-toolbar').isVisible();
   assert.equal(commonVisible, false, 'PhotoPost reader uses its own single command row, with no duplicate common heading');
-  // The approved phone layout may wrap the labelled controls once. The title
-  // follows that actual row height; no extra common heading or spacer returns.
+  // 2026-11-18 노션 방향 W3: the reading row is one line at every width (the phone no longer wraps its
+  // tools). The title follows that row; no extra common heading or spacer returns.
   assert.ok(Math.abs(readBar.top - editBar.top) <= 2, 'reading and editing command rows start at the same top');
   assert.ok(Math.abs((read.top - readBar.top - readBar.height) - (edit.top - editBar.top - editBar.height)) <= 2,
     'title follows its command row without extra space: ' + JSON.stringify({ read, edit, readBar, editBar }));
-  assert.ok(readBar.height >= editBar.height - 2 && readBar.height <= editBar.height + (width === 390 ? 48 : 2), 'phone controls wrap at most once; desktop keeps one row');
+  assert.ok(Math.abs(readBar.height - editBar.height) <= 2, 'the reading row is one line, as high as the editing row: ' + JSON.stringify({ readBar, editBar }));
   assert.equal(await page.getByRole('button', { name: '글 수정', exact: true }).isVisible(), true);
-  assert.equal(await page.getByRole('button', { name: '사진 포함 백업', exact: true }).isVisible(), true);
   const search = page.locator('.photo-read-actions').getByRole('button', { name: '통합 검색', exact: true });
   assert.equal(await search.isVisible(), true, 'reader has its own named search entry');
+  // W3 order: 뒤로 · 공개 알약 · 수정 · 통합 검색 · ⋯, in the document (keyboard) and on one visual line.
+  await page.locator('.photo-read-actions .photo-privacy[data-state="private"]').waitFor();
+  const row = await page.locator('.photo-read-actions').evaluate(bar => [...bar.querySelectorAll('button, summary')]
+    .filter(el => el.getClientRects().length && !el.closest('.photo-more-menu'))
+    .map(el => { const r = el.getBoundingClientRect(); return { name: el.getAttribute('aria-label') || el.textContent.trim(), left: r.left, middle: r.top + r.height / 2 }; }));
+  assert.deepEqual(row.map(item => item.name), ['노트로 돌아가기', '비공개 · 글 정보', '글 수정', '통합 검색', '더 보기']);
+  assert.ok(row.every((item, index) => !index || item.left > row[index - 1].left && Math.abs(item.middle - row[0].middle) <= 1), 'one line, left to right: ' + JSON.stringify(row));
+  // The path after 뒤로 (review m5): shown from 1101px on the top-level reading screen, the menu's current item
+  // and this post's title, and not read twice by a screen reader.
+  const pathLine = page.locator('.photo-read-actions > .photo-read-path');
+  assert.equal(await pathLine.count(), 1);
+  assert.equal(await pathLine.isVisible(), width >= 1101, 'the path shows from 1101px only');
+  assert.deepEqual(await pathLine.evaluate(node => ({ hidden: node.getAttribute('aria-hidden'), parts: [...node.querySelectorAll('span')].map(part => part.textContent), afterBack: node.previousElementSibling?.getAttribute('aria-label') })),
+    { hidden: 'true', parts: ['노트', '다시 읽고 이어 쓰는 합성 기록'], afterBack: '노트로 돌아가기' });
+  // 사진 포함 백업 moved into ⋯: first item, 삭제 last. Esc closes the menu and returns focus to ⋯.
+  const backup = page.getByRole('button', { name: '사진 포함 백업', exact: true });
+  assert.equal(await backup.isVisible(), false, '사진 포함 백업 is not a separate control of the row');
+  const more = page.locator('.photo-read-actions .photo-more > summary');
+  // Review m1/m2: an open ⋯ floats (the row keeps its height); up to 760px it opens under the whole row,
+  // at least 240px wide, with no item cut short.
+  const rowHeight = () => page.locator('.photo-read-actions').evaluate(el => el.getBoundingClientRect().height);
+  const menuFits = async (screen, where) => {
+    const menu = await page.locator('.photo-read-actions .photo-more-menu').evaluate(el => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right, width: r.width,
+      cut: [...el.querySelectorAll(':scope > button')].filter(item => item.scrollWidth > item.clientWidth || item.getBoundingClientRect().left < r.left || item.getBoundingClientRect().right > r.right).map(item => item.textContent) }; });
+    assert.ok(menu.left >= 0 && menu.right <= screen, where + ': the menu stays on screen: ' + JSON.stringify(menu));
+    assert.ok(menu.width >= 240, where + ': the menu is at least 240px wide: ' + JSON.stringify(menu));
+    assert.deepEqual(menu.cut, [], where + ': no menu item is cut short');
+  };
+  const closedHeight = await rowHeight();
+  await more.focus(); await page.keyboard.press('Enter');
+  assert.equal(await backup.isVisible(), true);
+  assert.ok(Math.abs(await rowHeight() - closedHeight) <= 1, width + ': opening ⋯ does not grow the row: ' + JSON.stringify({ closedHeight, open: await rowHeight() }));
+  await menuFits(width, String(width));
+  assert.deepEqual(await page.locator('.photo-read-actions .photo-more-menu > button').allTextContents(),
+    ['사진 포함 백업', '이 글 공개·보관', '근거 포함 파일', 'HTML 읽기 파일 받기', '사본으로 이어 쓰기', '목록에서 숨기기', '삭제']);
+  const menuBox = await page.locator('.photo-read-actions .photo-more-menu').boundingBox();
+  assert.ok(menuBox.x >= 0 && menuBox.x + menuBox.width <= width, 'the menu stays on screen: ' + JSON.stringify(menuBox));
+  assert.deepEqual(await page.locator('.photo-read-actions .photo-more-menu > button').evaluateAll(nodes => nodes.filter(el => el.getBoundingClientRect().height < 44).map(el => el.textContent)), [], 'menu items are 44px or taller');
+  await page.keyboard.press('Tab');
+  assert.equal(await backup.evaluate(el => el === document.activeElement), true, '사진 포함 백업 is the first stop inside ⋯');
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('.photo-read-actions .photo-more').evaluate(el => el.open), false);
+  assert.equal(await more.evaluate(el => el === document.activeElement), true, 'Esc returns focus to ⋯');
+  // Running it downloads the same ZIP and returns focus to ⋯ as well.
+  await more.click();
+  const download = page.waitForEvent('download'); await backup.click();
+  assert.equal((await download).suggestedFilename(), 'haedo-photo-post.zip');
+  await page.locator('.photo-posts[aria-busy="false"]').waitFor();
+  assert.equal(await page.locator('.photo-read-actions .photo-more').evaluate(el => el.open), false);
+  assert.equal(await more.evaluate(el => el === document.activeElement), true, 'after 사진 포함 백업 focus is on ⋯');
+  if (width === 390) {
+    // Below 360px (W3): the pill and 수정 show their pictures only, with the same names; the five 44px
+    // controls stay one line beside 글쓰기, and ⋯ opens inside the 320px screen.
+    await page.setViewportSize({ width: 320, height: 1000 }); await paint(page);
+    const narrow = await readRow(page);
+    assert.deepEqual(narrow.items.map(item => item.name), ['노트로 돌아가기', '비공개 · 글 정보', '글 수정', '통합 검색', '더 보기'], 'names stay at 320px');
+    assert.ok(narrow.items.every((item, index) => item.width >= 44 && item.height >= 44 && item.top === narrow.items[0].top && (!index || item.left >= narrow.items[index - 1].right)),
+      '320px: five 44px controls on one line: ' + JSON.stringify(narrow));
+    assert.ok(narrow.items.at(-1).right <= narrow.composeLeft && narrow.items[0].left >= 0 && narrow.overflow <= 0, '320px: beside 글쓰기, nothing off screen: ' + JSON.stringify(narrow));
+    assert.equal(await page.locator('.photo-read-actions .photo-privacy-label').isVisible(), false, 'the pill is its lock below 360px');
+    assert.equal(await page.locator('.photo-read-actions .photo-privacy-face > svg').first().isVisible(), true);
+    assert.equal(await page.locator('.photo-read-edit > svg').isVisible(), true, '수정 is its picture below 360px');
+    const narrowClosed = await rowHeight();
+    await more.click();
+    assert.ok(Math.abs(await rowHeight() - narrowClosed) <= 1, '320px: opening ⋯ does not grow the row');
+    await menuFits(320, '320px');
+    assert.equal(await page.locator('.photo-read-actions .photo-more-menu > button.photo-delete').isVisible(), true);
+    await page.keyboard.press('Escape');
+    // Review m3: at 360px the five controls are one line with their words (비공개, 수정).
+    await page.setViewportSize({ width: 360, height: 1000 }); await paint(page);
+    await assertOneLine(await readRow(page), ['노트로 돌아가기', '비공개 · 글 정보', '글 수정', '통합 검색', '더 보기'], '360px private');
+    assert.equal(await page.locator('.photo-read-actions .photo-privacy-label').isVisible(), true, 'the pill keeps its word at 360px');
+    await page.setViewportSize({ width, height: 1000 }); await paint(page);
+    assert.equal(await page.locator('.photo-read-edit > span').isVisible(), true, 'the word returns from 360px');
+  }
   const editLabel = await page.locator('.photo-read-edit > span').evaluate(el => {
     const box=el.getBoundingClientRect(), css=getComputedStyle(el);
     return {text:el.textContent,width:box.width,height:box.height,clipPath:css.clipPath};
@@ -153,14 +271,36 @@ async function header(page, width) {
   assert.deepEqual(overlap, [], 'full reading control rectangles do not overlap global compose');
   await capture(page, 'reader-' + width);
   // A failed export remains visible above the reader; only a success notice moves below it.
-  await page.evaluate(() => {window.originalCreateObjectURL=URL.createObjectURL;URL.createObjectURL=()=>{throw new Error('합성 백업 파일 생성 실패');};});
+  // Re-review n2: the sentence is long enough to wrap, so on a phone its lines would run under 글쓰기.
+  await page.evaluate(() => {window.originalCreateObjectURL=URL.createObjectURL;URL.createObjectURL=()=>{throw new Error('합성 백업 파일 생성 실패: 사진 원본 두 장을 읽지 못해 백업 파일을 만들지 못했습니다. 잠시 뒤 다시 시도해 주세요.');};});
   try {
+    await page.locator('.photo-read-actions .photo-more > summary').click();
     await page.getByRole('button',{name:'사진 포함 백업',exact:true}).click();
     await page.locator('.photo-status[role=alert]').waitFor();
     assert.match(await page.locator('.photo-status[role=alert]').textContent(),/합성 백업 파일 생성 실패/);
     const errorTop=await page.locator('.photo-status[role=alert]').evaluate(el=>el.getBoundingClientRect().top);
     assert.ok(errorTop < (await page.locator('.photo-read-heading').boundingBox()).y);
     assert.match(await page.locator('.photo-article').textContent(), /읽기와 편집을 오가도/);
+    // Up to 760px the alert sits at the top of the screen where 글쓰기 is fixed: neither the box its words may
+    // flow in nor any drawn line of them reaches under that control (320·360·390).
+    for (const screen of width === 390 ? [390, 360, 320] : [width]) {
+      await page.setViewportSize({ width: screen, height: 1000 }); await paint(page);
+      const alert = await page.locator('.photo-status[role=alert]').evaluate(el => {
+        const meets = (a, b) => Math.min(a.right, b.right) > Math.max(a.left, b.left) + .5 && Math.min(a.bottom, b.bottom) > Math.max(a.top, b.top) + .5;
+        const box = r => ({ left: Math.round(r.left * 10) / 10, right: Math.round(r.right * 10) / 10, top: Math.round(r.top * 10) / 10, bottom: Math.round(r.bottom * 10) / 10 });
+        const compose = [...document.querySelectorAll('[data-haedo-compose]')].find(node => node.getClientRects().length).getBoundingClientRect();
+        const style = getComputedStyle(el), outer = el.getBoundingClientRect();
+        const words = { left: outer.left + parseFloat(style.paddingLeft), right: outer.right - parseFloat(style.paddingRight), top: outer.top, bottom: outer.bottom };
+        const range = document.createRange(); range.selectNodeContents(el.querySelector('.photo-status-text'));
+        const lines = [...range.getClientRects()];
+        return { compose: box(compose), words: box(words), wordsUnder: meets(words, compose), lines: lines.length, linesUnder: lines.filter(line => meets(line, compose)).map(box) };
+      });
+      assert.ok(alert.lines >= (screen <= 760 ? 2 : 1), screen + ': the alert sentence is drawn: ' + JSON.stringify(alert));
+      assert.equal(alert.wordsUnder, false, screen + ': the alert words do not run under 글쓰기: ' + JSON.stringify(alert));
+      assert.deepEqual(alert.linesUnder, [], screen + ': no drawn line of the alert is under 글쓰기');
+      if (screen === 320) await capture(page, 'reader-alert-320');
+    }
+    await page.setViewportSize({ width, height: 1000 }); await paint(page);
   } finally {await page.evaluate(()=>URL.createObjectURL=originalCreateObjectURL);}
 
   await page.getByRole('button', { name: '글 수정', exact: true }).focus(); await page.keyboard.press('Enter');
@@ -178,8 +318,19 @@ async function header(page, width) {
   assert.match(await back.getAttribute('aria-label') || await back.textContent(), /돌아가기|목록/);
   await back.focus(); await page.keyboard.press('Enter'); await settle(page);
   await page.locator('#lifeMain[data-mode="home"]').waitFor();
+  // Review m3: the same one line at 360px when the post is public (the publication read is forced by the seam).
+  if (width === 390) await page.evaluate(() => { window.__minorForcePublic = true; });
   await page.getByRole('button', { name: '다시 읽고 이어 쓰는 합성 기록', exact: true }).click();
   await page.locator('.photo-read-heading').waitFor();
+  if (width === 390) {
+    await page.locator('.photo-read-actions .photo-privacy[data-state="public"]').waitFor();
+    await page.locator('.photo-read-actions #lifeFindOpen').waitFor();
+    await page.setViewportSize({ width: 360, height: 1000 }); await paint(page);
+    await assertOneLine(await readRow(page), ['노트로 돌아가기', '공개 · 글 정보', '글 수정', '통합 검색', '더 보기'], '360px public');
+    await capture(page, 'reader-public-360');
+    await page.setViewportSize({ width, height: 1000 }); await paint(page);
+    await page.evaluate(() => { window.__minorForcePublic = false; });
+  }
   const exact = await page.evaluate(async () => {
     const s=HaedoLife.Shell.storage,w=await s.getActive(),post=(await s.listPhotoPosts(w)).find(p=>p.title==='다시 읽고 이어 쓰는 합성 기록'&&p.status==='saved');
     return {id:post.id,doc:await s.readPhotoPost(w,post.id)};
@@ -226,6 +377,68 @@ async function configureSourceSync(context) {
         return original.mount(container,{...options,sync});
       }};}` });
   });
+}
+// 2026-11-18 W3 review (M1): a link inside a post has the body's ink, so its underline is the only cue. It
+// must be drawn and reach 3:1 on the page it sits on, in the reader and in the editor alike.
+async function reader(page, width) {
+  await page.goto(base + '/index.html?section=notes'); await ready(page);
+  await page.evaluate(async () => {
+    const s = HaedoLife.Shell.storage, m = HaedoLife.PhotoPost, w = await s.getActive(), doc = m.create(HaedoLife.Core.id, '2026-10-14T00:00:00.000Z');
+    doc.title = '링크가 있는 합성 글'; doc.status = 'saved';
+    doc.ops = [{ insert: '본문 안의 ' }, { insert: '참고한 글', attributes: { link: 'https://example.org/reference' } }, { insert: '을 밑줄로 구분한다.\n' }];
+    await s.savePhotoPost(w, doc, 0);
+  });
+  await page.reload(); await ready(page);
+  await page.locator('#homePosts[aria-busy="false"]').waitFor();
+  // Re-review n1: the post opens with an account upload problem, so the end of the post shows 다시 시도.
+  await page.evaluate(() => { window.__minorForceStatus = 'error'; });
+  await page.getByRole('button', { name: '링크가 있는 합성 글', exact: true }).click();
+  await page.locator('.photo-read-heading').waitFor(); await paint(page);
+  const underline = selector => page.locator(selector).evaluate(link => {
+    const parse = value => { const part = value.match(/rgba?\(([^)]+)\)/)[1].split(/[,/ ]+/).filter(Boolean).map(Number); return { r: part[0], g: part[1], b: part[2], a: part.length > 3 ? part[3] : 1 }; };
+    const over = (top, bottom) => ({ r: top.r * top.a + bottom.r * (1 - top.a), g: top.g * top.a + bottom.g * (1 - top.a), b: top.b * top.a + bottom.b * (1 - top.a), a: 1 });
+    const surface = node => { const layers = []; for (let n = node; n; n = n.parentElement) { const c = parse(getComputedStyle(n).backgroundColor); if (c.a > 0) layers.push(c); if (c.a === 1) break; } return layers.reverse().reduce((under, c) => over(c, under), { r: 255, g: 255, b: 255, a: 1 }); };
+    const linear = v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; };
+    const luminance = c => .2126 * linear(c.r) + .7152 * linear(c.g) + .0722 * linear(c.b);
+    const style = getComputedStyle(link), page = surface(link), line = over(parse(style.textDecorationColor), page), a = luminance(line), b = luminance(page);
+    return { line: style.textDecorationLine, style: style.textDecorationStyle, sameInkAsText: style.color === getComputedStyle(link.parentElement).color,
+      contrast: Math.round((Math.max(a, b) + .05) / (Math.min(a, b) + .05) * 100) / 100 };
+  });
+  const checkLink = async (selector, where) => {
+    const link = await underline(selector);
+    assert.equal(link.line, 'underline', where + ': the link is underlined: ' + JSON.stringify(link));
+    assert.equal(link.style, 'solid', where);
+    assert.equal(link.sameInkAsText, true, where + ': the link keeps the text ink, so the underline is its only cue');
+    assert.ok(link.contrast >= 3, where + ': the underline reaches 3:1 on its page: ' + JSON.stringify(link));
+    return link;
+  };
+  const read = await checkLink('.photo-article a[href]', 'reader');
+  // 다시 시도 is a text action: 600 ink with an underline that reaches 3:1 as well.
+  await page.locator('#photoServerStatus[data-state="error"]').waitFor();
+  const retry = await underline('#photoServerRetry');
+  assert.equal(await page.locator('#photoServerRetry').textContent(), '다시 시도');
+  assert.equal(retry.line, 'underline', '다시 시도 is underlined: ' + JSON.stringify(retry));
+  assert.ok(retry.contrast >= 3, 'the 다시 시도 underline reaches 3:1: ' + JSON.stringify(retry));
+  await page.evaluate(() => { window.__minorForceStatus = null; });
+  await capture(page, 'reader-link-' + width);
+  await page.getByRole('button', { name: '글 수정', exact: true }).click();
+  await page.locator('.ql-editor a[href]').waitFor(); await paint(page);
+  const edit = await checkLink('.ql-editor a[href]', 'editor');
+  await capture(page, 'editor-link-' + width);
+  await page.getByRole('button', { name: '닫기', exact: true }).click();
+  await page.locator('#lifeMain[data-mode="home"]').waitFor();
+  // Review m5: the path (menu item › title) belongs to the top-level reading screen only. A post opened from
+  // the older list inside 자료 › 선택 자료 페이지 goes back to that list (사진 글 목록), so it shows no path.
+  await page.goto(base + '/index.html?section=records&view=page'); await ready(page);
+  const compatibility = page.locator('.wb-page-compatibility'); await compatibility.waitFor({ state: 'attached' });
+  if (!await compatibility.evaluate(node => node.open)) await compatibility.locator(':scope > summary').click();
+  await page.locator('.photo-entry').first().click();
+  await page.locator('.photo-article').waitFor(); await paint(page);
+  assert.equal(await page.locator('.photo-read-heading').textContent(), '링크가 있는 합성 글');
+  const listRow = await page.locator('.photo-read-actions').evaluate(bar => ({ first: bar.querySelector('button')?.getAttribute('aria-label'), paths: bar.querySelectorAll('.photo-read-path').length }));
+  assert.deepEqual(listRow, { first: '사진 글 목록', paths: 0 }, 'a post read inside the older list has its list return and no path');
+  await capture(page, 'reader-from-list-' + width);
+  report.checks.push(width + ': a link inside a post is underlined at ' + read.contrast + ':1 (reader) and ' + edit.contrast + ':1 (editor)');
 }
 async function sourceStatus(page, width) {
   await page.goto(base + '/index.html?section=records'); await ready(page);
@@ -278,10 +491,11 @@ async function main() {
   try {
     report.browser = browser.version();
     for (const width of [1440, 390]) {
-      for (const [name, test] of [['workspace', workspace], ['header', header], ['source', sourceStatus]]) {
+      for (const [name, test] of [['workspace', workspace], ['header', header], ['reader', reader], ['source', sourceStatus]]) {
         if (selected && selected !== name) continue;
         const context = await makeContext(browser, new FakeCloud(), 'minor-e-' + name + width, accounts.a, { viewport: { width, height: 1000 } });
         if (name==='source') await configureSourceSync(context);
+        if (name==='header' || name==='reader') await configurePublication(context);
         const page = await context.newPage(); page.setDefaultTimeout(12000);
         page.on('pageerror', e => report.errors.push(e.message));
         page.on('console', m => { if (m.type() === 'error') report.consoleErrors.push(m.text()); });

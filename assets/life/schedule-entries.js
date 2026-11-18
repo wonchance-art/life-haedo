@@ -261,7 +261,7 @@
     // cannot be entered. A choice not stored yet stays selected (also when the app must refresh).
     function happinessField(day) {
       // The legend holds the h2, so 행복도 is a heading beside 습관 and 그날 기록 and still names the group (review 3 n2).
-      const field = el('fieldset', null, 'schedule-happiness'), legend = el('legend'); legend.append(el('h2', '행복도', 'schedule-happiness-title')); field.append(legend);
+      const field = el('fieldset', null, 'schedule-happiness'), legend = el('legend'); legend.append(el('h3', '행복도', 'schedule-happiness-title')); field.append(legend);
       const stored = mood.on(day), waiting = days?.pending.has(day) ? days.pending.get(day) : undefined;
       const chosen = waiting !== undefined ? waiting : stored?.score ?? null, name = 'schedule-happiness-' + day;
       const scale = el('div', null, 'schedule-happiness-scale');
@@ -328,7 +328,7 @@
     function dayPanel() {
       const due = model().dueHabits(s.items, date), parts = [];
       const habits = el('section', null, 'schedule-entry-section'); habits.setAttribute('aria-label', '습관');
-      habits.append(el('h2', '습관', 'schedule-entry-title'));
+      habits.append(el('h3', '습관', 'schedule-entry-title'));
       if (!noHabits(habits) && !due.length) habits.append(el('p', '이 날 할 습관이 없어요.', 'schedule-empty'));
       for (const row of due) {
         const line = el('label', null, 'schedule-habit');
@@ -356,7 +356,7 @@
       // each; the 행복도 row is drawn only when a day of the week has one (it is entered in D).
       const moods = week.some(day => mood.on(day)?.score != null);
       const section = el('section', null, 'schedule-entry-section schedule-week-entries');
-      section.append(el('h2', '습관 · 행복도', 'schedule-entry-title'));
+      // The part's h2 (습관 · 행복도, schedule-ui side) names this table (2026-11-16 노션 방향 m5).
       if (!noHabits(section) && !habits.length) section.append(el('p', '이번 주에 할 습관이 없어요.', 'schedule-empty'));
       if (!moods) section.append(el('p', '이번 주 행복도 기록이 없어요.', 'schedule-empty schedule-no-happiness'));
       if (!habits.length && !moods) return [section];
@@ -395,9 +395,8 @@
     function monthPanel() {
       const month = String(date).slice(0, 7), [y, m] = month.split('-').map(Number);
       const habits = s.items.filter(item => item.kind === 'habit' && model().habitMonth(item.data, y, m, today).days.some(day => day.scheduled));
-      // Named once, by the slot (이 달 습관); the section has its 습관 heading.
+      // Named once, by the slot (이 달 습관); the part's h2 (습관 · 행복도) is its heading (2026-11-16 노션 방향 m5).
       const section = el('section', null, 'schedule-entry-section schedule-month-habits');
-      section.append(el('h2', '습관', 'schedule-entry-title'));
       if (noHabits(section)) return [section];
       if (!habits.length) { section.append(el('p', '이 달에 할 습관이 없어요.', 'schedule-empty')); return [section]; }
       const table = el('div');
@@ -410,7 +409,7 @@
       const goals = model().activeGoals(s.items, year + '-01-01').filter(goal => !goal.data.target || goal.data.target.startsWith(String(year)) || goal.data.target > year + '-12-31');
       // Named once, by the slot (목표, review 3 n3); its h2 is a sibling of 올해 계획 and 예정 in the aside.
       const section = el('section', null, 'schedule-entry-section');
-      section.append(el('h2', '목표', 'schedule-entry-title'));
+      section.append(el('h3', '목표', 'schedule-entry-title'));
       if (!goals.length) {
         // No goal (review 2 m6): said at body size, with a link to the goal screen where one is added.
         const line = el('p', null, 'schedule-empty schedule-no-goals');

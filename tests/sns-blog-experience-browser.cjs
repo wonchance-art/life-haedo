@@ -184,7 +184,8 @@ async function main() {
         const metadata = await page.locator('#homePosts .home-post-meta').allTextContents();
         assert.equal(metadata.length, 3);
         metadata.forEach(text => { assert.match(text, /비공개 원본/); assert.doesNotMatch(text, /이 브라우저에 보관/); });
-        assert.equal(await page.locator('.home-profile-open .home-avatar').innerText(), '느린');
+        // Rule change 2026-11-16 노션 방향 (Designer default 2): 노트 has no blog profile row; name, intro, avatar and 소개 표시 live in 글 메뉴 → 프로필 편집.
+        assert.equal(await page.locator('#lifeHome :is(.home-avatar, .home-author-name, .home-blog-description)').count(), 0);
       }
       await exactCover(page, sample.postIds[0], sample.width); await snap(page, 'feed');
       await profile(page); await snap(page, 'profile');
@@ -194,7 +195,8 @@ async function main() {
         await page.locator('#wbPageIntro').fill('걷고, 읽고, 좋아하는 것을 모으며 씁니다. 오늘의 문장도 천천히.');
       }
       await home(page);
-      if (phase === 'after') assert.match(await page.locator('.home-profile-intro,.home-blog-description').first().innerText(), /오늘의 문장도 천천히/);
+      // The intro is kept with the profile (seen in 프로필 편집 and the public blog), not shown in 노트 since 2026-11-16 (Designer default 2).
+      if (phase === 'after') assert.match(await page.evaluate(() => (async () => { const s = HaedoLife.Shell.storage; return (await s.readWorkbench(await s.getActive())).page; })().then(page => page.intro)), /오늘의 문장도 천천히/);
       await openPost(page, sample.postIds[0]); await snap(page, 'reading');
       await page.getByRole('button', { name: '글 수정', exact: true }).click(); await page.locator('#photoTitle').waitFor(); await snap(page, 'writing');
       await page.locator('#photoTitle').fill('빛이 길게 머무는 오후 — 다시 쓴 생각');
@@ -222,7 +224,7 @@ async function main() {
     });
     if (phase === 'after') await check('failed writes preserve Korean/photo input; ZIP restores original bytes and account boundaries hold', async ({ page, server, device }) => {
       await page.goto(base + '/index.html'); await shellReady(page); await login(page, server, device); const sample = await seed(page); await page.reload(); await ready(page); await home(page); await openPost(page, sample.postIds[0]);
-      const download = page.waitForEvent('download'); await page.getByRole('button', { name: '사진 포함 백업', exact: true }).click(); const zip = await fs.readFile(await (await download).path());
+      await page.locator('.photo-read-actions .photo-more > summary').click(); const download = page.waitForEvent('download'); await page.getByRole('button', { name: '사진 포함 백업', exact: true }).click(); const zip = await fs.readFile(await (await download).path());
       await page.getByRole('button', { name: '글 수정', exact: true }).click(); await page.locator('#photoTitle').waitFor();
       await page.evaluate(() => { window.__snsPut = IDBObjectStore.prototype.put; IDBObjectStore.prototype.put = function (...args) { const request = __snsPut.apply(this, args); if (args[0]?.key?.startsWith('photo-post:')) this.transaction.abort(); return request; }; });
       await page.locator('#photoTitle').fill('실패해도 남아야 할 한글 입력'); await page.locator('.photo-status[role="alert"]').waitFor();

@@ -113,11 +113,21 @@ jobs:
         run: npm ci --prefix tests/browser-ci --ignore-scripts
       - name: Install Chromium and Korean fonts
         run: |
-          # Prefer the official archive over the runner's repeatedly stalled Azure mirror.
+          # Prefer the official archive over the runner's regional mirror, which repeatedly stalls. The runner image
+          # names it by cloud or region (azure.archive…, us-east-2.ec2.archive…), so any such host is replaced
+          # (2026-11-18: the ec2 name was not covered and a 61 MB font package stalled for the job's whole limit).
           if [ -f /etc/apt/apt-mirrors.txt ]; then
-            sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/apt-mirrors.txt
+            sudo sed -i -E 's|https?://[a-z0-9.-]+\.archive\.ubuntu\.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/apt-mirrors.txt
+            cat /etc/apt/apt-mirrors.txt
           fi
+          # A dead connection is dropped and retried instead of waiting without a limit.
+          printf 'Acquire::Retries "3";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' | sudo tee /etc/apt/apt.conf.d/80-haedo-ci > /dev/null
           node tests/browser-ci/node_modules/playwright/cli.js install --with-deps chromium
+          # The packages are fetched first, where a slow transfer can be stopped and resumed safely; then installed.
+          for attempt in 1 2 3; do
+            if sudo timeout 240 apt-get install -y --download-only fonts-noto-cjk poppler-utils; then break; fi
+            if [ "$attempt" = 3 ]; then echo "apt download did not finish in three attempts" >&2; exit 1; fi
+          done
           sudo apt-get install -y fonts-noto-cjk poppler-utils
       - name: Select the pinned browser
         run: |
@@ -955,11 +965,21 @@ jobs:
         run: npm ci --prefix tests/browser-ci --ignore-scripts
       - name: Install Chromium and Korean fonts
         run: |
-          # Prefer the official archive over the runner's repeatedly stalled Azure mirror.
+          # Prefer the official archive over the runner's regional mirror, which repeatedly stalls. The runner image
+          # names it by cloud or region (azure.archive…, us-east-2.ec2.archive…), so any such host is replaced
+          # (2026-11-18: the ec2 name was not covered and a 61 MB font package stalled for the job's whole limit).
           if [ -f /etc/apt/apt-mirrors.txt ]; then
-            sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/apt-mirrors.txt
+            sudo sed -i -E 's|https?://[a-z0-9.-]+\.archive\.ubuntu\.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/apt-mirrors.txt
+            cat /etc/apt/apt-mirrors.txt
           fi
+          # A dead connection is dropped and retried instead of waiting without a limit.
+          printf 'Acquire::Retries "3";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' | sudo tee /etc/apt/apt.conf.d/80-haedo-ci > /dev/null
           node tests/browser-ci/node_modules/playwright/cli.js install --with-deps chromium
+          # The packages are fetched first, where a slow transfer can be stopped and resumed safely; then installed.
+          for attempt in 1 2 3; do
+            if sudo timeout 240 apt-get install -y --download-only fonts-noto-cjk poppler-utils; then break; fi
+            if [ "$attempt" = 3 ]; then echo "apt download did not finish in three attempts" >&2; exit 1; fi
+          done
           sudo apt-get install -y fonts-noto-cjk poppler-utils
       - name: Select the pinned browser
         run: |

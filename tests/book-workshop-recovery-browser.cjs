@@ -9,6 +9,7 @@ const { playwright, makeContext, ready, settle, nav, observe } = require('./unif
 const { FakeCloud, accounts, password, cloud, base } = require('./life-sync-browser.cjs');
 const { fixture, current, go, openBook, oldBody } = require('./book-projects-browser.cjs');
 const { abortWorkbenchWrites } = require('./life-workbench-browser.cjs');
+const { toggleRecordSelection } = require('./helpers/feature-menus.cjs');
 const out = path.resolve('.local/book-workshop-recovery');
 const title = '선택의 이유를 다시 묻는 첫 책', question = '그때의 선택과 지금의 해석은 어디서 달라졌을까?';
 async function plan(page) {
@@ -50,7 +51,7 @@ async function main() {
   try {
     await check('record selection enables reflection intake and a failed write consumes selection only after successful retry', 390, async page => {
       const f = await fixture(page), before = await current(page); await nav(page, 'records');
-      await page.locator('#lifeSelectionToggle').click(); assert.equal(await page.locator('#lifeArrangeReflection').isDisabled(), true);
+      await toggleRecordSelection(page); assert.equal(await page.locator('#lifeArrangeReflection').isDisabled(), true);
       await page.locator(`.life-source-select[data-version-id="${f.refs.pause.versionId}"]`).click();
       assert.equal(await page.locator('#lifeArrangeReflection').isEnabled(), true, 'Reflection destination must follow selection changes');
       await page.locator('#lifeArrangeReflection').click(); await page.locator('#wbIncomingApply').waitFor();
@@ -60,7 +61,7 @@ async function main() {
       await page.waitForFunction(() => document.querySelector('#wbStatus')?.dataset.state === 'saved');
       const saved = await current(page); assert.deepEqual(saved.workbench.reflection.versionIds, [...f.legacy.versionIds, f.refs.pause.versionId]); assert.equal(saved.workbench.reflection.note, f.legacy.note); assert.deepEqual(saved.bundle, before.bundle);
       await nav(page, 'records'); assert.equal(await page.locator('#lifeSelectionToggle').getAttribute('aria-pressed'), 'false'); assert.equal(await page.locator('.life-source-select[aria-pressed="true"]').count(), 0);
-      await page.locator('#lifeSelectionToggle').click(); assert.equal(await page.locator('#lifeArrangeReflection').isDisabled(), true);
+      await toggleRecordSelection(page); assert.equal(await page.locator('#lifeArrangeReflection').isDisabled(), true);
     });
     await check('a reload banner from before editing cannot discard a newly created book after a CAS conflict; explicit comparison retries the same book', 820, async page => {
       const f = await fixture(page); await plan(page);

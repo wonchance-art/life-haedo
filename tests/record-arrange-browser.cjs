@@ -11,6 +11,7 @@ const { playwright, ready, settle, makeContext, observe, nav } = require('./unif
 const { fixture, current, seedComposition, abortWorkbenchWrites, go, inspect, oldBody, newBody } = require('./life-workbench-browser.cjs');
 const { inspectHome } = require('./home-entry-browser.cjs');
 const { awaitCondition } = require('./helpers/await-condition.cjs');
+const { toggleRecordSelection } = require('./helpers/feature-menus.cjs');
 const out = path.resolve(__dirname, '../.local/record-arrange');
 const report = { createdAt: new Date().toISOString(), scope: 'Actual app/SDK/IndexedDB; anonymous intercepted Auth, viewport/touch/IME-event simulation only', checks: [], visual: [], consoleErrors: [], pageErrors: [], expectedErrors: 0, external: [], realRemoteWrites: 0 };
 
@@ -35,8 +36,9 @@ async function instrument(context) {
 }
 // 2026-11-11 (자료 읽기 m2): 읽는 중의 새로고침은 같은 자료로 돌아온다. 읽기 화면과 같은 주소로 다시 가는 것은 브라우저에서
 // 새로고침이므로, 목록을 열 때는 목록을 가리키는 주소로 간다.
-async function records(page) { await page.goto(base + '/index.html?section=records&view=sources'); await ready(page); await page.locator('#lifeSelectionToggle').waitFor(); }
-async function selectMode(page) { if (await page.locator('#lifeSelectionToggle').getAttribute('aria-pressed') !== 'true') await page.locator('#lifeSelectionToggle').click(); }
+async function records(page) { await page.goto(base + '/index.html?section=records&view=sources'); await ready(page); await page.locator('#lifeSelectionToggle').waitFor({ state: 'attached' }); }
+// 2026-11-18 (노션 방향 W4): 기록 선택 is an item of the 자료 메뉴 (⋯).
+async function selectMode(page) { if (await page.locator('#lifeSelectionToggle').getAttribute('aria-pressed') !== 'true') await toggleRecordSelection(page); }
 async function selectVersion(page, id) {
   const b = page.locator(`.life-source-select[data-version-id="${id}"]`);
   // Selection covers all results, but cards are rendered forty at a time.
@@ -109,7 +111,8 @@ async function main() {
       assert.equal(await page.locator('#lifeOriginFilter').inputValue(), 'apple_notes'); await page.locator('#lifeOriginFilter').selectOption('');
       assert.equal(await page.locator(`.life-source-select[data-version-id="${f.refs[1].versionId}"]`).getAttribute('aria-pressed'), 'true');
       assert.deepEqual(await current(page), before); assert.deepEqual(await page.evaluate(() => __arrangeWrites), []);
-      await page.locator('#lifeSelectionToggle').click(); assert(await page.locator('#lifeSelectionBar').isHidden());
+      await toggleRecordSelection(page); assert(await page.locator('#lifeSelectionBar').isHidden());
+      assert.equal(await page.evaluate(() => document.activeElement === document.querySelector('#lifeRecordsMenu > summary')), true, 'after 기록 선택 focus is on the 자료 메뉴 button, not inside the closed menu');
       assert.deepEqual(await current(page), before);
     });
     await check('hidden selections can be removed and a batch stops at one hundred fixed versions', async ({ page }) => {
@@ -265,7 +268,11 @@ async function main() {
       assert.equal(await page.evaluate(async id => { try { await HaedoLife.Shell.storage.read(id); return false; } catch (_) { return true; } }, f.workspaceId), true);
     });
     await check('keyboard selection and Korean composition keep review local until explicit apply', async ({ page }) => {
-      const f = await fixture(page); await records(page); const before = await current(page); await page.locator('#lifeSelectionToggle').focus(); await page.keyboard.press('Enter');
+      const f = await fixture(page); await records(page); const before = await current(page);
+      // Keyboard only: ⋯ (Enter) → 기록 선택 (Enter). Focus then rests on ⋯ and the menu is closed.
+      await page.locator('#lifeRecordsMenu > summary').focus(); await page.keyboard.press('Enter'); await page.locator('#lifeSelectionToggle').focus(); await page.keyboard.press('Enter');
+      await page.locator('#lifeSelectionBar').waitFor({ state: 'visible' });
+      assert.deepEqual(await page.evaluate(() => ({ menuOpen: document.querySelector('#lifeRecordsMenu').open, focus: document.activeElement === document.querySelector('#lifeRecordsMenu > summary'), pressed: document.querySelector('#lifeSelectionToggle').getAttribute('aria-pressed') })), { menuOpen: false, focus: true, pressed: 'true' });
       const target = page.locator(`.life-source-select[data-version-id="${f.refs[1].versionId}"]`); await target.focus(); await page.keyboard.press('Space'); assert.equal(await target.getAttribute('aria-pressed'), 'true');
       const focus = await target.evaluate(el => ({ visible: el.matches(':focus-visible'), outline: parseFloat(getComputedStyle(el).outlineWidth) })); assert(focus.visible && focus.outline >= 2);
       await review(page, 'groups'); await page.locator('#wbIncomingTitle').evaluate(el => { el.focus(); el.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '' })); el.value='산책하며 떠오른'; el.dispatchEvent(new InputEvent('input', { bubbles: true, data:'른', isComposing:true })); });

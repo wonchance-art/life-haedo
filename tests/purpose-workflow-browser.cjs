@@ -12,7 +12,8 @@ const sourceRoot = path.resolve(process.env.PURPOSE_SOURCE_ROOT || path.join(__d
 const { CompositionCloud } = require(path.join(sourceRoot, 'tests/composition-sync-browser.cjs'));
 const { accounts, cloud, base } = require(path.join(sourceRoot, 'tests/life-sync-browser.cjs'));
 const { isBackgroundSync, isRssInboxRead } = require(path.join(sourceRoot, 'tests/helpers/account-sync-rpcs.cjs'));
-const { playwright, makeContext, ready, settle, nav } = require(path.join(sourceRoot, 'tests/unified-home-browser.cjs'));
+// atRest (2026-11-18): the main area's enter motion has ended. A baseline source root from before it measures as it did.
+const { playwright, makeContext, ready, settle, nav, atRest = async () => {} } = require(path.join(sourceRoot, 'tests/unified-home-browser.cjs'));
 const { inspectHome } = require(path.join(sourceRoot, 'tests/home-entry-browser.cjs'));
 const { openRecordsMenu } = require(path.join(sourceRoot, 'tests/helpers/feature-menus.cjs'));
 const Core = require(path.join(sourceRoot, 'assets/life/core.js'));
@@ -86,6 +87,7 @@ async function holdCatalog(context) {
 }
 async function capture(page, scene, size) {
   await page.evaluate(async () => { await document.fonts.ready; scrollTo({ top: 0, behavior: 'instant' }); }); await page.mouse.move(0, 0);
+  await atRest(page);
   const metrics = await page.evaluate(inspectHome, '#lifeApp');
   const layout = await page.evaluate(() => {
     const visible = el => el.checkVisibility({ checkVisibilityCSS: true }) && el.getBoundingClientRect().width > 0 && !el.closest('[hidden]');
