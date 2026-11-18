@@ -3826,6 +3826,9 @@
       }
       else if (context.mode === 'find') findRenderPromise.then(restore);
       else if (context.mode === 'naver-capture' || context.mode === 'naver-blog' || context.mode === 'interests' || context.mode === 'external-discovery' || context.mode === 'blog') mainRenderPromise.then(restore);
+      // A calendar unit is drawn after its read (as restoreOriginView waits): set before that, the position was cut to the
+      // empty frame's height (D left at 1169 came back at 58 from a reader's 돌아가기, 2026-11-18).
+      else if (calendarModes.has(context.mode) && schedule) mainRenderPromise.then(restore);
       else restore();
     }
 

@@ -49,15 +49,24 @@ async function seed(page) {
     return { workspaceId: ws, ids };
   }, { PRIVATE });
 }
-// A day with enough posts for W and D to scroll at these screen heights.
+// A day with enough posts for W and D to scroll at these screen heights, and a direct writing of that day (its reader
+// is the 자료 reader, whose 돌아가기 is another return path than a post's).
 async function seedDay(page) {
-  return page.evaluate(async () => {
-    const s = HaedoLife.Shell.storage, c = HaedoLife.Core, m = HaedoLife.PhotoPost, ws = await s.getActive();
+  // A direct writing is dated when it is saved: the clock stands on that day while it is written.
+  await page.clock.setFixedTime(new Date('2026-10-28T20:30:00+09:00'));
+  await page.evaluate(async () => {
+    const s = HaedoLife.Shell.storage, c = HaedoLife.Core, m = HaedoLife.PhotoPost, w = HaedoLife.Writing, ws = await s.getActive();
     for (let i = 0; i < 12; i++) {
       const doc = m.create(c.id, new Date('2026-10-28T' + String(8 + i).padStart(2, '0') + ':15:00+09:00').toISOString()); doc.title = '하루 익명 기록 ' + (i + 1); doc.status = 'saved';
       doc.ops = [{ insert: '그날 본 것을 한 줄로 남긴다. ' + i + '\n' }]; await s.savePhotoPost(ws, doc, 0);
     }
+    const bundle = await s.read(ws), own = w.createDraft(bundle); own.title = '직접 쓴 익명 기록';
+    own.text = Array.from({ length: 40 }, (_, i) => (i + 1) + '번째 문단. 천변을 따라 걸으며 본 것을 적는다.').join('\n\n');
+    const prepared = await w.prepareSave(bundle, own);
+    const stored = await s.commitLocal({ workspaceId: ws, baseRevision: bundle.revision, operationId: c.id(), changes: prepared.changes });
+    if (stored.status !== 'stored') throw new Error('direct writing fixture');
   });
+  await page.clock.setFixedTime(new Date(TODAY));
 }
 // A control that can be pressed where the page is: whole inside the screen and not under the fixed header or the bottom
 // tabs. It is pressed at its place with the mouse (press()): Playwright's own click scrolls a control clear of the root's
@@ -254,14 +263,19 @@ async function main() {
     await check('일정 M·W·D come back to the position they were left at, from the middle of the page too (1440, 820, 390)', async ({ page }) => {
       await page.goto(base + '/index.html'); await ready(page); await seed(page); await seedDay(page);
       const misses = [], trips = [];
-      const post = '#lifeSchedule .schedule-post-open', cell = '#lifeSchedule .schedule-day-cell:not([data-outside])', head = '#lifeSchedule .schedule-week-head';
+      const post = '#lifeSchedule .schedule-post-open[data-schedule-item^="photo:"]', writing = '#lifeSchedule .schedule-post-open[data-schedule-item^="source:"]';
+      const cell = '#lifeSchedule .schedule-day-cell:not([data-outside])', head = '#lifeSchedule .schedule-week-head';
       const read = () => page.locator('.photo-article').waitFor();
+      const readWriting = async () => { await page.locator('#lifeMain[data-mode="source"]').waitFor(); await page.locator('#lifeSourceText').waitFor(); await settle(page); };
       const browserBack = () => page.goBack(), appReturn = () => page.locator('#lifeSubviewReturn, [data-subview-return]').first().click();
+      const readerReturn = () => page.locator('#lifeSearchReturn').click();
       async function trip(scene, unit, query, top, control, arrive, back, { expected, wait } = {}) {
         // A new entry each time (an address opened again in place is a reload to the browser, which restores its scroll).
         await page.goto('about:blank'); await page.goto(base + '/index.html' + query); await ready(page); await shown(page, unit);
         await page.waitForFunction(() => [...document.querySelectorAll('#lifeSchedule .schedule-entries')].every(slot => slot.getAttribute('aria-busy') === 'false'));
         const max = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
+        // Without a position of its own the screen is left where the control stands at the middle of the screen.
+        top ??= await page.evaluate(({ control, max }) => { const box = document.querySelector(control).getBoundingClientRect(); return Math.round(Math.min(max - 20, Math.max(20, scrollY + box.top + box.height / 2 - innerHeight / 2))); }, { control, max });
         assert.ok(top > 0 && top < max - 1, scene + ': ' + top + ' is a middle position (the page ends at ' + max + ')');
         await page.evaluate(top => { scrollTo({ top, behavior: 'instant' }); addEventListener('click', () => { window.__left = scrollY; }, { once: true, capture: true }); }, top);
         const target = await pressable(page, control, scene), key = target.key;
@@ -284,6 +298,11 @@ async function main() {
         await trip(size + ' W ' + weekTops[1] + ' → 글 읽기 → 뒤로', 'week', '?section=schedule&view=week&date=2026-10-28', weekTops[1], post, read, browserBack);
         await trip(size + ' D ' + dayTops[0] + ' → 글 읽기 → 돌아가기', 'day', '?section=schedule&view=day&date=2026-10-28', dayTops[0], post, read, appReturn);
         await trip(size + ' D ' + dayTops[1] + ' → 글 읽기 → 뒤로', 'day', '?section=schedule&view=day&date=2026-10-28', dayTops[1], post, read, browserBack);
+        // A direct writing opens in the 자료 reader. Its 돌아가기 set the position before the calendar was drawn again, so
+        // it was cut to the empty frame's height (on 8c3c54f at 1440×600: D left at 1169 came back at 58).
+        await trip(size + ' D → 직접 쓴 글 → 돌아가기', 'day', '?section=schedule&view=day&date=2026-10-28', null, writing, readWriting, readerReturn);
+        await trip(size + ' D → 직접 쓴 글 → 뒤로', 'day', '?section=schedule&view=day&date=2026-10-28', null, writing, readWriting, browserBack);
+        await trip(size + ' W → 직접 쓴 글 → 돌아가기', 'week', '?section=schedule&view=week&date=2026-10-28', null, writing, readWriting, readerReturn);
         // W's day heads stand under one another below 1101px, so one is on screen in the middle of the page.
         if (width <= 1100) await trip(size + ' W ' + weekTops[0] + ' → D → 뒤로', 'week', '?section=schedule&view=week&date=2026-10-28', weekTops[0], head, dayShown, browserBack);
         // A phone's ‹ goes one level up to the top of the parent (not to where it was left): exactly the top.
