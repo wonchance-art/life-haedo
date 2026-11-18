@@ -610,8 +610,9 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
 }
 .photo-posts .ql-snow .ql-active .ql-fill { fill: #3156d3; }
 .photo-posts .ql-toolbar button.ql-active { background: #edf1ff; }
-/* A link inside a post is ink with a soft underline, in the editor and the reader alike (W1 table: 글 안 링크). */
-.photo-posts .ql-editor a, .photo-article a { color: var(--haedo-link, var(--ink, #37352f)); text-decoration: underline; text-decoration-color: rgba(55, 53, 47, .4); text-underline-offset: 4px; }
+/* A link inside a post keeps the text ink, in the editor and the reader alike (W1 table: 글 안 링크). Its
+   underline is then the only cue, so it uses the field line (3.50:1 on white), not a fainter decoration. */
+.photo-posts .ql-editor a, .photo-article a { color: var(--haedo-link, var(--ink, #37352f)); text-decoration: underline; text-decoration-color: var(--field-line, #8a8984); text-underline-offset: 4px; }
 .photo-posts .ql-editor a:hover, .photo-article a:hover { text-decoration-color: currentColor; }
 /* Private AI authorship mark in the editor (D1, 2026-11-04): the same mark as the
    owner's reading views' .blog-ai-text (blog-public.css). The dots are a background
@@ -771,7 +772,7 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
 .photo-read-sync .photo-server-status:is([data-state="error"], [data-state="refresh"]) { color: var(--color-error, #a3243d); }
 .photo-read-sync .photo-server-actions { margin: 0; padding: 0; }
 /* 다시 시도 and the conflict link are text actions: ink, 600 and an underline (not colour alone). */
-.photo-read-sync .photo-server-actions > button { min-height: 44px; padding: 0 8px; border: 0; border-radius: var(--haedo-control-radius, 6px); background: transparent; color: var(--ink, #37352f); font-size: var(--haedo-text-meta, 13px); font-weight: var(--haedo-weight-semibold, 600); text-decoration: underline; text-decoration-color: rgba(55, 53, 47, .4); text-underline-offset: 4px; }
+.photo-read-sync .photo-server-actions > button { min-height: 44px; padding: 0 8px; border: 0; border-radius: var(--haedo-control-radius, 6px); background: transparent; color: var(--ink, #37352f); font-size: var(--haedo-text-meta, 13px); font-weight: var(--haedo-weight-semibold, 600); text-decoration: underline; text-decoration-color: var(--field-line, #8a8984); text-underline-offset: 4px; }
 .photo-read-sync .photo-server-actions > button:hover { background: var(--haedo-hover, rgba(55, 53, 47, .04)); text-decoration-color: currentColor; }
 .photo-read-return { margin-top: 24px; }
 .photo-read-return > .life-button { min-height: 44px; border: 1px solid var(--field-line, #8a8984); border-radius: var(--haedo-control-radius, 6px); background: var(--paper, #fff); color: var(--ink, #37352f); font-size: var(--haedo-text-control, 15px); font-weight: var(--haedo-weight-medium, 500); }

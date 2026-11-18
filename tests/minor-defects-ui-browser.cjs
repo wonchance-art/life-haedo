@@ -1,6 +1,6 @@
 /* E2/E3/E5: real application/IndexedDB with synthetic Auth; no production writes.
  * BASE_URL=http://127.0.0.1:4173 node tests/minor-defects-ui-browser.cjs
- * E_UI_CASE=workspace|header|source selects one mutation target. */
+ * E_UI_CASE=workspace|header|reader|source selects one mutation target. */
 'use strict';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -284,6 +284,48 @@ async function configureSourceSync(context) {
       }};}` });
   });
 }
+// 2026-11-18 W3 review (M1): a link inside a post has the body's ink, so its underline is the only cue. It
+// must be drawn and reach 3:1 on the page it sits on, in the reader and in the editor alike.
+async function reader(page, width) {
+  await page.goto(base + '/index.html?section=notes'); await ready(page);
+  await page.evaluate(async () => {
+    const s = HaedoLife.Shell.storage, m = HaedoLife.PhotoPost, w = await s.getActive(), doc = m.create(HaedoLife.Core.id, '2026-10-14T00:00:00.000Z');
+    doc.title = '링크가 있는 합성 글'; doc.status = 'saved';
+    doc.ops = [{ insert: '본문 안의 ' }, { insert: '참고한 글', attributes: { link: 'https://example.org/reference' } }, { insert: '을 밑줄로 구분한다.\n' }];
+    await s.savePhotoPost(w, doc, 0);
+  });
+  await page.reload(); await ready(page);
+  await page.locator('#homePosts[aria-busy="false"]').waitFor();
+  await page.getByRole('button', { name: '링크가 있는 합성 글', exact: true }).click();
+  await page.locator('.photo-read-heading').waitFor(); await paint(page);
+  const underline = selector => page.locator(selector).evaluate(link => {
+    const parse = value => { const part = value.match(/rgba?\(([^)]+)\)/)[1].split(/[,/ ]+/).filter(Boolean).map(Number); return { r: part[0], g: part[1], b: part[2], a: part.length > 3 ? part[3] : 1 }; };
+    const over = (top, bottom) => ({ r: top.r * top.a + bottom.r * (1 - top.a), g: top.g * top.a + bottom.g * (1 - top.a), b: top.b * top.a + bottom.b * (1 - top.a), a: 1 });
+    const surface = node => { const layers = []; for (let n = node; n; n = n.parentElement) { const c = parse(getComputedStyle(n).backgroundColor); if (c.a > 0) layers.push(c); if (c.a === 1) break; } return layers.reverse().reduce((under, c) => over(c, under), { r: 255, g: 255, b: 255, a: 1 }); };
+    const linear = v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; };
+    const luminance = c => .2126 * linear(c.r) + .7152 * linear(c.g) + .0722 * linear(c.b);
+    const style = getComputedStyle(link), page = surface(link), line = over(parse(style.textDecorationColor), page), a = luminance(line), b = luminance(page);
+    return { line: style.textDecorationLine, style: style.textDecorationStyle, sameInkAsText: style.color === getComputedStyle(link.parentElement).color,
+      contrast: Math.round((Math.max(a, b) + .05) / (Math.min(a, b) + .05) * 100) / 100 };
+  });
+  const checkLink = async (selector, where) => {
+    const link = await underline(selector);
+    assert.equal(link.line, 'underline', where + ': the link is underlined: ' + JSON.stringify(link));
+    assert.equal(link.style, 'solid', where);
+    assert.equal(link.sameInkAsText, true, where + ': the link keeps the text ink, so the underline is its only cue');
+    assert.ok(link.contrast >= 3, where + ': the underline reaches 3:1 on its page: ' + JSON.stringify(link));
+    return link;
+  };
+  const read = await checkLink('.photo-article a[href]', 'reader');
+  await capture(page, 'reader-link-' + width);
+  await page.getByRole('button', { name: '글 수정', exact: true }).click();
+  await page.locator('.ql-editor a[href]').waitFor(); await paint(page);
+  const edit = await checkLink('.ql-editor a[href]', 'editor');
+  await capture(page, 'editor-link-' + width);
+  await page.getByRole('button', { name: '닫기', exact: true }).click();
+  await page.locator('#lifeMain[data-mode="home"]').waitFor();
+  report.checks.push(width + ': a link inside a post is underlined at ' + read.contrast + ':1 (reader) and ' + edit.contrast + ':1 (editor)');
+}
 async function sourceStatus(page, width) {
   await page.goto(base + '/index.html?section=records'); await ready(page);
   const raw = '첫 합성 원문. 저장된 문장도 그대로 보존합니다. 마지막 줄.';
@@ -335,7 +377,7 @@ async function main() {
   try {
     report.browser = browser.version();
     for (const width of [1440, 390]) {
-      for (const [name, test] of [['workspace', workspace], ['header', header], ['source', sourceStatus]]) {
+      for (const [name, test] of [['workspace', workspace], ['header', header], ['reader', reader], ['source', sourceStatus]]) {
         if (selected && selected !== name) continue;
         const context = await makeContext(browser, new FakeCloud(), 'minor-e-' + name + width, accounts.a, { viewport: { width, height: 1000 } });
         if (name==='source') await configureSourceSync(context);
