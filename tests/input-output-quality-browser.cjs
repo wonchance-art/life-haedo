@@ -3,6 +3,7 @@ const assert = require('node:assert/strict'), fs = require('node:fs/promises'), 
 const { playwright, makeContext, ready, nav, settle } = require('./unified-home-browser.cjs');
 const { FakeCloud, accounts, cloud, base } = require('./life-sync-browser.cjs');
 const { inspect } = require('../scripts/check-site-design.cjs');
+const { toggleRecordSelection } = require('./helpers/feature-menus.cjs');
 const out = path.resolve('.local/flow-quality');
 const thought = '좋아하는 일을 다시 만날 시간을 남겨 두기\n\n예전에는 잘하는 모습부터 보여 주고 싶었다. 지금은 오래 궁금한 것을 천천히 읽어 보고 싶다.\n\n다음 질문: 주말에 같은 길을 걸으면 무엇을 새로 알아차릴까?';
 const raw = '산책하며 돌아본 오래된 질문🌱\r\n같은 길에서 달라진 생각을 다시 읽는다.';
@@ -47,7 +48,7 @@ async function main() {
       await page.locator('#lifeSourceText').waitFor(); assert.equal(await page.locator('#lifeSourceText').textContent(), raw); await snap('source-reading'); await page.locator('#lifeSearchReturn').click(); await page.locator('#lifeFind[aria-busy="false"]').waitFor(); assert.equal(await page.locator('#lifeFindQuery').inputValue(), '달라진 생각'); assert.deepEqual((await read()).bundle, original);
     });
     await check('Thought actions are reachable without opening file settings at all widths', async () => {
-      await records(); await page.locator('#lifeSelectionToggle').click(); await page.locator('.life-source-select').first().click(); await page.locator('#lifeArrangeReflection').click(); await page.locator('#wbIncomingApply').click(); await page.locator('#wbReflectionNote').fill(thought); await click('지금 저장');
+      await records(); await toggleRecordSelection(page); await page.locator('.life-source-select').first().click(); await page.locator('#lifeArrangeReflection').click(); await page.locator('#wbIncomingApply').click(); await page.locator('#wbReflectionNote').fill(thought); await click('지금 저장');
       assert.equal(await page.locator('#wbReflectionToPage').evaluate(e => !!e.closest('details')), false);
       await snap('output-after', async () => { await page.locator('#wbReflectionUse').click(); await page.waitForFunction(() => document.activeElement?.id === 'wbReflectionToPage'); const rect = await page.locator('#wbReflectionToPage').boundingBox(); assert(rect.y > 0 && rect.y + rect.height < 900); });
       await page.locator('#wbReflectionFileOpen').click(); assert.equal(await page.locator('#wbReflectionIncludeSources').isChecked(), false);

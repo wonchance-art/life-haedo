@@ -41,4 +41,32 @@ async function openNewsSettings(page) {
 // 2026-11-02: 공개 표지 and 공개한 페이지 are rows of 설정 (no longer in the blog menu).
 const openSettings = page => sectionRoot(page, 'manage', 'manage');
 
-module.exports = { openRecordsMenu, openBlogMenu, openNewsSettings, openSettings };
+// 2026-11-18 (노션 방향 W4): on the 자료 list, 기록 선택 and 폴더 관리 are items of the 자료 메뉴 (⋯), and a row's
+// 자료 출처 정보 · 폴더로 이동 are items of that row's ⋯. These open the menu the way a person does, on the screen as it is.
+async function recordsListMenuItem(page, selector) {
+  const menu = page.locator('#lifeRecordsMenu');
+  if (!await menu.evaluate(node => node.open)) await menu.locator(':scope > summary').click();
+  const item = menu.locator(selector); await item.waitFor(); return item;
+}
+async function toggleRecordSelection(page) { await (await recordsListMenuItem(page, '#lifeSelectionToggle')).click(); }
+async function openFolderManage(page) {
+  if (await page.locator('#lifeFolderManage').isHidden()) {
+    await (await recordsListMenuItem(page, '#lifeFolderManageOpen')).click();
+    // The panel takes focus in the frame after it opens; wait for that, so a field used next keeps its focus.
+    await page.waitForFunction(() => document.querySelector('#lifeFolderManage')?.contains(document.activeElement));
+  }
+  await page.locator('#lifeFolderManage').waitFor({ state: 'visible' });
+}
+async function recordRowMenuItem(row, selector) {
+  const menu = row.locator('.records-row-more');
+  if (!await menu.evaluate(node => node.open)) await menu.locator(':scope > summary').click();
+  const item = menu.locator(selector); await item.waitFor(); return item;
+}
+// Opens a row's 폴더로 이동 form (under the row) and returns it.
+async function openRowFolderMove(row) {
+  const form = row.locator('[data-source-folder-assignment]').first();
+  if (!await form.evaluate(node => node.open)) await (await recordRowMenuItem(row, '.records-row-folder')).click();
+  return form;
+}
+
+module.exports = { openRecordsMenu, openBlogMenu, openNewsSettings, openSettings, recordsListMenuItem, toggleRecordSelection, openFolderManage, recordRowMenuItem, openRowFolderMove };

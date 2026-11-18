@@ -290,10 +290,12 @@
     error.hidden = true;
     const header = node('div', null, 'life-header');
     const toolbar = node('div', null, 'life-toolbar');
-    // 노트·일정 from 1101px keep their large title after the toolbar (renderHeader); the screen's title is found in either.
+    // 노트·일정, and the 자료 list·뉴스·설정 (W4), from 1101px keep their large title after the toolbar (renderHeader);
+    // the screen's title is found in either.
     const wideHeading = global.matchMedia?.('(min-width: 1101px)') || null;
+    const pageHeadModes = new Set(['sources', 'external-discovery', 'manage']);
     const pageHeading = () => toolbar.querySelector('h1') || root?.querySelector(':scope > .haedo-title-band h1') || null;
-    const pageHeadingWidth = () => { if (!disposed && state.bundle && (state.mode === 'home' || calendarModes.has(state.mode))) renderHeader(); };
+    const pageHeadingWidth = () => { if (!disposed && state.bundle && (state.mode === 'home' || calendarModes.has(state.mode) || pageHeadModes.has(state.mode))) renderHeader(); };
     const planningNavigation = node('div', null, 'life-planning-navigation');
     planningNavigation.hidden = true;
     main = node('main', null, 'life-main');
@@ -1491,13 +1493,16 @@
         state.remoteChanged = true;
         announce('보관한 자료가 변경되었습니다. 현재 입력을 유지합니다. 최신 내용 확인을 눌러 주세요.');
         renderHeader();
+        // What a person has open on the 자료 list is not redrawn under them: the 폴더 관리 panel (a section shown by
+        // removing `hidden`, no longer a <details>), a row's 폴더로 이동 form, its 자료 출처 정보 and its ⋯ menu (W4).
+        const listHeld = () => !!main.querySelector('#lifeFolderManage:not([hidden]),.source-folder-assignment[open],.life-result-details:not([hidden]),.records-row-more[open]');
         if (managedLibrary && state.mode === 'sources' && !dirty() && !sourceEditor?.isDirty() &&
-            !main.querySelector('#lifeFolderManage[open],.source-folder-assignment[open]') &&
+            !listHeld() &&
             !main.contains(document.activeElement)) {
           const workspaceId = state.bundle.workspaceId, workspace = workspaceGeneration, input = inputGeneration;
           const canApply = () => !disposed && workspace === workspaceGeneration && workspaceId === state.bundle?.workspaceId &&
             state.mode === 'sources' && input === inputGeneration && !state.busy && !dirty() && !sourceEditor?.isDirty() &&
-            !container.hidden && !main.querySelector('#lifeFolderManage[open],.source-folder-assignment[open]') &&
+            !container.hidden && !listHeld() &&
             !main.contains(document.activeElement);
           refreshData({ canApply }).then(applied => {
             if (applied !== true || !canApply()) return;
@@ -2622,6 +2627,8 @@
       const activeMenu = document.activeElement?.closest('.life-feature-menu');
       const menuFocus = activeMenu && toolbar.contains(activeMenu) && main.dataset.mode === state.mode ?
         { id: activeMenu.id, key: document.activeElement.dataset.focusKey, summary: document.activeElement.tagName === 'SUMMARY' } : null;
+      // 뉴스 설정 sits in this row (W4): a header rebuilt by a background update keeps its focus.
+      const newsSettingsFocus = main.dataset.mode === state.mode && document.activeElement?.id === 'discoveryNewsSettings' && toolbar.contains(document.activeElement);
       toolbar.replaceChildren();
       root.querySelector('#lifePhotoScreenHeading')?.remove();
       root.querySelector(':scope > .haedo-title-band')?.remove();
@@ -2704,8 +2711,8 @@
       // 노트·일정 (2026-11-16 노션 방향): from 1101px the sticky 44px top row is the path and the actions, and the title
       // is the large page title at the top of the body, after that row, so it scrolls away (home.css). The path repeats
       // the menu's current item, so it is not read twice. Up to 1100px the one-row heading stays.
-      if (!postHeading && (state.mode === 'home' || scheduleParts) && wideHeading?.matches) {
-        const path = node('span', section === 'notes' ? '노트' : '일정', 'haedo-heading-path');
+      if (!postHeading && (state.mode === 'home' || scheduleParts || pageHeadModes.has(state.mode)) && wideHeading?.matches) {
+        const path = node('span', ({ notes: '노트', schedule: '일정', records: '자료', news: '뉴스' })[section] || '설정', 'haedo-heading-path');
         path.setAttribute('aria-hidden', 'true');
         toolbar.dataset.pageHead = 'true';
         toolbar.append(path);
@@ -2720,19 +2727,6 @@
       actions.setAttribute('role', 'toolbar'); actions.setAttribute('aria-label', '화면 동작');
       if (scheduleParts) { toolbar.dataset.schedule = state.mode; actions.append(scheduleParts.views, scheduleParts.today, scheduleParts.step); }
       else delete toolbar.dataset.schedule;
-      if (section === 'records') {
-        if (state.mode === 'sources') {
-          const select = iconButton('기록 선택', 'check', guarded(() => {
-            state.selecting = !state.selecting;
-            if (!state.selecting) selectedVersions.clear();
-            render();
-            main.parentNode.querySelector('#lifeSelectionToggle')?.focus({ preventScroll: true });
-          }));
-          select.id = 'lifeSelectionToggle';
-          select.setAttribute('aria-pressed', String(state.selecting));
-          actions.append(select);
-        }
-      }
       if (!focused && (section === 'records' || section === 'schedule' && !planningModes.has(state.mode))) {
         const nav = node('nav', null, 'life-nav life-context-nav');
         nav.setAttribute('aria-label', '기록 보기');
@@ -2746,6 +2740,9 @@
         // Home exposes these actions with labels in its shortcut row.
         if (section === 'records') { nav.append(add); actions.append(nav); }
       }
+      // 뉴스: 뉴스 설정 is this screen's own heading action (W4). The control belongs to DiscoveryUI and is the same
+      // element across rebuilds; an earlier DiscoveryUI without it keeps its control in the tab row.
+      if (state.mode === 'external-discovery') { const control = externalDiscoveryUI?.settingsControl?.(); if (control) actions.append(control); }
       // A plan screen's heading is ‹ + title + its own add control only (2026-11-08 S1); 연간 계획 has none.
       if (!['source', 'find', 'annual-plan'].includes(state.mode)) {
         const find = iconButton('통합 검색', 'search', guarded(() => navigate('find'))); find.id = 'lifeFindOpen'; actions.append(find);
@@ -2802,6 +2799,7 @@
           [...(menu?.querySelectorAll('[data-focus-key]') || [])].find(item => item.dataset.focusKey === menuFocus.key);
         control?.focus({ preventScroll: true });
       }
+      if (newsSettingsFocus) toolbar.querySelector('#discoveryNewsSettings')?.focus({ preventScroll: true });
     }
 
     function destinationRow(label, description, href, glyph) {
@@ -2904,6 +2902,26 @@
       if (blog) group('글 메뉴', [['글 공개·보관', 'edit', 'blog'], ['계정 보관 상태', 'cloud', 'account-blog', 'homeAccountBlog'],
         ['프로필 편집', 'user', 'page', 'homeProfileEdit', { blogContext: true, pageProfileEdit: true }]]);
       else {
+        // 자료 목록's own actions (W4): 기록 선택 and 폴더 관리 moved here from the heading and the folder bar.
+        // After either, and after Esc, focus is on this menu's ⋯; neither leaves it on a control inside the closed menu.
+        if (state.mode === 'sources') {
+          const list = group('목록', []);
+          const select = actionRow('기록 선택', '', 'check', () => {
+            state.selecting = !state.selecting;
+            if (!state.selecting) selectedVersions.clear();
+            menu.open = false;
+            render();
+            toolbar.querySelector('#lifeRecordsMenu > summary')?.focus({ preventScroll: true });
+          });
+          select.id = 'lifeSelectionToggle'; select.dataset.focusKey = 'records:menu:select';
+          select.setAttribute('aria-pressed', String(state.selecting));
+          list.append(select);
+          if (global.HaedoLife.SourceFoldersUI) {
+            const manageFolders = actionRow('폴더 관리', '', 'folder', () => { menu.open = false; sourceFoldersMount?.openManage(); });
+            manageFolders.id = 'lifeFolderManageOpen'; manageFolders.dataset.focusKey = 'records:menu:folders';
+            list.append(manageFolders);
+          }
+        }
         group('모아 보기', [['컬렉션', 'bookmark', 'collection'], ['묶음', 'link', 'activities'], ['선택 자료 페이지', 'user', 'page']]);
         group('활용', [['다시 찾기', 'search', 'discover'], ['회고', 'book', 'reflection'], ['책 만들기', 'book', 'books']]);
         const management = group('가져오기·관리', [
@@ -2926,6 +2944,12 @@
         if (event.key !== 'Escape' || !menu.open) return;
         event.preventDefault(); event.stopPropagation(); menu.open = false; summary.focus({ preventScroll: true });
       });
+      // On a low screen the menu scrolls inside its panel. `data-more` says items remain below, and the panel draws
+      // its end fade while it does (records.css), the same cue as the news tab row.
+      const more = () => { panel.dataset.more = String(panel.scrollTop + panel.clientHeight < panel.scrollHeight - 1); };
+      panel.addEventListener('scroll', more, { passive: true });
+      menu.addEventListener('toggle', () => { if (menu.open) more(); });
+      if (typeof global.ResizeObserver === 'function') new global.ResizeObserver(more).observe(panel);
       return menu;
     }
 
@@ -3390,7 +3414,7 @@
           // 뉴스 목록을 기다리며 전역 이동을 막지 않는다. 다른 화면으로 옮겼으면 열지 않는다.
           Promise.resolve(mainRenderPromise).then(() => {
             if (disposed || token !== navigationGeneration || state.mode !== 'external-discovery') return;
-            const toggle = main.querySelector('#discoveryNewsSettings');
+            const toggle = toolbar.querySelector('#discoveryNewsSettings') || main.querySelector('#discoveryNewsSettings');
             if (toggle && !main.querySelector('#discoveryNewsSettingsPanel')?.checkVisibility?.()) toggle.click();
           }).catch(failure);
         }),
@@ -4158,10 +4182,10 @@
       if (current) control.setAttribute('aria-current', 'true');
       control.setAttribute('aria-label', '발췌를 원문에서 보기: ' + record.text.slice(0, 80) + ' · ' + (source ? sourceLabel(source) : '출처 없음'));
       control.append(markedText(record.text, query, 'records-quote'));
-      card.append(RecordsList.when(document, record.createdAt), control);
+      card.append(control);
       if (record.note) card.append(markedText(record.note, query, 'records-note'));
       card.append(RecordsList.badges(document, ['발췌', source ? sourceLabel(source) : '출처 없음', record.topic || null,
-        index && index < versions.length ? '이전 버전' : null, record.sourceRefs.length > 1 ? '출처 ' + record.sourceRefs.length + '개' : null]));
+        index && index < versions.length ? '이전 버전' : null, record.sourceRefs.length > 1 ? '출처 ' + record.sourceRefs.length + '개' : null], RecordsList.when(document, record.createdAt)));
       return card;
     }
 
@@ -4206,7 +4230,7 @@
         if (hit.versionIndex < hit.versionCount) facts.push('이전 버전');
         if (hit.matchedBy === 'note') facts.push('저장한 문장·메모 일치');
         if (reading && version.id !== state.sourceVersionId) facts.push('이전 버전 읽는 중');
-        item.append(RecordsList.when(document, version.importedAt), control, RecordsList.badges(document, facts));
+        item.append(control, RecordsList.badges(document, facts, RecordsList.when(document, version.importedAt)));
         return item;
       };
       // True while the open version has no row of its own in the list just drawn.
@@ -4333,7 +4357,7 @@
       controls.append(iconButton('선택 모두 해제', 'close', () => { selectedVersions.clear(); update(); selectionSummary.focus(); }));
       const cancelSelection = button('선택 취소', () => {
         selectedVersions.clear(); state.selecting = false; render();
-        toolbar.querySelector('#lifeSelectionToggle')?.focus({ preventScroll: true });
+        toolbar.querySelector('#lifeRecordsMenu > summary')?.focus({ preventScroll: true });
       });
       selectionBar.append(selectionDetails, selectionStatus, controls, cancelSelection);
       function updateSelection(matches) {
@@ -4430,7 +4454,7 @@
             heading.append(choose);
           }
           heading.append(open);
-          card.append(RecordsList.when(document, version.importedAt), heading);
+          card.append(heading);
           if (hit.locator) {
             card.dataset.locatorStart = String(hit.locator.start); card.dataset.locatorEnd = String(hit.locator.end);
             const context = node('p', null, 'life-search-context');
@@ -4440,16 +4464,14 @@
           } else if (!query && !records.length && version.contentText) {
             card.append(node('p', version.contentText.slice(0, 180) + (version.contentText.length > 180 ? '…' : ''), 'life-search-context'));
           }
-          const footer = node('div', null, 'life-feed-footer');
-          // Badges show stored facts only: origin, coverage, exact version and why it matched.
+          // Badges show stored facts only: origin, coverage, exact version and why it matched. The stored date and time end the line.
           const facts = [sourceOrigin(source)];
           if (version.coverage.status !== 'full_text') facts.push(({ partial: '본문 일부', link_only: '본문 미확보', unknown: '범위 미확인' })[version.coverage.status] || '범위 미확인');
           if (hit.versionCount > 1) facts.push('버전 ' + hit.versionIndex + '/' + hit.versionCount);
           if (hit.versionIndex < hit.versionCount) facts.push('이전 버전');
           if (state.sourcesSearch.trim() && hit.matchedBy === 'title') facts.push('제목 일치');
           if (hit.matchedBy === 'note') facts.push('저장한 문장·메모 일치');
-          const badges = RecordsList.badges(document, facts); badges.classList.add('life-meta', 'life-source-meta');
-          footer.append(badges);
+          const badges = RecordsList.badges(document, facts, RecordsList.when(document, version.importedAt)); badges.classList.add('life-meta', 'life-source-meta');
           const details = node('section', null, 'life-result-details');
           details.id = 'lifeResultDetails-' + version.id;
           details.hidden = true;
@@ -4457,14 +4479,58 @@
           details.append(node('p', '버전 ' + hit.versionIndex + '/' + hit.versionCount + (hit.versionIndex === hit.versionCount ? '' : ' · 이전 버전'), 'life-meta'));
           if (state.sourcesSearch.trim() && hit.matchedBy === 'title') details.append(node('p', '제목에서 일치 · 본문에는 일치하는 구절 없음', 'life-meta'));
           details.append(metadata(source, version, true));
-          const info = iconButton('자료 출처 정보 · ' + sourceLabel(source), 'info', () => {}, 'life-result-info');
-          disclosure(info, details);
-          // The row's own actions end it as one group on the right edge.
-          const rowTools = node('div', null, 'records-row-tools'); rowTools.setAttribute('role', 'toolbar'); rowTools.setAttribute('aria-label', '자료 동작 · ' + sourceLabel(source));
-          rowTools.append(info);
-          if (folders) rowTools.append(folders.assignmentControl({ sourceIds: [source.id], buttonLabel: '폴더로 이동 · ' + sourceLabel(source) }));
-          footer.append(rowTools);
-          card.append(footer, details);
+          // The row's own actions are one ⋯ on its right edge (W4, Designer 기본값 5): 자료 출처 정보 and 폴더로 이동.
+          // What either opens appears under the row. After choosing an item, and after Esc, focus is on the row's
+          // title button, never on an item inside the closed menu.
+          const rowTools = node('div', null, 'records-row-tools');
+          const rowMenu = node('details', null, 'life-feature-menu records-row-more');
+          const rowSummary = node('summary', null, 'life-icon-button'); rowSummary.setAttribute('aria-label', '자료 동작 · ' + sourceLabel(source));
+          rowSummary.append(global.HaedoLife.Icons.create('more'));
+          const rowPanel = node('div', null, 'life-feature-menu-panel records-row-menu');
+          const toTitle = () => open.focus({ preventScroll: true });
+          const menuItem = (name, glyph, action, className) => {
+            const item = button(null, () => { rowMenu.open = false; action(); }, 'life-destination life-action-row' + (className ? ' ' + className : ''));
+            item.setAttribute('aria-label', name + ' · ' + sourceLabel(source));
+            const copy = node('span', null, 'life-destination-copy'); copy.append(node('strong', name));
+            item.append(global.HaedoLife.Icons.create(glyph), copy);
+            return item;
+          };
+          const showInfo = shown => { details.hidden = !shown; info.setAttribute('aria-expanded', String(shown)); };
+          const info = menuItem('자료 출처 정보', 'info', () => { showInfo(details.hidden); toTitle(); }, 'life-result-info');
+          info.setAttribute('aria-controls', details.id); info.setAttribute('aria-expanded', 'false');
+          details.addEventListener('keydown', event => {
+            if (event.key !== 'Escape' || details.hidden) return;
+            event.preventDefault(); event.stopPropagation(); showInfo(false); toTitle();
+          });
+          rowPanel.append(info);
+          let assignment = null;
+          if (folders) {
+            // After 이동 the list is redrawn, so this row is gone: focus the same material's title button in the new
+            // list (the folder choice when the material is no longer listed), unless focus has already been placed.
+            const afterMove = () => requestAnimationFrame(() => {
+              if (disposed || state.mode !== 'sources' || state.bundle?.workspaceId !== workspaceId || !list.isConnected) return;
+              const active = document.activeElement;
+              if (active && active !== document.body && active.isConnected && !active.disabled) return;
+              ([...list.querySelectorAll('.life-source-open')].find(control => control.dataset.sourceId === source.id) || main.querySelector('#lifeFolderFilter'))?.focus({ preventScroll: true });
+            });
+            assignment = folders.assignmentControl({ sourceIds: [source.id], buttonLabel: '폴더로 이동 · ' + sourceLabel(source), embedded: true, focusReturn: () => open, onSaved: afterMove });
+            assignment.id = 'lifeFolderMove-' + version.id;
+            const move = menuItem('폴더로 이동', 'folder', () => {
+              assignment.open = !assignment.open;
+              if (assignment.open) assignment.querySelector('select')?.focus({ preventScroll: true }); else toTitle();
+            }, 'records-row-folder');
+            move.setAttribute('aria-controls', assignment.id); move.setAttribute('aria-expanded', 'false');
+            assignment.addEventListener('toggle', () => move.setAttribute('aria-expanded', String(assignment.open)));
+            rowPanel.append(move);
+          }
+          rowMenu.append(rowSummary, rowPanel);
+          rowMenu.addEventListener('keydown', event => {
+            if (event.key !== 'Escape' || !rowMenu.open) return;
+            event.preventDefault(); event.stopPropagation(); rowMenu.open = false; toTitle();
+          });
+          rowTools.append(rowMenu);
+          card.append(badges, rowTools, details);
+          if (assignment) card.append(assignment);
           if (records.length) {
             const notes = node('section', null, 'life-record-notes');
             notes.setAttribute('aria-label', '저장한 문장·메모');
@@ -4497,9 +4563,14 @@
       origin.input.addEventListener('change', () => { state.originFilter = origin.input.value; update(); });
       spacing.input.addEventListener('change', () => { state.ignoreKoreanSpacing = spacing.input.checked; update(); });
       main.append(filters);
+      // The kind tabs and, on their right, the folder choice share one row (W4). 폴더 관리 opens from the 자료 메뉴 (⋯)
+      // into #lifeFolderBar; closing it, or Esc, returns focus to that ⋯.
+      const tabRow = node('div', null, 'records-tab-row'), folderFilter = node('div', null, 'records-folder-filter');
+      tabRow.append(kindTabs, folderFilter);
       if (folders) {
         const folderHost = node('section'); folderHost.id = 'lifeFolderBar'; main.append(folderHost);
-        sourceFoldersMount = folders.mountList(folderHost, { filter: state.folderFilter, onFilter: value => { state.folderFilter = value; update(); } });
+        sourceFoldersMount = folders.mountList(folderHost, { filter: state.folderFilter, onFilter: value => { state.folderFilter = value; update(); }, filterHost: folderFilter,
+          onManageClose: () => toolbar.querySelector('#lifeRecordsMenu > summary')?.focus({ preventScroll: true }) });
         sourceFoldersUpdate = ({ reason } = {}) => {
           if (!list.isConnected) return;
           // Explicit refresh must keep an open move form and its chosen destination.
@@ -4516,7 +4587,7 @@
       }
       main.append(importResult);
       renderReadingResume(main, 'sources');
-      main.append(selectionBar, kindTabs, count, list, more);
+      main.append(selectionBar, tabRow, count, list, more);
       update();
       // 2026-11-07 owner request: no reading column until an original is opened. On wide screens
       // the list itself uses the wider frame (assets/life/records.css); the reader appears beside it on open.

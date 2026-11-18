@@ -2,7 +2,7 @@
  * HTTP. Every device starts signed out. No enable/download/syncNow shortcuts.
  * BASE_URL=http://127.0.0.1:4173 node tests/account-library-browser.cjs */
 'use strict';
-const { openRecordsMenu } = require('./helpers/feature-menus.cjs');
+const { openRecordsMenu, openFolderManage, openRowFolderMove, recordRowMenuItem } = require('./helpers/feature-menus.cjs');
 process.env.BASE_URL ||= 'http://127.0.0.1:4173';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -58,7 +58,7 @@ async function richProfile(page, f) {
   await page.locator('#lifeSourceText').evaluate((el, range) => { if (el.firstChild?.nodeType !== Node.TEXT_NODE) throw Error('Exact raw Text node absent'); el.focus(); const r = document.createRange(); r.setStart(el.firstChild, range.start); r.setEnd(el.firstChild, range.end); const selection = getSelection(); selection.removeAllRanges(); selection.addRange(r); el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true })); }, { start, end });
   await page.locator('#lifeSourceTopic').fill('익명 언어와 독서'); await page.locator('#lifeSourceNote').fill('두 기기에서 보존할 익명 발췌'); await click(page, '#lifeSourceExcerptSave');
   await records(page); const parent = await folder(page, '익명 읽기'), child = await folder(page, '익명 언어', parent.id);
-  const assignment = page.locator('.life-source-card[data-source-id="' + f.source.id + '"] [data-source-folder-assignment]').first(); await assignment.locator(':scope > summary').click(); await assignment.locator('[data-source-folder-destination]').selectOption(child.id); await assignment.locator('[data-source-folder-apply]').click();
+  const assignment = await openRowFolderMove(page.locator('.life-source-card[data-source-id="' + f.source.id + '"]')); await assignment.locator('[data-source-folder-destination]:enabled').waitFor(); await assignment.locator('[data-source-folder-destination]').selectOption(child.id); await assignment.locator('[data-source-folder-apply]').click();
   await waitFor(() => snapshot(page), value => value.sourceFolders.assignments.some(item => item.sourceId === f.source.id && item.folderId === child.id), 'Folder assignment');
   // Explicit fixture: use actual saved-domain models/storage; no wire seeding or
   // manager replacement. All automatic replication remains production code.
@@ -73,7 +73,7 @@ async function richProfile(page, f) {
   return { parent, child, saved };
 }
 async function folder(page, name, parentId = '', id = '') {
-  const details = page.locator('#lifeFolderManage'); if (!await details.evaluate(el => el.open)) await details.locator(':scope > summary').click();
+  await openFolderManage(page); // 2026-11-18 (노션 방향 W4): from the 자료 메뉴 (⋯)
   await page.locator('#lifeFolderEdit').selectOption(id || 'new'); await page.locator('#lifeFolderName').fill(name); await page.locator('#lifeFolderParent').selectOption(parentId);
   const before = (await snapshot(page)).sourceFolders.revision; await click(page, '#lifeFolderSave');
   const saved = await waitFor(() => snapshot(page), value => value.sourceFolders.revision > before, 'Explicit folder save'); const result = saved.sourceFolders.folders.find(item => id ? item.id === id : item.name === name); assert(result); return result;
@@ -89,7 +89,7 @@ async function edit(page, f) {
 }
 async function collectionNote(page, id, note) { await page.evaluate(async ({ id, note }) => { const s = HaedoLife.Shell.storage, value = await s.readCollection(id); value.items[0].note = note; await s.saveCollection(id, value, value.revision); }, { id, note }); }
 async function freshFolderView(page) {
-  await records(page); const before = await snapshot(page), details = page.locator('#lifeFolderManage'); if (!await details.evaluate(el => el.open)) await details.locator(':scope > summary').click();
+  await records(page); const before = await snapshot(page), details = page.locator('#lifeFolderManage'); await openFolderManage(page);
   assert(before.sourceFolders.assignments.length > 0); assert(before.sourceFolders.assignments.every(item => before.bundle.sources.some(source => source.id === item.sourceId)), 'Every real assigned source is available');
   await page.locator('#lifeFolderUnavailable[hidden]').waitFor({ state: 'attached' }); assert.equal(await page.locator('#lifeFolderUnavailable').textContent(), ''); assert.doesNotMatch(await details.innerText(), /이\s*브라우저/);
   const editId = await page.locator('#lifeFolderEdit').inputValue(), saved = before.sourceFolders.folders.find(item => item.id === editId);
@@ -120,8 +120,10 @@ async function missingFolderReferenceFixture(page) {
   exactGraph(await snapshot(page), before); report.folderAvailabilityComponentFixture = observed;
 }
 async function captureThree(page) {
-  await freshFolderView(page); const details = page.locator('#lifeFolderManage'), summary = details.locator(':scope > summary'); if (!await details.evaluate(el => el.open)) await summary.click();
-  await summary.focus(); await summary.press('Space'); assert.equal(await details.evaluate(el => el.open), false); await summary.press('Enter'); assert.equal(await details.evaluate(el => el.open), true);
+  // Keyboard: ⋯ → 폴더 관리 opens the panel; Esc closes it and returns focus to ⋯ (2026-11-18 노션 방향 W4).
+  await freshFolderView(page); const details = page.locator('#lifeFolderManage'), summary = page.locator('#lifeRecordsMenu > summary'); await openFolderManage(page);
+  await page.locator('#lifeFolderEdit').focus(); await page.keyboard.press('Escape'); assert.equal(await details.isHidden(), true); assert.equal(await summary.evaluate(el => document.activeElement === el), true);
+  await summary.press('Enter'); await page.locator('#lifeFolderManageOpen').press('Enter'); assert.equal(await details.isVisible(), true);
   const before = await snapshot(page);
   for (const width of [1440, 820, 390]) {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 }); await page.evaluate(async () => { await document.fonts.ready; scrollTo(0, 0); }); await summary.focus();
@@ -266,6 +268,35 @@ async function main() {
       await edit(b.page, f); await synced(b.page, f.id); await a.page.bringToFront(); await focus(a.page); await waitFor(() => snapshot(a.page), value => value.bundle.sourceVersions.some(v => v.contentText === edited), 'A lifecycle receive of B edit'); await synced(a.page, f.id);
       const final = await snapshot(a.page); assert.equal(final.bundle.sources.length, 1); assert.equal(final.bundle.sourceVersions.length, 2); assert.equal(final.bundle.sourceVersions.find(v => v.id === f.version.id).contentText, raw); assert.equal(final.bundle.sourceVersions.find(v => v.contentText === edited).contentHash, sha(edited));
       assert.deepEqual(final.sourceFolders.assignments, rich.saved.sourceFolders.assignments); assert.deepEqual(final.bundle.records, rich.saved.bundle.records); exactGraph(final, await snapshot(b.page)); await captureThree(a.page); await missingFolderReferenceFixture(a.page);
+    });
+    // 2026-11-18 (노션 방향 W4 검수 MAJOR-1): 폴더 관리 became a panel (no longer <details>), and a row's 자료 출처 정보 ·
+    // 폴더로 이동 open from the row's ⋯. Whatever is open on the list is not redrawn by another device's change, also
+    // when focus is outside the list: the open element and its input stay, and 최신 내용 확인 is offered instead.
+    await check('another device\'s change does not redraw the records list under an open folder panel, row form, row info or row menu', async ({ device }) => {
+      const a = await device('a'); await a.login(); await synced(a.page); const f = await importMarkdown(a.page); await synced(a.page, f.id);
+      const b = await device('b'); await b.login(); await synced(b.page, f.id);
+      const put = (page, name) => page.evaluate(async name => { const storage = HaedoLife.Shell.storage, core = HaedoLife.Core, bundle = await storage.read(await storage.getActive()); const prepared = await core.prepareImport({ origin: 'obsidian', title: name, text: '익명 본문 ' + name, forceSeparate: true }, bundle); const stored = await storage.commitLocal({ operationId: core.id(), workspaceId: bundle.workspaceId, baseRevision: bundle.revision, changes: core.buildImportChanges(bundle, prepared, []) }); if (stored.status !== 'stored') throw Error('anonymous material was not stored'); }, name);
+      const rowSelector = '#lifeSearchResults .life-source-card[data-source-id="' + f.source.id + '"]', row = a.page.locator(rowSelector);
+      const open = {
+        'folder panel': async () => { await openFolderManage(a.page); await a.page.locator('#lifeFolderName').fill('익명 작성 중인 폴더'); return '#lifeFolderManage'; },
+        'row folder form': async () => { const form = await openRowFolderMove(row); await form.locator('[data-source-folder-destination]:enabled').waitFor(); return rowSelector + ' [data-source-folder-assignment]'; },
+        'row info': async () => { await (await recordRowMenuItem(row, '.life-result-info')).click(); await row.locator('.life-result-details').waitFor({ state: 'visible' }); return rowSelector + ' .life-result-details'; },
+        'row menu': async () => { await row.locator('.records-row-more > summary').click(); return rowSelector + ' .records-row-more'; }
+      };
+      for (const [scenario, prepare] of Object.entries(open)) {
+        await a.page.goto(base + '/index.html?section=records&view=sources'); await ready(a.page); await a.page.locator('#lifeFolderFilter:enabled').waitFor(); await synced(a.page, f.id);
+        const selector = await prepare(), listed = await a.page.locator('#lifeSearchResults .life-source-open').count();
+        // Focus leaves the list (as after pressing the page background, or a window switch): nothing in <main> is focused.
+        await a.page.evaluate(selector => { document.activeElement?.blur(); document.querySelector(selector).__kept = true; document.querySelector('#lifeSearchResults').__kept = true; }, selector);
+        assert.equal(await a.page.evaluate(() => document.querySelector('#lifeMain').contains(document.activeElement)), false, scenario + ': focus is outside the list');
+        const name = '익명 다른 기기 자료 · ' + scenario; await put(b.page, name); await synced(b.page, f.id);
+        await a.page.bringToFront(); await focus(a.page); await waitFor(() => snapshot(a.page), value => value.bundle.sources.some(source => source.title === name), scenario + ': A receives the other device\'s material');
+        await a.page.getByRole('button', { name: '최신 내용 확인', exact: true }).waitFor({ state: 'visible' }).catch(error => { throw Error(scenario + ': 최신 내용 확인 is not offered (the list was redrawn instead): ' + error.message.split('\n')[0]); });
+        await a.page.waitForTimeout(600); // a redraw, if one were coming, has happened by now
+        const after = await a.page.evaluate(selector => { const element = document.querySelector(selector); return { element: !!element?.__kept, shown: !!element && element.getClientRects().length > 0 && !element.hidden && (element.tagName !== 'DETAILS' || element.open), list: !!document.querySelector('#lifeSearchResults')?.__kept, listed: document.querySelectorAll('#lifeSearchResults .life-source-open').length, name: document.querySelector('#lifeFolderName')?.value ?? null }; }, selector);
+        assert.deepEqual(after, { element: true, shown: true, list: true, listed, name: scenario === 'folder panel' ? '익명 작성 중인 폴더' : '' }, scenario + ': the open element, its input and the list are the same as before the other device\'s change');
+        await button(a.page, '최신 내용 확인'); await waitFor(() => a.page.locator('#lifeSearchResults .life-source-open').count(), value => value === listed + 1, scenario + ': 최신 내용 확인 lists the new material');
+      }
     });
     await check('automatic offline outbox, lost ACK receipt replay and later source and metadata edits survive reload', async ({ server, device }) => {
       const a = await device('a'); await a.login(); const f = await importMarkdown(a.page); await richProfile(a.page, f); await synced(a.page, f.id); a.expectedFailures = true;

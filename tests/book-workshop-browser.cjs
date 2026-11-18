@@ -3,7 +3,7 @@
  * No source/workbench seeding; storage reads only, except isolated IDB fault injection.
  * BASE_URL, PW_MODULE_PATH (or PLAYWRIGHT_MODULE), CHROMIUM_PATH; BOOK_WORKSHOP_MATCH filters. */
 'use strict';
-const { openRecordsMenu } = require('./helpers/feature-menus.cjs');
+const { openRecordsMenu, toggleRecordSelection } = require('./helpers/feature-menus.cjs');
 process.env.BASE_URL ||= 'http://127.0.0.1:4184';
 if (!process.env.PW_MODULE_PATH && process.env.PLAYWRIGHT_MODULE) process.env.PW_MODULE_PATH = process.env.PLAYWRIGHT_MODULE;
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
@@ -69,7 +69,7 @@ async function importUI(page) {
   return { refs, bundle };
 }
 async function arrangeReflection(page, refs, keys = samples.map(sample => sample.key), failApply = false) {
-  await records(page); await page.locator('#lifeSelectionToggle').click();
+  await records(page); await toggleRecordSelection(page);
   for (const key of keys) { const query = key === 'work' ? '오래 좋아할 조건을 대신' : samples.find(sample => sample.key === key).title; await page.locator('#lifeSearch').fill(query); await page.locator(`.life-source-select[data-version-id="${refs[key].versionId}"]`).click(); }
   const before = await current(page); await page.locator('#lifeArrangeReflection').click(); await page.locator('#wbIncomingSelection').waitFor(); assert.deepEqual((await current(page)).workbench, before.workbench);
   const selected = await page.locator('#wbIncomingSelection input[data-version-id]:checked').evaluateAll(nodes => nodes.map(node => node.dataset.versionId)); assert.deepEqual(new Set(selected), new Set(keys.map(key => refs[key].versionId)));
