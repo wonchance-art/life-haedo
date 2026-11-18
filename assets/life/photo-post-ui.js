@@ -3707,13 +3707,18 @@
           actions.append(iconControl(button("사진 글 목록", list), "back", "사진 글 목록"));
         const shownTitle = doc.title || (doc.photos.length ? "사진 " + doc.photos.length + "장" : "내 글");
         // From 1101px the path follows 뒤로: the menu's current item, then this post. It repeats the menu and
-        // the title under it, so it is not read twice (the same rule as 노트·일정's path, home.css).
-        const path = el("span", null, "photo-read-path"),
-          section = document.querySelector('[data-haedo-navigation] a[data-haedo-section="' + (document.body.dataset.haedoSection || "") + '"]')?.getAttribute("aria-label");
-        path.setAttribute("aria-hidden", "true");
-        if (section) path.append(el("span", section), glyph("forward", 14));
-        path.append(el("span", shownTitle, "photo-read-path-title"));
-        actions.append(path, privacyPill());
+        // the title under it, so it is not read twice (the same rule as 노트·일정's path, home.css). Only the
+        // top-level reading screen has it (its 뒤로 comes from the app heading): a post read inside the older
+        // list, or one that returns to 작성 준비 or 9칸 구성, goes back somewhere the path does not name.
+        if (standalone && !readBackAction) {
+          const path = el("span", null, "photo-read-path"),
+            section = document.querySelector('[data-haedo-navigation] a[data-haedo-section="' + (document.body.dataset.haedoSection || "") + '"]')?.getAttribute("aria-label");
+          path.setAttribute("aria-hidden", "true");
+          if (section) path.append(el("span", section), glyph("forward", 14));
+          path.append(el("span", shownTitle, "photo-read-path-title"));
+          actions.append(path);
+        }
+        actions.append(privacyPill());
         const tools = el("div", null, "photo-read-tools");
         if (doc.archived) tools.append(button("목록에 다시 보이기", () => archive(false)));
         else {

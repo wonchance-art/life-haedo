@@ -158,6 +158,13 @@ async function header(page, width) {
     .map(el => { const r = el.getBoundingClientRect(); return { name: el.getAttribute('aria-label') || el.textContent.trim(), left: r.left, middle: r.top + r.height / 2 }; }));
   assert.deepEqual(row.map(item => item.name), ['노트로 돌아가기', '비공개 · 글 정보', '글 수정', '통합 검색', '더 보기']);
   assert.ok(row.every((item, index) => !index || item.left > row[index - 1].left && Math.abs(item.middle - row[0].middle) <= 1), 'one line, left to right: ' + JSON.stringify(row));
+  // The path after 뒤로 (review m5): shown from 1101px on the top-level reading screen, the menu's current item
+  // and this post's title, and not read twice by a screen reader.
+  const pathLine = page.locator('.photo-read-actions > .photo-read-path');
+  assert.equal(await pathLine.count(), 1);
+  assert.equal(await pathLine.isVisible(), width >= 1101, 'the path shows from 1101px only');
+  assert.deepEqual(await pathLine.evaluate(node => ({ hidden: node.getAttribute('aria-hidden'), parts: [...node.querySelectorAll('span')].map(part => part.textContent), afterBack: node.previousElementSibling?.getAttribute('aria-label') })),
+    { hidden: 'true', parts: ['노트', '다시 읽고 이어 쓰는 합성 기록'], afterBack: '노트로 돌아가기' });
   // 사진 포함 백업 moved into ⋯: first item, 삭제 last. Esc closes the menu and returns focus to ⋯.
   const backup = page.getByRole('button', { name: '사진 포함 백업', exact: true });
   assert.equal(await backup.isVisible(), false, '사진 포함 백업 is not a separate control of the row');
@@ -370,6 +377,17 @@ async function reader(page, width) {
   await capture(page, 'editor-link-' + width);
   await page.getByRole('button', { name: '닫기', exact: true }).click();
   await page.locator('#lifeMain[data-mode="home"]').waitFor();
+  // Review m5: the path (menu item › title) belongs to the top-level reading screen only. A post opened from
+  // the older list inside 자료 › 선택 자료 페이지 goes back to that list (사진 글 목록), so it shows no path.
+  await page.goto(base + '/index.html?section=records&view=page'); await ready(page);
+  const compatibility = page.locator('.wb-page-compatibility'); await compatibility.waitFor({ state: 'attached' });
+  if (!await compatibility.evaluate(node => node.open)) await compatibility.locator(':scope > summary').click();
+  await page.locator('.photo-entry').first().click();
+  await page.locator('.photo-article').waitFor(); await paint(page);
+  assert.equal(await page.locator('.photo-read-heading').textContent(), '링크가 있는 합성 글');
+  const listRow = await page.locator('.photo-read-actions').evaluate(bar => ({ first: bar.querySelector('button')?.getAttribute('aria-label'), paths: bar.querySelectorAll('.photo-read-path').length }));
+  assert.deepEqual(listRow, { first: '사진 글 목록', paths: 0 }, 'a post read inside the older list has its list return and no path');
+  await capture(page, 'reader-from-list-' + width);
   report.checks.push(width + ': a link inside a post is underlined at ' + read.contrast + ':1 (reader) and ' + edit.contrast + ':1 (editor)');
 }
 async function sourceStatus(page, width) {
