@@ -19,7 +19,7 @@
 .p-icon-button { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; min-width: 44px; min-height: 44px; padding: 12px; border: 0; border-radius: 50%; background: transparent; color: var(--ink-soft); }
 @media (hover: hover) and (pointer: fine) { .p-icon-button:hover { background: var(--paper-2); color: var(--ink); } }
 .p-text-link { display: inline-flex; align-items: center; min-width: 44px; min-height: 44px; max-width: 100%; padding: 8px 0; border: 0; background: transparent; color: var(--ink-soft); font-size: var(--haedo-text-control); line-height: 1.6; text-decoration: underline; text-underline-offset: 4px; overflow-wrap: anywhere; }
-.p-text-link:hover { color: var(--color-primary); }
+.p-text-link:hover { color: var(--ink); text-decoration-color: currentColor; }
 .p-muted,.p-account,.p-message { font-size: var(--haedo-text-meta); line-height: 1.75; color: var(--ink-soft); overflow-wrap: anywhere; }
 .p-message:empty { display: none; }
 .p-message.error,.p-message[role=alert]:not(:empty) { color: var(--color-error); }
@@ -41,7 +41,7 @@
 .p-timeline-recovery details { margin-top: 8px; }
 .document-row { display: flex; flex-direction: column; gap: 12px; padding: 28px 0; border-bottom: 1px solid var(--line); min-width: 0; }
 .document-title { display: inline-flex; align-items: center; min-height: 44px; color: var(--ink); font-size: var(--haedo-text-control); font-weight: var(--haedo-weight-semibold, 600); line-height: 1.65; text-decoration: none; word-break: keep-all; overflow-wrap: anywhere; }
-.document-title:hover { color: var(--color-primary); }
+.document-title:hover { color: var(--ink); text-decoration: underline; text-decoration-color: var(--field-line, #8a8984); text-underline-offset: 4px; }
 .document-row p { margin-top: 8px; font-size: var(--haedo-text-badge); line-height: 1.75; color: var(--ink-soft); }
 .document-links { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-left: auto; }
 .document-links .haedo-icon-button { color: var(--ink-soft); }
@@ -54,7 +54,7 @@
 .goal-copy,.habit-copy { min-width: 0; min-height: 44px; padding: 0; background: transparent; border: 0; color: var(--ink); text-align: left; }
 .goal-copy strong,.habit-copy strong { display: block; font-size: var(--haedo-text-control); line-height: 1.65; font-weight: var(--haedo-weight-semibold, 600); }
 .goal-copy small,.habit-copy small { display: block; margin-top: 8px; font-size: var(--haedo-text-badge); line-height: 1.75; color: var(--ink-soft); }
-.goal-copy:hover strong,.habit-copy:hover strong { color: var(--color-primary); }
+.goal-copy:hover strong,.habit-copy:hover strong { color: var(--ink); text-decoration: underline; text-decoration-color: var(--field-line, #8a8984); text-underline-offset: 4px; }
 .goal-progress { display: flex; align-items: center; gap: 16px; grid-column: 1; max-width: 240px; color: var(--ink-soft); font-size: var(--haedo-text-badge); font-variant-numeric: tabular-nums; }
 .goal-progress progress { width: 100%; height: 4px; appearance: none; border: 0; background: var(--line); border-radius: 2px; overflow: hidden; }
 .goal-progress progress::-webkit-progress-bar { background: var(--line); }

@@ -43,7 +43,7 @@ body.haedo-timeline { padding-left: var(--haedo-nav-width, 72px); }
 .haedo-timeline .hero-dots { justify-content: flex-start; gap: 0; }
 .haedo-timeline .hero-dots button { position: relative; width: 44px; height: 44px; border-radius: 50%; background: transparent; }
 .haedo-timeline .hero-dots button::after { content: ''; position: absolute; top: 19px; left: 19px; width: 6px; height: 6px; border-radius: 50%; background: var(--haedo-muted); }
-.haedo-timeline .hero-dots button.on::after { background: var(--haedo-accent); width: 16px; left: 14px; border-radius: 4px; }
+.haedo-timeline .hero-dots button.on::after { background: var(--haedo-ink); width: 16px; left: 14px; border-radius: 4px; }
 .haedo-timeline .hero-dots button:hover { background: var(--haedo-soft); }
 .haedo-timeline .head-right .stat-cards { display: grid; grid-template-columns: 1fr 1fr; width: 100%; padding-top: 16px; border-top: 1px solid var(--haedo-line); gap: 16px; }
 .haedo-timeline .head-right .stat { min-width: 0; padding: 0; border: 0; background: transparent; }
@@ -55,14 +55,14 @@ body.haedo-timeline { padding-left: var(--haedo-nav-width, 72px); }
 /* Icon controls reserve the same 44px area in every view. The selected time range stays explicit. */
 .haedo-timeline .workspace-toolbar { gap: 12px; margin: 0 0 16px; padding-bottom: 12px; border-bottom: 1px solid var(--haedo-line); }
 .haedo-timeline .view-switch { padding: 0; gap: 0; }
-.haedo-timeline .view-switch button { display: inline-flex; width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 12px; border: 0; border-radius: 50%; color: var(--haedo-muted); }
-.haedo-timeline .view-switch button.on { color: var(--haedo-accent); background: var(--haedo-soft); }
+.haedo-timeline .view-switch button { display: inline-flex; width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 12px; border: 0; border-radius: var(--haedo-control-radius, 6px); color: var(--haedo-muted); }
+.haedo-timeline .view-switch button.on { color: var(--haedo-ink); background: var(--haedo-selected); box-shadow: inset 0 0 0 1.5px var(--haedo-ink); }
 .haedo-timeline .tool-actions, .haedo-timeline .workspace-actions, .haedo-timeline .edit-tools { gap: 0; }
 .haedo-timeline .edit-tools { padding-right: 8px; margin-right: 8px; border-color: var(--haedo-line); }
-.haedo-timeline .tool-button { width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 12px; border-radius: 50%; color: var(--haedo-muted); background: transparent; }
+.haedo-timeline .tool-button { width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 12px; border-radius: var(--haedo-control-radius, 6px); color: var(--haedo-muted); background: transparent; }
 .haedo-timeline .ui-icon { width: 20px; height: 20px; stroke-width: 2; }
 .haedo-timeline :is(.tool-button, .view-switch button):hover:not(:disabled), .haedo-timeline .tool-select summary:hover { background: var(--haedo-soft); color: var(--haedo-ink); }
-.haedo-timeline :is(.tool-button.on, #btnMap.on, #btnGrid.on) { color: var(--haedo-accent); background: var(--haedo-soft); }
+.haedo-timeline :is(.tool-button.on, #btnMap.on, #btnGrid.on) { color: var(--haedo-ink); background: var(--haedo-selected); box-shadow: inset 0 0 0 1.5px var(--haedo-ink); }
 .haedo-timeline :is(#btnMap, #btnGrid, #btnSearch) { color: var(--haedo-muted); }
 .haedo-timeline #btnAdd { background: var(--haedo-ink); color: var(--haedo-paper); }
 .haedo-timeline #btnAdd:hover { background: #343439; }
@@ -75,7 +75,7 @@ body.haedo-timeline { padding-left: var(--haedo-nav-width, 72px); }
 .haedo-timeline .tool-popover { color: var(--haedo-ink); border-color: var(--haedo-line); background: var(--haedo-paper); box-shadow: none; }
 .haedo-timeline :is(.lay-chip, .bar-button, .trip-btn, .guide-link) { min-height: 44px; min-width: 44px; font-size: 14px; color: var(--haedo-muted); background: transparent; letter-spacing: 0; opacity: 1; transform: none; }
 .haedo-timeline :is(.lay-chip, .bar-button, .trip-btn, .guide-link):hover { color: var(--haedo-ink); background: var(--haedo-soft); transform: none; }
-.haedo-timeline :is(.lay-chip.on, .tool-popover .lay-chip.on) { background: var(--haedo-soft); color: var(--haedo-accent); }
+.haedo-timeline :is(.lay-chip.on, .tool-popover .lay-chip.on) { background: var(--haedo-selected); color: var(--haedo-ink); font-weight: var(--haedo-weight-semibold, 600); }
 .haedo-timeline .tool-popover #btnToday { border-color: var(--haedo-line); }
 
 /* Preserve graph palette and coordinates. Only the surrounding paper loses its decorative frame. */
@@ -212,3 +212,8 @@ body.haedo-timeline { padding-left: var(--haedo-nav-width, 72px); }
 /* Shared neutral browser surfaces; plot paints and user-selected colors remain untouched. */
 .haedo-timeline :is(.pop-ed,.ctx,.search-panel,.timeline-summary-panel) :focus-visible { outline: 3px solid var(--haedo-focus, #3156d3); outline-offset: 3px; }
 .haedo-timeline :is(input,textarea)::placeholder { color: var(--haedo-muted); opacity: 1; }
+/* W5 (2026-11-18): the pressed view, tool and scale controls show the selected surface with ink and a ring or 600 (the
+ * contract's second cue, not teal). In forced colours the surface and ring are dropped, so a Highlight outline says it. */
+@media (forced-colors: active) {
+  .haedo-timeline :is(.view-switch button.on, .tool-button.on, #btnMap.on, #btnGrid.on, .lay-chip.on) { outline: 2px solid Highlight; outline-offset: -2px; }
+}

@@ -293,8 +293,9 @@
     // 노트·일정, and the 자료 list·뉴스·설정 (W4), from 1101px keep their large title after the toolbar (renderHeader);
     // the screen's title is found in either.
     const wideHeading = global.matchMedia?.('(min-width: 1101px)') || null;
-    // W5 (2026-11-18): 자료's own screens (주제·컬렉션·가져오기·묶음) take the same wide heading as 자료.
-    const pageHeadModes = new Set(['sources', 'external-discovery', 'manage', 'topics', 'collection', 'import', 'activities']);
+    // W5 (2026-11-18): 자료's own list and work screens (주제·컬렉션·가져오기·묶음·다시 찾기·회고) take the same wide heading
+    // as 자료. Focused editors (자료 작성, 선택 자료 페이지, 책 — its list shares the mode with its editor) keep one row.
+    const pageHeadModes = new Set(['sources', 'external-discovery', 'manage', 'topics', 'collection', 'import', 'activities', 'discover', 'reflection']);
     const pageHeading = () => toolbar.querySelector('h1') || root?.querySelector(':scope > .haedo-title-band h1') || null;
     const pageHeadingWidth = () => { if (!disposed && state.bundle && (state.mode === 'home' || calendarModes.has(state.mode) || pageHeadModes.has(state.mode))) renderHeader(); };
     const planningNavigation = node('div', null, 'life-planning-navigation');
