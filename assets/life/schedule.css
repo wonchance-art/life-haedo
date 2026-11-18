@@ -80,6 +80,13 @@ body.haedo-shell:has(#lifeMain:is([data-mode=home],[data-mode=tools],[data-mode=
   .schedule-layout.schedule-week { grid-template-columns: minmax(0, 1fr) 333px; }
   .schedule-aside { align-self: stretch; padding-left: 24px; border-left: 1px solid var(--haedo-line); }
 }
+/* M from 1101 to 1279px (an iPad on its side next to the 240px menu; 2026-11-18, W2 review m-3): beside the 305px
+ * column a cell was 58–70px wide and its tags showed one or two characters (a plan 1 of 10 at 1101–1200px, 2 to
+ * 1279px). There M's side column goes under the calendar, as up to 1100px; the other units keep it beside. */
+@media (min-width: 1101px) and (max-width: 1279px) {
+  .schedule-layout.schedule-month { grid-template-columns: minmax(0, 1fr); row-gap: 8px; }
+  .schedule-month > .schedule-aside { align-self: start; max-width: 560px; padding-left: 0; border-left: 0; }
+}
 .schedule-side > .schedule-entries { margin-top: 0; }
 .schedule-side-line { margin: 0; }
 /* Y·Q's one 습관 link: a 44px target like the plan link line's links (home.css), the text at the line's start. */

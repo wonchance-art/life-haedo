@@ -346,7 +346,7 @@ async function main() {
       await page.goto(base + '/index.html'); await ready(page); await seed(page);
       const units = [['tools', '?section=schedule&view=tools'], ['quarter', '?section=schedule&view=quarter&date=2026-11-03'], ['month', '?section=schedule&view=month&date=2026-11-03'],
         ['week', '?section=schedule&view=week&date=2026-11-03'], ['day', '?section=schedule&view=day&date=2026-11-05']];
-      for (const [width, height] of [[1440, 960], [1100, 900], [820, 1180], [390, 844], [320, 640]]) {
+      for (const [width, height] of [[1440, 960], [1101, 900], [1100, 900], [820, 1180], [390, 844], [320, 640]]) {
         await page.setViewportSize({ width, height });
         for (const [unit, query] of units) {
           await page.goto(base + '/index.html' + query); await ready(page); await shown(page, unit);
@@ -367,13 +367,53 @@ async function main() {
           assert.equal(frame.filterFirst, true, scene + ': the 거르기 above the body');
           assert.equal(frame.filterShown, width > 760, scene + ': shown from 761px (the phone keeps its calendar without it)');
           assert.deepEqual(frame.sides, ['plans', 'habits', 'goals'], scene + ': 예정 → 습관·행복도 → 목표·계획');
-          assert.equal(width > 1100 ? frame.beside : frame.under, true, scene + (width > 1100 ? ': beside the body' : ': under the body'));
+          // Rule change 2026-11-18 (W2 review m-3): M alone keeps the column under its calendar up to 1279px (below).
+          const beside = width > 1100 && !(unit === 'month' && width < 1280);
+          assert.equal(beside ? frame.beside : frame.under, true, scene + (beside ? ': beside the body' : ': under the body'));
           assert.equal(frame.tables, 0, scene + ': no empty table');
           assert.equal(frame.overflow, 0, scene + ': no horizontal overflow');
           if (width === 1440 || width === 390 || width === 820 || width === 320) {
             const file = 'schedule-' + unit + '-' + width + '.png'; await page.screenshot({ path: path.join(output, file) }); report.screenshots.push(file);
           }
         }
+      }
+      // 2026-11-18 (W2 review m-3): beside the 305px column M's cells were 58–70px wide between 1101 and 1279px and their
+      // tags showed one or two characters (on 8c3c54f at 1101: a title 2 of 12, a plan 1 of 10). There the column goes
+      // under the calendar, as up to 1100px. A tag shows at least three characters or its whole text; the cell keeps its
+      // 104px, the 1px grid and its name (dayLabel).
+      for (const [width, under] of [[1101, true], [1279, true], [1280, false], [1440, false], [820, true]]) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(base + '/index.html?section=schedule&view=month&date=2026-11-03'); await ready(page); await shown(page, 'month');
+        await page.waitForFunction(() => [...document.querySelectorAll('#lifeSchedule .schedule-entries')].every(slot => slot.getAttribute('aria-busy') === 'false'));
+        const month = await page.evaluate(() => {
+          const D = HaedoLife.ScheduleData, box = node => node.getBoundingClientRect();
+          const primary = box(document.querySelector('#lifeSchedule .schedule-primary')), aside = document.querySelector('#lifeSchedule .schedule-aside');
+          // The characters of a tag that are drawn whole inside it.
+          const shownOf = node => {
+            const text = (node.matches('.schedule-cell-plan') ? node.querySelector('span') : node).firstChild, holder = text.parentElement, style = getComputedStyle(holder);
+            const right = box(holder).right - parseFloat(style.paddingRight) - parseFloat(style.borderRightWidth), range = document.createRange();
+            let count = 0;
+            for (let i = 0; i < text.length; i++) { range.setStart(text, i); range.setEnd(text, i + 1); if (range.getBoundingClientRect().right > right + 0.5) break; count = i + 1; }
+            return { kind: node.className, shown: count, length: text.length };
+          };
+          const cells = [...document.querySelectorAll('#lifeSchedule .schedule-day-cell')];
+          return { under: box(aside).top >= primary.bottom - 1, beside: box(aside).left >= primary.right - 1, aside: Math.round(box(aside).width), line: getComputedStyle(aside).borderLeftWidth,
+            tags: [...document.querySelectorAll('#lifeSchedule :is(.schedule-cell-title, .schedule-cell-plan)')].map(shownOf),
+            low: cells.filter(cell => box(cell).height < 104).length, grid: [...new Set(cells.map(cell => getComputedStyle(cell).borderRightWidth + ' ' + getComputedStyle(cell).borderBottomWidth))],
+            unnamed: cells.filter(cell => !cell.getAttribute('aria-label').startsWith(D.dayTitle(cell.dataset.scheduleGo.slice(4)))).length,
+            sides: [...aside.querySelectorAll(':scope > [data-side]')].map(node => node.dataset.side), overflow: document.documentElement.scrollWidth - innerWidth };
+        });
+        const scene = 'M ' + width;
+        assert.equal(under ? month.under : month.beside, true, scene + (under ? ': the side column under the calendar' : ': the side column beside the calendar'));
+        // Beside: the 280px column with its 24px and 1px line. Under: no line, 560px at most.
+        if (under) assert.ok(month.aside <= 560 && month.line === '0px', scene + ': the column under is 560px at most, without the line (' + month.aside + ', ' + month.line + ')');
+        else assert.deepEqual([month.aside, month.line], [305, '1px'], scene + ': the 280px column, its 24px and the 1px line');
+        assert.ok(month.tags.length >= 3, scene + ': the fixture has tags');
+        assert.deepEqual(month.tags.filter(tag => tag.shown < Math.min(3, tag.length)), [], scene + ': no tag is cut to one or two characters');
+        assert.deepEqual([month.low, month.grid, month.unnamed], [0, ['1px 1px'], 0], scene + ': 104px cells, the 1px grid and each cell named by its day');
+        assert.deepEqual(month.sides, ['plans', 'habits', 'goals'], scene);
+        assert.equal(month.overflow, 0, scene + ': no horizontal overflow');
+        if (width === 1101 || width === 1279 || width === 1280) { const file = 'schedule-month-' + width + '.png'; await page.screenshot({ path: path.join(output, file) }); report.screenshots.push(file); }
       }
       await page.setViewportSize({ width: 1440, height: 960 });
       // Each part holds what fits its period.
