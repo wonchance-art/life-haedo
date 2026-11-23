@@ -855,14 +855,37 @@ async function main() {
       assert.equal(await rest(), 900, 'a script scroll in the same task as a height change');
       await page.waitForTimeout(1200); assert.equal(await rest(), 900, 'and it stays there');
     }, 1440);
+    // 2026-11-23 (hbrev MINOR-1): a reload right after scrolling 설정 at 1440 opens the item read. The deferred hash of
+    // 2d4cf2f was written 0.2s after the scrolling rested; Chromium takes the address a reload opens before beforeunload,
+    // so a reload 10 or 120ms after the wheel opened 설정 without a hash, at the top (3 of 3), where 2930ae5 opened
+    // #settings-news at its item. The item is now written as soon as the budget has room.
+    await check('history: a reload right after scrolling 설정 opens the item that was read', async ({ page }) => {
+      await page.setViewportSize({ width: 1440, height: 700 });
+      const rest = () => page.evaluate(() => new Promise(resolve => { let last = scrollY, same = 0; const tick = () => { if (scrollY === last) same += 1; else { last = scrollY; same = 0; } if (same >= 30) resolve(Math.round(last)); else requestAnimationFrame(tick); }; requestAnimationFrame(tick); }));
+      const current = () => page.evaluate(() => document.querySelector('.settings-index-link[aria-current]')?.dataset.settingsItem || null);
+      for (const delay of [10, 120]) {
+        await page.goto('about:blank'); await page.goto(base + '/index.html?section=manage'); await ready(page); await mode(page, 'manage');
+        await page.waitForTimeout(1200);
+        // Two frames after the wheel: the page has moved and the current item is marked (the spy runs in a frame).
+        await page.mouse.move(900, 350); await page.mouse.wheel(0, 700); await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        const read = await current();
+        assert.ok(read && read !== 'account', 'the wheel took 설정 past its first item (' + read + ')');
+        await page.waitForTimeout(delay);
+        await page.evaluate(() => location.reload()); await page.waitForLoadState('load'); await ready(page); await mode(page, 'manage'); await rest();
+        assert.equal(new URL(page.url()).hash, '#settings-' + read, 'a reload ' + delay + 'ms after the wheel keeps the item in the address');
+        await page.waitForFunction(item => document.querySelector('.settings-index-link[aria-current]')?.dataset.settingsItem === item, read);
+        assert.ok(await page.evaluate(() => scrollY) > 0, 'and opens at that item, not at the top');
+      }
+    }, 1440);
     // 2026-11-23 (history review MAJOR-A, MINOR-B 2): every history write of the page counts against one budget. 설정 at
     // 1440 wrote its current item into the hash as it was scrolled and its position after each rest: 98–134 writes in 30s
     // of reading in short bursts. WebKit (Safari, iPad Chrome) throws a SecurityError past 100 writes in 30s; this check
     // throws as it does, and then 노트 from the menu did not open and the browser's back left the app. The writes that
-    // can wait stay within 60 in 30s and leave a screen change its room.
+    // can wait stay within 40 in 30s and leave screen changes their room (one costs 1–4 writes; hbrev MINOR-3). The
+    // address names the item marked current, once the budget has room for it.
     // Real time, no clock: the limit is a 30s window of real writes, and the app's writes follow its own timers and frames
     // (page.clock replaces requestAnimationFrame with a timer, which changed the app's timing in R1).
-    await check('history: 30s of reading 설정 in short bursts stays within 60 history writes and the menu still opens 노트', async ({ page, context }) => {
+    await check('history: 30s of reading 설정 in short bursts stays within 40 history writes and the menu still opens 노트', async ({ page, context }) => {
       await context.addInitScript(() => {
         // Times of the writes made; a refused one is kept as its negative time.
         const writes = window.__historyWrites = [];
@@ -896,9 +919,13 @@ async function main() {
         for (const at of made) most = Math.max(most, made.filter(other => other >= at && other - at < 30000).length);
         return { most, refused: writes.length - made.length, hash: location.hash, key: history.state?.haedo?.key, length: history.length };
       }, start);
-      assert.match(run.hash, /^#settings-[a-z]+$/, 'the address follows the item read');
       assert.equal(run.key, start.key, 'the same entry'); assert.equal(run.length, start.length, 'no entry added');
-      assert.equal(run.refused, 0, 'no write refused'); assert.ok(run.most <= 60, 'at most 60 history writes in 30s (' + run.most + ')');
+      assert.equal(run.refused, 0, 'no write refused'); assert.ok(run.most <= 40, 'at most 40 history writes in 30s (' + run.most + ')');
+      // The address names the item marked current. With the budget full, the item waits until the oldest of the last
+      // 40 writes is 30s old (then the 0.5s gap and a frame); that is the longest it may wait here.
+      const free = await page.evaluate(() => { const now = performance.now(), recent = window.__historyWrites.filter(at => at >= 0 && now - at < 30000); return recent.length >= 40 ? Math.ceil(recent[recent.length - 40] + 30000 - now) : 0; });
+      await page.waitForFunction(() => { const item = document.querySelector('.settings-index-link[aria-current]')?.dataset.settingsItem; return !!item && location.hash === '#settings-' + item; }, null, { timeout: free + 2000 })
+        .catch(async () => assert.fail('the address names the item marked current: ' + JSON.stringify(await page.evaluate(() => ({ hash: location.hash, current: document.querySelector('.settings-index-link[aria-current]')?.dataset.settingsItem })))));
       // The menu opens 노트 at once, and the browser's back comes back to 설정 in the app.
       await nav(page, 'home'); await mode(page, 'home'); await homeLoaded(page);
       assert.equal(new URL(page.url()).searchParams.get('section'), 'notes');

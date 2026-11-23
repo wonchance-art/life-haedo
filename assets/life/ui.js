@@ -2203,16 +2203,19 @@
     function syncScrollRestoration(mode = state.mode) {
       try { global.history.scrollRestoration = appRestoresPosition(mode) ? 'manual' : 'auto'; } catch (_) { /* The app's own restore still runs. */ }
     }
-    // Every history write of this page goes through historyWrite, so the writes that can wait share one budget with
+    // The app's history writes on this page go through historyWrite, so the writes that can wait share one budget with
     // those that cannot (2026-11-23 review MAJOR-A). WebKit (Safari, iPad Chrome) throws a SecurityError past 100
     // pushState/replaceState calls in 30s. 설정 at 1440 wrote its current item into the hash as it was scrolled and its
-    // position after each rest, 98–134 writes in 30s together; past WebKit's limit 노트 from the menu did not open and
+    // position after each rest, 98–139 writes in 30s together; past WebKit's limit 노트 from the menu did not open and
     // Back left the app. The writes that can wait (a screen's position, an original's reading line, 설정's item in the
-    // hash) are made only with room: 0.5s after the last write of any kind and fewer than 60 writes in the last 30s, so
-    // they never take the page past 60. A screen change (pushState) and the writes that go with it are never held back;
-    // they count, so what waits leaves them their room.
+    // hash) are made only with room: 0.5s after the last write of any kind and fewer than 40 writes in the last 30s, so
+    // they never take the page past 40. A screen change (pushState) and the writes that go with it are never held back;
+    // they count, and one change costs 1–4 writes (push, the entry left, a waiting item, the screen's own replace), so
+    // 15–60 changes in the same 30s still fit under WebKit's 100.
+    // The one write outside it: platform-auth.js scrubCallback replaces the address once, before the app starts, to
+    // take OAuth values out of it.
     const historyStamps = [];
-    const HISTORY_WINDOW = 30000, HISTORY_ROOM = 60, HISTORY_GAP = 500;
+    const HISTORY_WINDOW = 30000, HISTORY_ROOM = 40, HISTORY_GAP = 500;
     function historyRecent() {
       const now = global.performance.now();
       while (historyStamps.length && now - historyStamps[0] >= HISTORY_WINDOW) historyStamps.shift();
@@ -2230,15 +2233,28 @@
       const full = count >= HISTORY_ROOM ? historyStamps[count - HISTORY_ROOM] + HISTORY_WINDOW - now : 0;
       return Math.max(0, Math.ceil(spacing), Math.ceil(full));
     }
-    // 설정's current item for the address (settings-ui writeHash), with the entry it was asked for. An item chosen in
-    // the index is written at once (unless the budget is full); one followed while scrolling waits with the position
-    // and goes into the same write. A screen change writes a waiting item first (flushSettingsHash): the entry left
-    // keeps the item, as its sub-screens do.
-    let settingsHashWaiting = null;
+    // 설정's current item for the address (settings-ui writeHash), with the entry it was asked for. It goes before the
+    // position in the budget: written as soon as there is room (an item chosen in the index without the 0.5s gap; one
+    // followed while scrolling at once when 0.5s have passed), not after the scrolling rests, so a reload right after
+    // scrolling opens the item read (review hbrev MINOR-1: the address a reload opens is taken before beforeunload).
+    // Without room it waits for it (writeSettingsHash), and a position write made first carries it. A screen change,
+    // a hidden tab and the page's unload write a waiting item at once (flushSettingsHash): the entry left keeps the
+    // item, as its sub-screens do.
+    let settingsHashWaiting = null, settingsHashTimer = 0;
     function settingsHash(hash, { now = false } = {}) {
       settingsHashWaiting = { hash, key: historyKey };
-      if (now && !historyRoom({ gap: false })) flushSettingsHash();
-      else positionScrolled();
+      if (now && !historyRoom({ gap: false })) { flushSettingsHash(); return; }
+      writeSettingsHash();
+    }
+    function writeSettingsHash() {
+      if (settingsHashTimer) global.clearTimeout(settingsHashTimer);
+      settingsHashTimer = 0;
+      if (disposed || !settingsHashWaiting) return;
+      if (state.mode !== 'manage') { settingsHashWaiting = null; return; }
+      const wait = historyRoom();
+      if (wait > 0) { settingsHashTimer = global.setTimeout(writeSettingsHash, wait); return; }
+      if (state.busy || historyWait || historyPending || navigationRender !== null) { settingsHashTimer = global.setTimeout(writeSettingsHash, 200); return; }
+      flushSettingsHash();
     }
     // The waiting item, if the entry shown is still the one it was asked for.
     function takeSettingsHash() {
@@ -7071,7 +7087,7 @@
     };
     visibility = () => {
       if (!document.hidden) return;
-      recordReaderHistory();
+      recordReaderHistory(); flushSettingsHash();
       if (dirty()) persistStage().catch(failure);
       if (workbench?.dirty()) workbench.checkpoint().catch(failure);
       if (publicCoverUI?.dirty()) publicCoverUI.flush().catch(failure);
@@ -7336,7 +7352,7 @@
       cleanup(() => unifiedSearch?.dispose());
       cleanup(() => unbindNavigation?.());
       cleanup(() => global.removeEventListener('popstate', popstate));
-      cleanup(() => { global.removeEventListener('scroll', positionScrolled); if (positionTimer) global.clearTimeout(positionTimer); positionTimer = 0; positionHold?.(); });
+      cleanup(() => { global.removeEventListener('scroll', positionScrolled); if (positionTimer) global.clearTimeout(positionTimer); positionTimer = 0; if (settingsHashTimer) global.clearTimeout(settingsHashTimer); settingsHashTimer = 0; positionHold?.(); });
       cleanup(() => wideHeading?.removeEventListener?.('change', pageHeadingWidth));
       cleanup(() => document.removeEventListener('pointerdown', closeFeatureMenusOutside));
       cleanup(() => document.removeEventListener('focusin', closeFeatureMenusOnFocus));
