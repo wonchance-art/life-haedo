@@ -528,7 +528,8 @@ async function main() {
     await check('a phone\'s 일정 title is one line beside 오늘 ‹ › at 320–390; D shows its weekday short to 374px and is named by the whole date', async ({ page }) => {
       await page.goto(base + '/index.html'); await ready(page);
       // [unit, date, title, the short title shown to 374px]
-      const cases = [['day', '2026-11-03', '11월 3일 화요일', '11월 3일 (화)'], ['day', '2026-12-25', '12월 25일 금요일', '12월 25일 (금)'], ['week', '2026-11-03', '11.2 – 11.8'],
+      // 10월 30일 (금) is this year's widest D short title (6.24em, W5 re-review MAJOR-1): at a 24px floor it took two lines.
+      const cases = [['day', '2026-11-03', '11월 3일 화요일', '11월 3일 (화)'], ['day', '2026-12-25', '12월 25일 금요일', '12월 25일 (금)'], ['day', '2026-10-30', '10월 30일 금요일', '10월 30일 (금)'], ['week', '2026-11-03', '11.2 – 11.8'],
         ['week', '2026-12-23', '12.21 – 12.27'], ['month', '2026-11-03', '11월'], ['quarter', '2026-11-03', '2026년 4분기'], ['tools', '2026-11-03', '2026년']];
       for (const width of [320, 350, 351, 360, 374, 375, 390]) {
         await page.setViewportSize({ width, height: 640 });
@@ -545,10 +546,40 @@ async function main() {
           assert.equal(head.seen, short && width <= 374 ? short : title, scene + ': the title shown');
           assert.equal(head.lines, 1, scene + ': one line (' + JSON.stringify(head) + ')');
           assert.deepEqual([head.inside, head.row, head.overflow], [true, true, 0], scene + ': whole, on the row of 오늘 ‹ ›, no horizontal overflow');
-          assert.ok(head.size >= 24 && head.size <= 28 && (width <= 350 ? head.size < 28 : head.size === 28), scene + ': 28px from 351px, smaller to 350px, never under 24px (W5) (' + head.size + ')');
+          assert.ok(head.size >= 23 && head.size <= 28 && (width <= 350 ? head.size < 28 : head.size === 28), scene + ': 28px from 351px, smaller to 350px, never under 23px (' + head.size + ')');
           assert.equal(await page.getByRole('heading', { level: 1, name: title, exact: true }).count(), 1, scene + ': the heading is named ' + title);
           if (width === 320 && (unit === 'day' || unit === 'week')) { const file = 'schedule-title-' + unit + '-' + date + '-320.png'; await page.screenshot({ path: path.join(output, file) }); report.screenshots.push(file); }
         }
+      }
+      // Every D short title and every week of 2026 at 320px, through the app's own titles (ScheduleData) in the real
+      // heading: each is one line inside the title's column, left of 오늘. A week across New Year names both years and may
+      // take two lines, never three (W5 re-review MAJOR-1: at a 24px floor nine dates took two lines and 2026년 12.28 –
+      // 2027년 1.3 took three).
+      await page.setViewportSize({ width: 320, height: 640 });
+      for (const unit of ['day', 'week']) {
+        await page.goto(base + '/index.html?section=schedule&view=' + unit + '&date=2026-11-03'); await ready(page); await shown(page, unit);
+        const year = await page.evaluate(unit => {
+          const D = HaedoLife.ScheduleData, now = '2026-11-03', h1 = document.querySelector('#lifeApp .life-page-title');
+          const seen = unit === 'day' ? h1.querySelector('.schedule-title-short') : h1.querySelector('.schedule-title-full') || h1;
+          const kept = seen.textContent, today = document.querySelector('#lifeApp .schedule-today').getBoundingClientRect(), wide = [], crossing = [];
+          const lines = text => {
+            seen.textContent = text;
+            const range = document.createRange(); range.selectNodeContents(seen);
+            const rects = [...range.getClientRects()], box = h1.getBoundingClientRect();
+            return { lines: new Set(rects.map(rect => Math.round(rect.top))).size, inside: rects.every(rect => rect.left >= box.left - 0.5 && rect.right <= Math.min(box.right, today.left) + 0.5) };
+          };
+          let count = 0;
+          for (let date = unit === 'day' ? '2026-01-01' : D.startOfWeek('2026-01-01'); date < '2027-01-01'; date = D.addDays(date, unit === 'day' ? 1 : 7)) {
+            const text = unit === 'day' ? D.dayTitleShort(date, now) : D.title('week', date, now), cross = unit === 'week' && text.includes('년');
+            const got = lines(text); count++;
+            if (cross) { crossing.push(text); if (got.lines > 2) wide.push([text, got]); } else if (got.lines !== 1 || !got.inside) wide.push([text, got]);
+          }
+          seen.textContent = kept;
+          return { count, wide, crossing, size: parseFloat(getComputedStyle(h1).fontSize) };
+        }, unit);
+        assert.ok(year.count >= (unit === 'day' ? 365 : 52), unit + ': every ' + unit + ' of 2026 measured (' + year.count + ')');
+        assert.deepEqual(year.wide, [], unit + ' at 320 (' + year.size + 'px): every 2026 title is one line in its column; a week across New Year at most two');
+        if (unit === 'week') assert.deepEqual(year.crossing.length, 2, 'the two weeks across New Year are among them (' + year.crossing.join(' / ') + ')');
       }
       // From 761px the whole title is shown as before.
       await page.setViewportSize({ width: 1440, height: 960 });
