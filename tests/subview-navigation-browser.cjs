@@ -894,6 +894,40 @@ async function main() {
       assert.equal(await name(), '검색 결과로 돌아가기');
       await back.click(); await mode(page, 'sources'); assert.equal(await page.locator('#lifeSearch').inputValue(), '직접');
     }, 1440);
+    // 2026-11-23 (MINOR-4 of the R review): 일정으로 돌아가기 from an original opened in D or W puts that unit back where it
+    // was left, with focus on the row that opened it. The unit is drawn after its own read; set before that, the place
+    // was cut to the empty frame (D left at 1169 came back at 58, 2026-11-18), which only a Playwright-clock check held.
+    for (const width of [1440, 390]) await check('일정으로 돌아가기 puts 일정 D·W back where the original was opened, with focus on its row ' + width, async ({ page }) => {
+      await page.goto(base + '/index.html'); await ready(page);
+      // Fourteen direct writings saved now stand on today in 일정's D and W.
+      await page.evaluate(async () => {
+        const s = HaedoLife.Shell.storage, c = HaedoLife.Core, w = HaedoLife.Writing, ws = await s.getActive();
+        for (let i = 0; i < 14; i++) {
+          const bundle = await s.read(ws), own = w.createDraft(bundle); own.title = '직접 쓴 익명 기록 ' + (i + 1); own.text = '천변을 따라 걸으며 본 것을 적는다. ' + (i + 1);
+          const prepared = await w.prepareSave(bundle, own);
+          const stored = await s.commitLocal({ workspaceId: ws, baseRevision: bundle.revision, operationId: c.id(), changes: prepared.changes });
+          if (stored.status !== 'stored') throw new Error('direct writing fixture');
+        }
+      });
+      await page.setViewportSize({ width, height: 600 });
+      const rest = () => page.evaluate(() => new Promise(resolve => { let last = scrollY, same = 0; const tick = () => { if (scrollY === last) same += 1; else { last = scrollY; same = 0; } if (same >= 20) resolve(last); else requestAnimationFrame(tick); }; requestAnimationFrame(tick); }));
+      for (const view of ['day', 'week']) {
+        await page.goto('about:blank'); await page.goto(base + '/index.html?section=schedule&view=' + view); await ready(page); await mode(page, view);
+        const rows = page.locator('#lifeSchedule .schedule-post-open[data-schedule-item^="source:"]');
+        assert.ok(await rows.count() >= 10, '일정 ' + view + ' lists the writings');
+        // The tenth row, brought to rest in the middle of the view; the place is read when it is pressed.
+        const opener = rows.nth(9);
+        await opener.evaluate(n => n.scrollIntoView({ block: 'center', behavior: 'instant' })); await rest();
+        const left = await page.evaluate(() => Math.round(scrollY)), key = await opener.getAttribute('data-focus-key');
+        assert.ok(left > 200, '일정 ' + view + ' is read on (' + left + ')');
+        await opener.click(); await mode(page, 'source'); await page.locator('#lifeSourceText').waitFor();
+        assert.equal(await page.locator('#lifeSearchReturn').getAttribute('aria-label'), '일정으로 돌아가기');
+        await page.locator('#lifeSearchReturn').click(); await mode(page, view);
+        assert.equal(await rest(), left, '일정 ' + view + ' is back where it was left');
+        assert.equal(await page.evaluate(() => document.activeElement?.dataset.focusKey), key, 'focus is on the row that opened the original');
+      }
+    }, width);
+
     assert.deepEqual(report.consoleErrors, []); assert.deepEqual(report.pageErrors, []);
   } finally { await browser.close(); await fs.writeFile(path.join(out, process.env.SUBVIEW_TEST_MATCH ? 'recheck-report.json' : 'browser-report.json'), JSON.stringify(report, null, 2) + '\n'); }
   console.log(JSON.stringify({ passed: report.checks.filter(x => x.pass).length, total: report.checks.length, visual: report.visual.length, console: report.consoleErrors.length, page: report.pageErrors.length }));
