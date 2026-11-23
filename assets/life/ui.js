@@ -1805,8 +1805,7 @@
       if (mode === 'sync' || mode === 'transfer') global.scrollTo({ top: 0, behavior: 'instant' });
       // The screen's first heading takes focus. When it is said to screen readers only (묶음·다시 찾기·회고·선택 자료 페이지
       // repeat the heading's name, W5) the visible screen title takes it, so the focus ring shows (W5 re-review MINOR-1).
-      const first = main.querySelector('h1,h2'), firstShown = first && !first.closest('.life-sr-only') ? first : pageHeading() || first;
-      const heading = (options?.chapterImport && (main.querySelector('#wbChapterImportHeading') || main.querySelector('#wbChapterNote'))) || (options?.book && main.querySelector(options.book.chapterId ? '#wbChapterNote' : '#wbBookHeading')) || firstShown;
+      const heading = (options?.chapterImport && (main.querySelector('#wbChapterImportHeading') || main.querySelector('#wbChapterNote'))) || (options?.book && main.querySelector(options.book.chapterId ? '#wbChapterNote' : '#wbBookHeading')) || shownFirstHeading();
       // A return or back that puts focus on its origin control (restoreOriginView) does not pass through this heading first.
       if (heading && !restoresFocus && mode !== 'find' && mode !== 'write' && !(mode === 'page' && blogPageTask && blogMode === 'edit') && !options?.searchTarget && !options?.nineTarget && !options?.collectionItemId && !options?.groupId && !reimport) {
         heading.focus({ preventScroll: true });
@@ -2648,8 +2647,14 @@
 
     // The first heading that actually takes focus: on 일정 the first main heading (the author name) has no
     // tabindex, so the toolbar heading is tried next instead of leaving focus on <body>.
+    // A first heading said to screen readers only (묶음·다시 찾기·회고·선택 자료 페이지, W5) is skipped, so focus
+    // lands on the shown title after back/forward as it does on entry (W5 re-review MINOR-A).
+    function shownFirstHeading() {
+      const first = main.querySelector('h1,h2');
+      return first && !first.closest('.life-sr-only') ? first : pageHeading() || first;
+    }
     function focusFirstHeading() {
-      for (const heading of [main.querySelector('h1,h2'), pageHeading()]) {
+      for (const heading of [shownFirstHeading(), pageHeading(), main.querySelector('h1,h2')]) {
         heading?.focus({ preventScroll: true });
         if (document.activeElement && document.activeElement !== document.body) return;
       }
@@ -2674,7 +2679,7 @@
         const target = (origin.focusKey && controls.find(el => el.dataset.focusKey === origin.focusKey)) ||
           (receivedActions.length === 1 ? receivedActions[0] : null) ||
           (origin.focusId && controls.find(el => el.id === origin.focusId)) || controls.find(el =>
-          el.tagName === origin.focusTag && (el.getAttribute('aria-label') || el.textContent) === origin.focusName) || main.querySelector('#lifeFindQuery,#lifeSearch,h1,h2') || pageHeading();
+          el.tagName === origin.focusTag && (el.getAttribute('aria-label') || el.textContent) === origin.focusName) || main.querySelector('#lifeFindQuery,#lifeSearch') || shownFirstHeading();
         for (let parent = target?.parentElement; parent && parent !== main; parent = parent.parentElement) if (parent.tagName === 'DETAILS') parent.open = true;
         target?.focus({ preventScroll: true });
         // The return skipped the heading focus, so a target that could not take focus must not leave focus on <body>.

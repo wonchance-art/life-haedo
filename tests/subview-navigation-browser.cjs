@@ -354,6 +354,13 @@ async function main() {
         const focused = await page.evaluate(() => { const node = document.activeElement, box = node.getBoundingClientRect();
           return { text: node.textContent.trim(), shown: !node.closest('.life-sr-only') && box.width > 1 && box.height > 1 && node.checkVisibility() }; });
         assert.deepEqual(focused, { text: title, shown: true }, view + ' at ' + width + ': keyboard entry focuses the shown title');
+        // Back to 자료 and forward again reopens the screen with focus on the same shown title (W5 re-review MINOR-A).
+        await page.goBack(); await mode(page, 'sources');
+        await page.goForward(); await mode(page, view);
+        await page.waitForFunction(() => /^H[12]$/.test(document.activeElement?.tagName || ''));
+        const again = await page.evaluate(() => { const node = document.activeElement, box = node.getBoundingClientRect();
+          return { text: node.textContent.trim(), shown: !node.closest('.life-sr-only') && box.width > 1 && box.height > 1 && node.checkVisibility() }; });
+        assert.deepEqual(again, { text: title, shown: true }, view + ' at ' + width + ': forward focuses the shown title');
         await back(page, 'sources');
       }
     }, width);
