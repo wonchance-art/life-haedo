@@ -2209,9 +2209,15 @@
       if (disposed) return;
       const wait = 500 - (global.performance.now() - positionWritten);
       if (wait > 0) { positionTimer = global.setTimeout(recordPosition, wait); return; }
+      // While a screen is being opened or the browser is moving, the current entry is not the screen shown: tried again
+      // after it, as the position may have changed meanwhile with no scroll after it (일정 W at 300, `다음` drawn while
+      // busy at 184 kept 300 in its entry). The checks below then still refuse an entry that is not the screen shown.
+      if (state.busy || historyWait || historyPending || navigationRender !== null) { positionTimer = global.setTimeout(recordPosition, 200); return; }
+      // An original keeps its reading line in its entry (readerHistoryState, written by the reader 0.5s after it rests);
+      // a second writer there took the history writes past 100 in 30s (Safari's limit).
+      if (state.mode === 'source') return;
       const recorded = global.history.state?.haedo;
-      // While a screen is being opened or the browser is moving, the current entry is not the screen shown.
-      if (!state.bundle || state.busy || historyWait || historyPending || navigationRender !== null || recorded?.v !== 1 || recorded.key !== historyKey || recorded.doc !== historyDoc ||
+      if (!state.bundle || recorded?.v !== 1 || recorded.key !== historyKey || recorded.doc !== historyDoc ||
           recorded.entry?.mode !== state.mode || recorded.entry.workspaceId !== state.bundle.workspaceId || !appRestoresPosition()) return;
       const top = Math.max(0, Math.round(global.scrollY));
       if (recorded.entry.scrollY === top) return;

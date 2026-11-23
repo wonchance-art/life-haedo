@@ -705,6 +705,55 @@ async function main() {
       await page.reload(); await ready(page);
       await page.goBack(); await mode(page, 'sources'); assert.equal(await rest(), listLeft + 140, 'back to 자료 after a reload elsewhere');
     }, 820);
+    // 2026-11-23 (MINOR-2 of the R review): a position write that falls while a screen is being opened is tried again
+    // after it. It was dropped: on a slow device (CPU 6×, 390) 일정 W read on to 300 and moved with `다음` stood at 184
+    // with 300 in its entry (2 of 3 trips), so a reload elsewhere and back would open it at 300. Here the next week's read
+    // is held (instrumentStorage), so the write for the move falls inside the opening as on that slow device.
+    await check('history: the entry of a calendar unit moved while it is being opened holds the place it shows', async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 600 });
+      await page.goto('about:blank'); await page.goto(base + '/index.html?section=schedule&view=week&date=2026-10-28'); await ready(page); await mode(page, 'week');
+      await page.evaluate(() => scrollTo({ top: 300, behavior: 'instant' }));
+      await page.waitForFunction(() => history.state?.haedo?.entry?.scrollY === 300);
+      // Read on for a moment before 다음: a write within 0.5s of the last one waits for that limit, past the held read.
+      await page.waitForTimeout(1000);
+      await page.evaluate(() => { window.__homeHoldRead = true; window.__homeReadEntered = false; });
+      await page.getByRole('button', { name: /^다음 / }).first().click();
+      await page.waitForFunction(() => window.__homeReadEntered === true);
+      // 다음 has already moved the page (to the end of the shorter week, 184); the write for that move comes 0.2s after
+      // it, while the read is still held.
+      await page.waitForTimeout(600);
+      const moved = await page.evaluate(() => Math.round(scrollY));
+      assert.ok(moved < 300, 'the page moved while the next week was read (' + moved + ')');
+      await page.evaluate(() => window.__homeReleaseRead());
+      await page.waitForFunction(() => new URL(location.href).searchParams.get('date') === '2026-11-04'); await mode(page, 'week'); await settle(page);
+      await page.waitForFunction(() => history.state?.haedo?.entry?.scrollY === Math.round(scrollY));
+    }, 390);
+    // 2026-11-23 (MINOR-3 of the R review): an original keeps its reading line in its entry, written by the reader once
+    // the reading rests. The screen-position write (recordPosition) wrote the same entry as well, which took the history
+    // writes past Safari's limit (100 in 30s) while reading in short bursts (110 measured). One write per rest now.
+    await check('history: an original read on writes its entry once per rest', async ({ page }) => {
+      await page.goto(base + '/index.html'); await ready(page);
+      await page.evaluate(async () => {
+        const s = HaedoLife.Shell.storage, c = HaedoLife.Core, bundle = await s.read(await s.getActive());
+        const prepared = await c.prepareImport({ origin: 'other', title: '길게 읽는 익명 자료', text: Array.from({ length: 80 }, (_, k) => (k + 1) + '번째 문단. 천변을 따라 걸으며 본 것을 적는다.').join('\n\n'), forceSeparate: true }, bundle);
+        const stored = await s.commitLocal({ workspaceId: bundle.workspaceId, baseRevision: bundle.revision, operationId: c.id(), changes: c.buildImportChanges(bundle, prepared, []) });
+        if (stored.status !== 'stored') throw new Error('long original fixture');
+      });
+      await page.setViewportSize({ width: 1440, height: 600 });
+      await page.goto('about:blank'); await page.goto(base + '/index.html?section=records'); await ready(page); await mode(page, 'sources');
+      await page.locator('#lifeSearchResults .life-source-open', { hasText: '길게 읽는 익명 자료' }).first().click(); await mode(page, 'source'); await page.locator('#lifeSourceText').waitFor();
+      await settle(page);
+      await page.evaluate(() => { window.__writes = 0; const replace = history.replaceState; history.replaceState = function (...args) { window.__writes += 1; return replace.apply(this, args); }; });
+      for (const top of [600, 900]) {
+        await page.evaluate(() => { window.__writes = 0; });
+        await page.evaluate(top => scrollTo({ top, behavior: 'instant' }), top);
+        await page.waitForFunction(() => window.__writes > 0);
+        // Both writers wait for the reading to rest (0.2s and 0.5s, at most two writes a second); a second write would
+        // come within this second.
+        await page.waitForTimeout(1000);
+        assert.equal(await page.evaluate(() => window.__writes), 1, 'one history write for the rest at ' + top);
+      }
+    }, 1440);
     // 2026-11-23 (MINOR-1 of the R review): after a reload, 자료's folder line (폴더를 확인하고 있습니다., 31px above the
     // list) was still shown when the app put the list back and went away 80ms later; the browser then kept what was in
     // view and the list stood 30px up (300 → 270, 200 → 169; the deployed browser restore had 269 on the first path).
