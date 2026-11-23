@@ -3,8 +3,9 @@
  * Checks: the five-tab menu at 1440·820·390·320 (no overflow, 44px, uncut labels), the first screen after login is 노트,
  * the address table opens the screen it names, 노트 ↔ 글 읽기·편집 ↔ 노트 and 일정 ↔ D ↔ 일정 keep scroll, search, tab and
  * filter, a late read cannot show another account's posts, and the five calendar units share one frame (거르기, side
- * column 예정 → 습관·행복도 → 목표·계획, no empty table, W's date columns hold records only), and 일정 M·W·D come back to the
- * exact position they were left at, also from the middle of the page (2026-11-18, the browser's own restore is off there).
+ * column 예정 → 습관·행복도 → 목표·계획, no empty table, W's date columns hold records only), and 일정 M·W·D, 자료, 노트 and a
+ * post being read come back to the exact position they were left at, also from the middle of the page (2026-11-18,
+ * the browser's own restore is off for every screen the app puts back).
  * NOTES_MENU_OUTPUT keeps the screenshots. Never uses real Google, production Supabase or Apple-device claims. */
 'use strict';
 const assert = require('node:assert/strict');
@@ -69,6 +70,22 @@ async function seedDay(page) {
   });
   await page.clock.setFixedTime(new Date(TODAY));
 }
+// 자료 with more than one page of rows (자료 더 보기 after 40), one original long enough to read on, and a long post.
+async function seedLong(page) {
+  return page.evaluate(async () => {
+    const s = HaedoLife.Shell.storage, c = HaedoLife.Core, m = HaedoLife.PhotoPost, ws = await s.getActive();
+    let bundle = await s.read(ws);
+    for (let i = 1; i <= 50; i++) {
+      const prepared = await c.prepareImport({ origin: 'other', title: '반복 익명 자료 ' + i, text: Array.from({ length: 60 }, (_, k) => '갈래 ' + i + ' 문단 ' + k + '. 천변을 따라 걸으며 본 것을 적는다.').join('\n\n'), forceSeparate: true }, bundle);
+      const stored = await s.commitLocal({ workspaceId: ws, baseRevision: bundle.revision, operationId: c.id(), changes: c.buildImportChanges(bundle, prepared, []) });
+      if (stored.status !== 'stored') throw new Error('original fixture');
+      bundle = await s.read(ws);
+    }
+    const doc = m.create(c.id, new Date('2026-11-02T23:00:00+09:00').toISOString()); doc.title = '길게 쓴 익명 글'; doc.status = 'saved';
+    doc.ops = [{ insert: Array.from({ length: 70 }, (_, k) => (k + 1) + '번째 문단. 천변을 따라 걸으며 본 것을 적는다.').join('\n') + '\n' }]; await s.savePhotoPost(ws, doc, 0);
+    return { post: doc.id };
+  });
+}
 // A control that can be pressed where the page is: whole inside the screen and not under the fixed header or the bottom
 // tabs. It is pressed at its place with the mouse (press()): Playwright's own click scrolls a control clear of the root's
 // scroll padding first (120 became 73 for a cell in M's first row), and the position left would not be the one set.
@@ -92,6 +109,36 @@ const rest = page => page.evaluate(() => new Promise(resolve => {
   const tick = () => { if (scrollY === last) same += 1; else { last = scrollY; same = 0; } if (same >= 20) resolve(last); else requestAnimationFrame(tick); };
   requestAnimationFrame(tick);
 }));
+// Return trips: a new entry of `query` showing `unit`, left at `top` by pressing `control` where it stands, then `back`.
+// `before` prepares the screen first (a search word, 더 보기); `between` acts in the screen opened (reading on).
+function returnTrips(page) {
+  const misses = [], trips = [];
+  async function trip(scene, unit, query, top, control, arrive, back, { expected, wait, before, between } = {}) {
+    // A new entry each time (an address opened again in place is a reload to the browser, which restores its scroll).
+    await page.goto('about:blank'); await page.goto(base + '/index.html' + query); await ready(page); await shown(page, unit);
+    await page.waitForFunction(() => [...document.querySelectorAll('#lifeSchedule .schedule-entries')].every(slot => slot.getAttribute('aria-busy') === 'false'));
+    if (before) await before();
+    const max = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
+    // A position counted from the end of the page; without a position of its own the screen is left where the control
+    // stands at the middle of the screen.
+    if (typeof top === 'function') top = top(max);
+    top ??= await page.evaluate(({ control, max }) => { const box = document.querySelector(control).getBoundingClientRect(); return Math.round(Math.min(max - 20, Math.max(20, scrollY + box.top + box.height / 2 - innerHeight / 2))); }, { control, max });
+    assert.ok(top > 0 && top < max - 1, scene + ': ' + top + ' is a middle position (the page ends at ' + max + ')');
+    await page.evaluate(top => { scrollTo({ top, behavior: 'instant' }); addEventListener('click', () => { window.__left = scrollY; }, { once: true, capture: true }); }, top);
+    const target = await pressable(page, control, scene), key = target.key;
+    await page.mouse.click(target.x, target.y); await arrive();
+    const left = await page.evaluate(() => window.__left);
+    assert.equal(left, top, scene + ': pressed where the page was');
+    if (between) await between();
+    await back(); await shown(page, unit);
+    // The return puts focus back on the control and sets the position in the same frame (restoreOriginView).
+    if (wait) await wait(); else await page.waitForFunction(key => document.activeElement?.dataset.focusKey === key, key);
+    const got = await rest(page), want = expected ?? left;
+    trips.push(scene + ' ' + want + '→' + got);
+    if (Math.abs(got - want) > 1) misses.push(scene + ': left at ' + left + ', expected ' + want + ', came back at ' + got);
+  }
+  return { trip, misses, trips };
+}
 async function shown(page, expected) {
   await page.waitForFunction(value => document.querySelector('#lifeMain')?.dataset.mode === value && !document.querySelector('.life-app[aria-busy="true"]') &&
     (!document.querySelector('#lifeSchedule') || document.querySelector('#lifeSchedule').getAttribute('aria-busy') === 'false') &&
@@ -263,33 +310,13 @@ async function main() {
     // Allowed difference 1px: history.state keeps the position as a whole number (historyPublic rounds it).
     await check('일정 M·W·D come back to the position they were left at, from the middle of the page too (1440, 820, 390)', async ({ page }) => {
       await page.goto(base + '/index.html'); await ready(page); await seed(page); await seedDay(page);
-      const misses = [], trips = [];
+      const { trip, misses, trips } = returnTrips(page);
       const post = '#lifeSchedule .schedule-post-open[data-schedule-item^="photo:"]', writing = '#lifeSchedule .schedule-post-open[data-schedule-item^="source:"]';
       const cell = '#lifeSchedule .schedule-day-cell:not([data-outside])', head = '#lifeSchedule .schedule-week-head';
       const read = () => page.locator('.photo-article').waitFor();
       const readWriting = async () => { await page.locator('#lifeMain[data-mode="source"]').waitFor(); await page.locator('#lifeSourceText').waitFor(); await settle(page); };
       const browserBack = () => page.goBack(), appReturn = () => page.locator('#lifeSubviewReturn, [data-subview-return]').first().click();
       const readerReturn = () => page.locator('#lifeSearchReturn').click();
-      async function trip(scene, unit, query, top, control, arrive, back, { expected, wait } = {}) {
-        // A new entry each time (an address opened again in place is a reload to the browser, which restores its scroll).
-        await page.goto('about:blank'); await page.goto(base + '/index.html' + query); await ready(page); await shown(page, unit);
-        await page.waitForFunction(() => [...document.querySelectorAll('#lifeSchedule .schedule-entries')].every(slot => slot.getAttribute('aria-busy') === 'false'));
-        const max = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
-        // Without a position of its own the screen is left where the control stands at the middle of the screen.
-        top ??= await page.evaluate(({ control, max }) => { const box = document.querySelector(control).getBoundingClientRect(); return Math.round(Math.min(max - 20, Math.max(20, scrollY + box.top + box.height / 2 - innerHeight / 2))); }, { control, max });
-        assert.ok(top > 0 && top < max - 1, scene + ': ' + top + ' is a middle position (the page ends at ' + max + ')');
-        await page.evaluate(top => { scrollTo({ top, behavior: 'instant' }); addEventListener('click', () => { window.__left = scrollY; }, { once: true, capture: true }); }, top);
-        const target = await pressable(page, control, scene), key = target.key;
-        await page.mouse.click(target.x, target.y); await arrive();
-        const left = await page.evaluate(() => window.__left);
-        assert.equal(left, top, scene + ': pressed where the page was');
-        await back(); await shown(page, unit);
-        // The return puts focus back on the control and sets the position in the same frame (restoreOriginView).
-        if (wait) await wait(); else await page.waitForFunction(key => document.activeElement?.dataset.focusKey === key, key);
-        const got = await rest(page), want = expected ?? left;
-        trips.push(scene + ' ' + want + '→' + got);
-        if (Math.abs(got - want) > 1) misses.push(scene + ': left at ' + left + ', expected ' + want + ', came back at ' + got);
-      }
       const dayShown = () => shown(page, 'day');
       const monthLabel = '#lifeSchedule .schedule-month-label', weekLabel = '#lifeSchedule .schedule-week-label';
       for (const [width, height, monthTops, weekTops, dayTops] of [[1440, 600, [60, 120, 162, 200], [80, 160], [100, 200]], [820, 700, [60, 120, 200], [90, 170], [100, 200]], [390, 600, [60, 120, 189], [90, 170], [100, 200]]]) {
@@ -316,7 +343,7 @@ async function main() {
       }
       report.restoreTrips = trips;
       assert.deepEqual(misses, [], 'every return is within 1px of where the screen was left');
-      // The entries of 일정 are put back by the app alone; other screens keep the browser's restore.
+      // The entries of 일정 are put back by the app alone (so is every screen the app reopens at its place, below).
       await page.setViewportSize({ width: 1440, height: 600 });
       const mode = () => page.evaluate(() => history.scrollRestoration);
       const to = top => page.evaluate(top => scrollTo({ top, behavior: 'instant' }), top);
@@ -344,10 +371,82 @@ async function main() {
       await page.reload(); await ready(page); await shown(page, 'month'); await to(90);
       await page.goForward(); await shown(page, 'day'); await page.waitForFunction(() => document.activeElement && document.activeElement !== document.body);
       assert.equal(await rest(page), 0, 'forward to D after a reload');
-      // 노트 and a post keep the browser's restore; coming back to 일정 is the app's again.
-      await page.locator(tab('notes')).click(); await shown(page, 'home'); assert.equal(await mode(), 'auto', '노트');
-      await page.locator('#homePostList .home-post-open').first().click(); await page.locator('.photo-article').waitFor(); assert.equal(await mode(), 'auto', '글 읽기');
+      // 2026-11-18 (R1·R2, the rule widened from 일정): 노트 and a post being read are put back by the app alone too. An
+      // editor is not put back by the app, so its entry keeps the browser's restore.
+      await page.locator(tab('notes')).click(); await shown(page, 'home'); assert.equal(await mode(), 'manual', '노트');
+      await page.locator('#homePostList .home-post-open').first().click(); await page.locator('.photo-article').waitFor();
+      // From the moment the reader reports that the post is read.
+      await page.waitForFunction(() => history.scrollRestoration === 'manual');
+      await page.locator('[data-haedo-navigation] [data-haedo-compose]:visible').click(); await page.locator('.photo-posts[data-mode="edit"] #photoTitle').waitFor();
+      assert.equal(await mode(), 'auto', '글쓰기');
+      await page.goBack(); await page.locator('.photo-article').waitFor(); await page.waitForFunction(() => history.scrollRestoration === 'manual');
       await page.goBack(); await shown(page, 'home'); await page.goBack(); await shown(page, 'day'); assert.equal(await mode(), 'manual', 'back in 일정');
+    });
+
+    // 2026-11-18 (R1·R2): the same defect outside 일정, and the same rule. 자료 left at 333 came back at 335–369 after an
+    // original: the browser's own restore of the entry, animated by the root's smooth scrolling, was still moving when
+    // the app set the position. It shows under this test's clock, where requestAnimationFrame is not the browser's own
+    // frame. A long post read on, left for a short screen and returned to with the browser's back stood at the height of
+    // the screen left (the browser's restore, cut to it: 560 → 79), and at the top after a forward: nothing put a post
+    // back. Every screen the app reopens at its place is now put back by the app alone, once that screen is drawn.
+    await check('자료, 노트 and a post being read come back to the position they were left at (1440, 820, 390)', async ({ page }) => {
+      await page.goto(base + '/index.html'); await ready(page); await seed(page); const long = await seedLong(page);
+      const { trip, misses, trips } = returnTrips(page);
+      const original = '#lifeSearchResults .life-source-open', note = '#homePostList .home-post-open';
+      const reader = async () => { await page.locator('#lifeMain[data-mode="source"]').waitFor(); await page.locator('#lifeSourceText').waitFor(); await settle(page); };
+      const read = () => page.locator('.photo-article').waitFor();
+      const browserBack = () => page.goBack(), readerReturn = () => page.locator('#lifeSearchReturn').click(), appReturn = () => page.locator('#lifeSubviewReturn, [data-subview-return]').first().click();
+      const to = top => page.evaluate(top => scrollTo({ top, behavior: 'instant' }), top);
+      const readOn = async () => { await to(400); await page.waitForTimeout(150); };
+      const records = '?section=records', listed = () => page.locator(original).count();
+      // A long post opened from 노트 in a new entry, read on to `top`, left by `leave`.
+      async function reading(scene, top, leave, arrived, comeBack) {
+        await page.goto('about:blank'); await page.goto(base + '/index.html?section=notes'); await ready(page); await shown(page, 'home');
+        await to(120); await page.locator('[data-focus-key="home:post:photo:' + long.post + '"]').click(); await read();
+        assert.equal(await rest(page), 0, scene + ': a post just opened stands at its top');
+        const max = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
+        assert.ok(top < max - 1, scene + ': ' + top + ' is inside the post (it ends at ' + max + ')');
+        await to(top); await page.waitForTimeout(150);
+        await leave(); await arrived();
+        // The position is set a frame after the reader has drawn the post; rest() waits for twenty still frames.
+        await comeBack(); await read();
+        const got = await rest(page);
+        trips.push(scene + ' ' + top + '→' + got);
+        if (Math.abs(got - top) > 1) misses.push(scene + ': read on to ' + top + ', came back at ' + got);
+      }
+      const compose = () => page.locator('[data-haedo-navigation] [data-haedo-compose]:visible').click(), editor = () => page.locator('.photo-posts[data-mode="edit"] #photoTitle').waitFor();
+      for (const [width, height] of [[1440, 600], [820, 700], [390, 600]]) {
+        await page.setViewportSize({ width, height });
+        const size = width + '×' + height;
+        for (const top of [90, 333, 800]) await trip(size + ' 자료 ' + top + ' → 원문 → 뒤로', 'sources', records, top, original, reader, browserBack);
+        await trip(size + ' 자료 333 → 원문 → 돌아가기', 'sources', records, 333, original, reader, readerReturn);
+        // Read on in the original before returning: the screen left is scrolled when the browser moves.
+        // (돌아가기 is pressed at the top of the original, where it stands; only the browser's back leaves from the middle.)
+        await trip(size + ' 자료 500 → 원문 (읽다 400) → 뒤로', 'sources', records, 500, original, reader, browserBack, { between: readOn });
+        // The list keeps its own state: a search word, and the rows shown by 자료 더 보기.
+        let rows = 0;
+        await trip(size + ' 자료 검색어 400 → 원문 → 뒤로', 'sources', records, 400, original, reader, browserBack,
+          { before: async () => { await page.locator('#lifeSearch').fill('반복'); await settle(page); rows = await listed(); } });
+        assert.equal(await page.locator('#lifeSearch').inputValue(), '반복', size + ': the search word is kept');
+        assert.equal(await listed(), rows, size + ': the same rows');
+        await trip(size + ' 자료 더 보기 끝 → 원문 → 뒤로', 'sources', records, max => max - 60, original, reader, browserBack,
+          { before: async () => { await page.locator('#lifeSearchMore').click(); await settle(page); rows = await listed(); assert.ok(rows > 40, 'more than one page of rows (' + rows + ')'); } });
+        assert.equal(await listed(), rows, size + ': 자료 더 보기 stays open');
+        // 노트 (already exact: its list is drawn late, after the browser's restore had ended).
+        await trip(size + ' 노트 333 → 글 읽기 → 뒤로', 'home', '?section=notes', 333, note, read, browserBack);
+        await trip(size + ' 노트 333 → 글 읽기 → 돌아가기', 'home', '?section=notes', 333, note, read, appReturn);
+        // A post read on, then another screen and the browser's back: a short screen (글쓰기), a long one (설정).
+        await reading(size + ' 글 읽기 560 → 글쓰기 → 뒤로', 560, compose, editor, browserBack);
+        await reading(size + ' 글 읽기 560 → 설정 → 뒤로', 560, () => page.locator(tab('manage')).click(), () => shown(page, 'manage'), browserBack);
+        // Left with the browser's back (노트), returned to with its forward.
+        await reading(size + ' 글 읽기 250 → 뒤로 → 앞으로', 250, browserBack, () => shown(page, 'home'), () => page.goForward());
+      }
+      assert.deepEqual(misses, [], 'every return is within 1px of where the screen was left');
+      // 자료 and an original are the app's to put back.
+      await page.goto('about:blank'); await page.goto(base + '/index.html' + records); await ready(page); await shown(page, 'sources');
+      assert.equal(await page.evaluate(() => history.scrollRestoration), 'manual', '자료');
+      await page.locator(original).first().click(); await reader(); assert.equal(await page.evaluate(() => history.scrollRestoration), 'manual', '원문 읽기');
+      report.restoreTripsRecords = trips;
     });
 
     await check('a late post read cannot show account A\'s posts in 노트 after an account change', async ({ page, server, device }) => {

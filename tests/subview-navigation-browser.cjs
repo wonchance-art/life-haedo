@@ -655,6 +655,135 @@ async function main() {
       await page.goBack(); await mode(page, 'source');
       assert.equal((await historyRecord(page)).key, reader.key);
     }, 390);
+    // 2026-11-18 (R1): a screen is put back by the app alone (history.scrollRestoration manual), once it is drawn.
+    // 컬렉션 draws after its own read: the position set before that was cut to the empty frame (left at 142, back at 0).
+    // (The drift of 자료 itself shows only where requestAnimationFrame is not the browser's frame: notes-menu-browser,
+    // which runs under Playwright's clock, holds those trips.)
+    await check('history: a screen drawn after its own read comes back where it was left (컬렉션)', async ({ page }) => {
+      await fixture(page, { many: true });
+      await page.setViewportSize({ width: 820, height: 600 });
+      const rest = () => page.evaluate(() => new Promise(resolve => { let last = scrollY, same = 0; const tick = () => { if (scrollY === last) same += 1; else { last = scrollY; same = 0; } if (same >= 20) resolve(last); else requestAnimationFrame(tick); }; requestAnimationFrame(tick); }));
+      const to = top => page.evaluate(top => scrollTo({ top, behavior: 'instant' }), top);
+      await page.goto('about:blank'); await page.goto(base + '/index.html?section=records&view=collection'); await ready(page); await mode(page, 'collection');
+      await page.locator('#clGrid, #clEmpty, .cl-form, #lifeMain form').first().waitFor();
+      const end = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
+      assert.ok(end > 40, '컬렉션 scrolls at this height (' + end + ')');
+      const left = Math.min(120, end - 10);
+      await to(left); await nav(page, 'manage'); await mode(page, 'manage');
+      await page.goBack(); await mode(page, 'collection'); assert.equal(await rest(), left, 'back to 컬렉션');
+      await page.goForward(); await mode(page, 'manage'); await page.goBack(); await mode(page, 'collection'); assert.equal(await rest(), left, 'back to 컬렉션 after a forward');
+      assert.equal(await page.evaluate(() => history.scrollRestoration), 'manual', '컬렉션 is put back by the app alone');
+    }, 820);
+    await check('history: 자료 comes back where it was left from an original read on, also after a forward, a reload elsewhere and back', async ({ page }) => {
+      await fixture(page, { many: true });
+      await page.evaluate(async () => {
+        const s = HaedoLife.Shell.storage, c = HaedoLife.Core, bundle = await s.read(await s.getActive());
+        const prepared = await c.prepareImport({ origin: 'other', title: '길게 읽는 익명 자료', text: Array.from({ length: 80 }, (_, k) => (k + 1) + '번째 문단. 천변을 따라 걸으며 본 것을 적는다.').join('\n\n'), forceSeparate: true }, bundle);
+        const stored = await s.commitLocal({ workspaceId: bundle.workspaceId, baseRevision: bundle.revision, operationId: c.id(), changes: c.buildImportChanges(bundle, prepared, []) });
+        if (stored.status !== 'stored') throw new Error('long original fixture');
+      });
+      await page.setViewportSize({ width: 820, height: 600 });
+      const rest = () => page.evaluate(() => new Promise(resolve => { let last = scrollY, same = 0; const tick = () => { if (scrollY === last) same += 1; else { last = scrollY; same = 0; } if (same >= 20) resolve(last); else requestAnimationFrame(tick); }; requestAnimationFrame(tick); }));
+      const to = top => page.evaluate(top => scrollTo({ top, behavior: 'instant' }), top);
+      // An original read on to 400, then the browser's back to 자료.
+      await page.goto('about:blank'); await page.goto(base + '/index.html?section=records'); await ready(page); await mode(page, 'sources');
+      // The position 자료 is left at is read when the row is pressed (a click brings its row into view first).
+      await to(260); await page.evaluate(() => addEventListener('click', () => { window.__left = scrollY; }, { once: true, capture: true }));
+      await page.locator('#lifeSearchResults .life-source-open', { hasText: '길게 읽는 익명 자료' }).first().click(); await mode(page, 'source'); await page.locator('#lifeSourceText').waitFor();
+      const listLeft = await page.evaluate(() => window.__left);
+      const readerEnd = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
+      assert.ok(readerEnd > 200, 'the original scrolls at this height (' + readerEnd + ')');
+      const readAt = Math.min(400, readerEnd - 20);
+      await to(readAt);
+      await page.goBack(); await mode(page, 'sources');
+      assert.equal(await rest(), listLeft, 'back to 자료');
+      assert.equal(await page.evaluate(() => history.scrollRestoration), 'manual', '자료 is put back by the app alone');
+      // Left with the browser's forward after resting, then a reload elsewhere and back: the entry itself keeps the
+      // position (written once the scrolling has rested), so the app can put it back without this page's memory.
+      await to(listLeft + 140); await page.waitForFunction(top => history.state?.haedo?.entry?.scrollY === top, listLeft + 140);
+      await page.goForward(); await mode(page, 'source'); await page.locator('#lifeSourceText').waitFor();
+      await page.reload(); await ready(page);
+      await page.goBack(); await mode(page, 'sources'); assert.equal(await rest(), listLeft + 140, 'back to 자료 after a reload elsewhere');
+    }, 820);
+
+    // 2026-11-18 (R2): a post read on, left for another screen and returned to with the browser's back or forward opens
+    // where it was left. Until then nothing put a post back: the browser's own restore ran before the post was drawn
+    // and was cut to the height of the screen being left (560 came back at 329 or at 0 after a short screen), and a
+    // forward ended at the top. The position is set once the reader has drawn the post (ui.js restorePostReturn); it
+    // lives in the history entry and this page's memory, nowhere else. A post opened anew stands at its top.
+    for (const width of [1440, 390]) await check('history: a post read on comes back where it was left, on back and on forward ' + width, async ({ page }) => {
+      await page.goto(base + '/index.html'); await ready(page);
+      const id = await page.evaluate(async () => {
+        const s = HaedoLife.Shell.storage, c = HaedoLife.Core, m = HaedoLife.PhotoPost, ws = await s.getActive();
+        const doc = m.create(c.id, new Date().toISOString()); doc.title = '길게 쓴 익명 글'; doc.status = 'saved';
+        doc.ops = [{ insert: Array.from({ length: 70 }, (_, k) => (k + 1) + '번째 문단. 천변을 따라 걸으며 본 것을 적는다.').join('\n') + '\n' }]; await s.savePhotoPost(ws, doc, 0);
+        return doc.id;
+      });
+      await page.setViewportSize({ width, height: 600 });
+      const rest = () => page.evaluate(() => new Promise(resolve => { let last = scrollY, same = 0; const tick = () => { if (scrollY === last) same += 1; else { last = scrollY; same = 0; } if (same >= 20) resolve(last); else requestAnimationFrame(tick); }; requestAnimationFrame(tick); }));
+      const to = top => page.evaluate(top => scrollTo({ top, behavior: 'instant' }), top);
+      const row = '[data-focus-key="home:post:photo:' + id + '"]';
+      const read = async () => { await mode(page, 'page'); await page.locator('.photo-posts[data-mode="read"] .photo-article').waitFor(); };
+      await page.goto('about:blank'); await page.goto(base + '/index.html?section=notes'); await ready(page); await mode(page, 'home'); await homeLoaded(page);
+      await page.locator(row).click(); await read();
+      assert.equal(await rest(), 0, 'a post just opened stands at its top');
+      const end = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
+      assert.ok(end > 600, 'the post is long enough to read on (' + end + ')');
+      // A short screen (글쓰기, nothing typed), then back.
+      await to(560); await compose(page).click(); await page.locator('.photo-posts[data-mode="edit"] #photoTitle').waitFor();
+      assert.ok(await page.evaluate(() => document.documentElement.scrollHeight - innerHeight) < 560, 'the screen left for is shorter than the place read to');
+      await page.goBack(); await read(); assert.equal(await rest(), 560, 'back from a short screen');
+      // A long screen (설정), then back.
+      await to(430); await nav(page, 'manage'); await mode(page, 'manage');
+      await page.goBack(); await read(); assert.equal(await rest(), 430, 'back from a long screen');
+      // Left with the browser's back, returned to with its forward.
+      await to(250); await page.goBack(); await mode(page, 'home'); await homeLoaded(page);
+      await page.goForward(); await read(); assert.equal(await rest(), 250, 'forward to the post');
+      // Opened again from the list: a new entry, at its top.
+      await page.goBack(); await mode(page, 'home'); await homeLoaded(page);
+      await page.locator(row).click(); await read(); assert.equal(await rest(), 0, 'a post opened again stands at its top');
+    }, width);
+
+    // 2026-11-18 (R3): an original's 돌아가기 is named after the screen it goes back to. One opened from 일정's D or W was
+    // named 검색 결과로 돌아가기 and went back to that calendar unit; one from 자료's list was named so without a search.
+    await check('an original\'s 돌아가기 is named after where it goes: 일정 D·W, 노트, 자료 and a searched 자료', async ({ page }) => {
+      await page.goto(base + '/index.html'); await ready(page);
+      // A direct writing saved now stands on today in 일정 and in 노트, and is a row of 자료.
+      await page.evaluate(async () => {
+        const s = HaedoLife.Shell.storage, c = HaedoLife.Core, w = HaedoLife.Writing, ws = await s.getActive();
+        const bundle = await s.read(ws), own = w.createDraft(bundle); own.title = '직접 쓴 익명 기록'; own.text = '천변을 따라 걸으며 본 것을 적는다.';
+        const prepared = await w.prepareSave(bundle, own);
+        const stored = await s.commitLocal({ workspaceId: ws, baseRevision: bundle.revision, operationId: c.id(), changes: prepared.changes });
+        if (stored.status !== 'stored') throw new Error('direct writing fixture');
+      });
+      const back = page.locator('#lifeSearchReturn'), name = () => back.getAttribute('aria-label');
+      const reader = async () => { await mode(page, 'source'); await page.locator('#lifeSourceText').waitFor(); };
+      for (const view of ['day', 'week']) {
+        await page.goto(base + '/index.html?section=schedule&view=' + view); await ready(page); await mode(page, view);
+        await page.locator('#lifeSchedule .schedule-post-open[data-schedule-item^="source:"]').first().click(); await reader();
+        assert.equal(await name(), '일정으로 돌아가기', '일정 ' + view);
+        assert.equal(await back.locator('.life-tooltip').textContent(), '일정으로 돌아가기');
+        await back.click(); await mode(page, view);
+        assert.equal(new URL(page.url()).searchParams.get('view'), view, 'and goes back to that unit');
+      }
+      await page.goto(base + '/index.html?section=notes'); await ready(page); await mode(page, 'home'); await homeLoaded(page);
+      await page.locator('#homePostList .home-post-open', { hasText: '직접 쓴 익명 기록' }).first().click(); await reader();
+      assert.equal(await name(), '노트로 돌아가기'); await back.click(); await mode(page, 'home');
+      // 자료: its list is 자료; narrowed by a search word it is the search results (r2-search).
+      await nav(page, 'records'); await mode(page, 'sources');
+      await page.locator('#lifeSearchResults .life-source-open', { hasText: '직접 쓴 익명 기록' }).first().click(); await reader();
+      assert.equal(await name(), '자료로 돌아가기');
+      // The list beside the original (from 1101px) is searched while reading: the return is named again.
+      await page.locator('#lifePaneSearch').fill('직접'); await page.waitForFunction(() => document.querySelector('#lifeSearchReturn')?.getAttribute('aria-label') === '검색 결과로 돌아가기');
+      assert.equal(await back.locator('.life-tooltip').textContent(), '검색 결과로 돌아가기');
+      await page.locator('#lifePaneSearch').fill(''); await page.waitForFunction(() => document.querySelector('#lifeSearchReturn')?.getAttribute('aria-label') === '자료로 돌아가기');
+      await back.click(); await mode(page, 'sources');
+      await page.locator('#lifeSearch').fill('직접'); await settle(page);
+      await page.locator('#lifeSearchResults .life-source-open', { hasText: '직접 쓴 익명 기록' }).first().click(); await reader();
+      assert.equal(await name(), '검색 결과로 돌아가기');
+      await back.click(); await mode(page, 'sources'); assert.equal(await page.locator('#lifeSearch').inputValue(), '직접');
+    }, 1440);
+
     assert.deepEqual(report.consoleErrors, []); assert.deepEqual(report.pageErrors, []);
   } finally { await browser.close(); await fs.writeFile(path.join(out, process.env.SUBVIEW_TEST_MATCH ? 'recheck-report.json' : 'browser-report.json'), JSON.stringify(report, null, 2) + '\n'); }
   console.log(JSON.stringify({ passed: report.checks.filter(x => x.pass).length, total: report.checks.length, visual: report.visual.length, console: report.consoleErrors.length, page: report.pageErrors.length }));
