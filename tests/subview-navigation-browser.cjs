@@ -705,6 +705,35 @@ async function main() {
       await page.reload(); await ready(page);
       await page.goBack(); await mode(page, 'sources'); assert.equal(await rest(), listLeft + 140, 'back to 자료 after a reload elsewhere');
     }, 820);
+    // 2026-11-23 (MINOR-1 of the R review): after a reload, 자료's folder line (폴더를 확인하고 있습니다., 31px above the
+    // list) was still shown when the app put the list back and went away 80ms later; the browser then kept what was in
+    // view and the list stood 30px up (300 → 270, 200 → 169; the deployed browser restore had 269 on the first path).
+    // The app now sets the place again while the page's height changes and the user has not acted (ui.js holdPosition).
+    await check('history: 자료 comes back at its place after a reload, also while its folders are still being read', async ({ page }) => {
+      await fixture(page, { many: true });
+      await page.setViewportSize({ width: 1440, height: 600 });
+      const rest = () => page.evaluate(() => new Promise(resolve => { let last = scrollY, same = 0; const tick = () => { if (scrollY === last) same += 1; else { last = scrollY; same = 0; } if (same >= 30) resolve(last); else requestAnimationFrame(tick); }; requestAnimationFrame(tick); }));
+      const to = async top => { await page.evaluate(top => scrollTo({ top, behavior: 'instant' }), top); await rest(); };
+      // What is in view: the first list row still showing, and where it stands in the view.
+      const inView = () => page.evaluate(() => { const row = [...document.querySelectorAll('#lifeSearchResults .life-source-open')].find(n => n.getBoundingClientRect().bottom > 0); return row && row.dataset.versionId + '@' + Math.round(row.getBoundingClientRect().top); });
+      await page.goto('about:blank'); await page.goto(base + '/index.html?section=notes'); await ready(page); await mode(page, 'home'); await homeLoaded(page);
+      await nav(page, 'records'); await mode(page, 'sources');
+      assert.ok(await page.evaluate(() => document.documentElement.scrollHeight - innerHeight) > 400, '자료 scrolls at this height');
+      // Left for 설정, reloaded there, then the browser's back (a new page: the folders are read again).
+      await to(300); const left = await inView();
+      await nav(page, 'manage'); await mode(page, 'manage');
+      await page.reload(); await ready(page); await mode(page, 'manage');
+      await page.goBack(); await ready(page); await mode(page, 'sources');
+      assert.equal(await rest(), 300, 'back to 자료 after a reload elsewhere'); assert.equal(await inView(), left, 'with the same rows in view');
+      // Left with the browser's back once its entry holds the place, a reload on 노트, then the browser's forward.
+      // The entry is written 0.2s after the scrolling rests (at most twice a second); this waits for that, not for the value.
+      await to(200); await page.waitForTimeout(800); const left2 = await inView();
+      await page.goBack(); await mode(page, 'home'); await homeLoaded(page);
+      await page.reload(); await ready(page); await mode(page, 'home');
+      await page.goForward(); await ready(page); await mode(page, 'sources');
+      assert.equal(await rest(), 200, 'forward to 자료 after a reload'); assert.equal(await inView(), left2, 'with the same rows in view');
+    }, 1440);
+
     // 2026-11-18 (R2): a post read on, left for another screen and returned to with the browser's back or forward opens
     // where it was left. Until then nothing put a post back: the browser's own restore ran before the post was drawn
     // and was cut to the height of the screen being left (560 came back at 329 or at 0 after a short screen), and a

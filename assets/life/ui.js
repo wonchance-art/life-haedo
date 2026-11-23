@@ -2222,6 +2222,32 @@
       if (positionTimer) global.clearTimeout(positionTimer);
       positionTimer = global.setTimeout(recordPosition, 200);
     }
+    // A screen put back at its place can still change height above that place a moment later, and the browser then
+    // keeps what is in view, not the place: 자료 left at 300 came back at 270 after a reload and forward, as its folder
+    // line (폴더를 확인하고 있습니다.) went away 80ms after the list was put back; a photo whose recorded size is not its
+    // own moves what follows it once it loads. Until the user acts (wheel, touch, pointer, key) or the screen changes, the
+    // place is set again whenever the page's height changes, for up to a second after the last change (three at most).
+    let positionHold = null;
+    function holdPosition(top, current) {
+      positionHold?.();
+      if (typeof global.ResizeObserver !== 'function') return;
+      const inputs = ['wheel', 'touchstart', 'pointerdown', 'keydown'];
+      let quiet = 0;
+      const stop = () => {
+        observer.disconnect(); global.clearTimeout(quiet); global.clearTimeout(limit);
+        for (const type of inputs) global.removeEventListener(type, stop, true);
+        if (positionHold === stop) positionHold = null;
+      };
+      const observer = new global.ResizeObserver(() => {
+        if (disposed || !current()) { stop(); return; }
+        global.clearTimeout(quiet); quiet = global.setTimeout(stop, 1000);
+        if (Math.round(global.scrollY) !== top) global.scrollTo({ top, behavior: 'instant' });
+      });
+      const limit = global.setTimeout(stop, 3000);
+      for (const type of inputs) global.addEventListener(type, stop, { capture: true, passive: true });
+      positionHold = stop;
+      observer.observe(document.documentElement);
+    }
 
     // News: opening an article where it replaces the list pushes an entry; closing it in the app
     // returns to the list entry with the browser (so the next back leaves news as before).
@@ -2638,7 +2664,10 @@
         // after a reload) opens at its top instead of keeping the position of the screen just left. An original has its
         // own reading line and is left there.
         const top = Number.isFinite(origin.scrollY) ? origin.scrollY : origin.mode === 'source' ? null : 0;
-        if (!anchor && top !== null) global.scrollTo({ top, behavior: 'instant' });
+        if (!anchor && top !== null) {
+          global.scrollTo({ top, behavior: 'instant' });
+          holdPosition(top, () => token === navigationGeneration && state.mode === origin.mode);
+        }
       });
       // Every screen is put back once it is drawn: set before that, the position was cut to the height of the frame
       // still empty (컬렉션 left at 142 came back at 0). A screen drawn at once has a settled promise.
@@ -3248,6 +3277,7 @@
         for (let parent = target?.parentElement; parent && parent !== main; parent = parent.parentElement) if (parent.tagName === 'DETAILS') parent.open = true;
         target?.focus({ preventScroll: true });
         global.scrollTo({ top: pending.origin.scrollY, behavior: 'instant' });
+        holdPosition(pending.origin.scrollY, () => navigationGeneration === pending.navigation && state.mode === 'page');
       });
     }
 
@@ -3899,6 +3929,7 @@
         if (!context.homeAnchor) {
           global.scrollTo({ top: Number.isFinite(context.scrollY) ? context.scrollY : 0, behavior: 'instant' });
           if (!Number.isFinite(context.scrollY)) target?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+          else holdPosition(context.scrollY, () => navigation === navigationGeneration && state.mode === context.mode);
         }
       });
       if (context.focusKey === context.mode + ':reading-resume') {
@@ -7207,7 +7238,7 @@
       cleanup(() => unifiedSearch?.dispose());
       cleanup(() => unbindNavigation?.());
       cleanup(() => global.removeEventListener('popstate', popstate));
-      cleanup(() => { global.removeEventListener('scroll', positionScrolled); if (positionTimer) global.clearTimeout(positionTimer); positionTimer = 0; });
+      cleanup(() => { global.removeEventListener('scroll', positionScrolled); if (positionTimer) global.clearTimeout(positionTimer); positionTimer = 0; positionHold?.(); });
       cleanup(() => wideHeading?.removeEventListener?.('change', pageHeadingWidth));
       cleanup(() => document.removeEventListener('pointerdown', closeFeatureMenusOutside));
       cleanup(() => document.removeEventListener('focusin', closeFeatureMenusOnFocus));
