@@ -2124,6 +2124,8 @@
       if (!global.HaedoNavigation) return;
       // While the browser is moving, its current entry is not this screen's.
       if (historyWait) return;
+      // 설정's item still waiting goes into the entry it belongs to before that entry is left or rewritten.
+      flushSettingsHash();
       const push = action === true || action === 'push';
       const url = new URL(global.location.href);
       const section = sectionFor(mode);
@@ -2166,20 +2168,20 @@
           const leftKey = historyKey || core.id();
           const left = leaving && leaving.key === historyKey ? leaving.entry : historyDetails.get(leftKey) || recorded?.entry || entry;
           // Update the entry being left only while it is still this screen's entry.
-          if (leaving && leaving.key === historyKey) global.history.replaceState(historyRecord(leaving.entry, historyIndex, leftKey, recorded?.back), '', here);
+          if (leaving && leaving.key === historyKey) historyWrite('replaceState', historyRecord(leaving.entry, historyIndex, leftKey, recorded?.back), here);
           const key = core.id();
           historyIndex += 1; historyKey = key;
-          global.history.pushState(historyRecord(entry, historyIndex, key, historyBack(left, leftKey)), '', destination);
+          historyWrite('pushState', historyRecord(entry, historyIndex, key, historyBack(left, leftKey)), destination);
         } else {
           const key = historyKey || core.id();
           const next = historyRecord(entry, historyIndex, key, recorded?.back);
           historyKey = key;
-          if (destination !== here || JSON.stringify(recorded) !== JSON.stringify(next.haedo)) global.history.replaceState(next, '', destination);
+          if (destination !== here || JSON.stringify(recorded) !== JSON.stringify(next.haedo)) historyWrite('replaceState', next, destination);
         }
       } catch (_) {
         // A state that cannot be stored still keeps the address correct.
-        if (push) global.history.pushState(null, '', destination);
-        else if (destination !== here) global.history.replaceState(null, '', destination);
+        if (push) historyWrite('pushState', null, destination);
+        else if (destination !== here) historyWrite('replaceState', null, destination);
       }
       lastRouteBase = url.pathname + url.search;
       syncScrollRestoration(mode);
@@ -2201,31 +2203,84 @@
     function syncScrollRestoration(mode = state.mode) {
       try { global.history.scrollRestoration = appRestoresPosition(mode) ? 'manual' : 'auto'; } catch (_) { /* The app's own restore still runs. */ }
     }
+    // Every history write of this page goes through historyWrite, so the writes that can wait share one budget with
+    // those that cannot (2026-11-23 review MAJOR-A). WebKit (Safari, iPad Chrome) throws a SecurityError past 100
+    // pushState/replaceState calls in 30s. 설정 at 1440 wrote its current item into the hash as it was scrolled and its
+    // position after each rest, 98–134 writes in 30s together; past WebKit's limit 노트 from the menu did not open and
+    // Back left the app. The writes that can wait (a screen's position, an original's reading line, 설정's item in the
+    // hash) are made only with room: 0.5s after the last write of any kind and fewer than 60 writes in the last 30s, so
+    // they never take the page past 60. A screen change (pushState) and the writes that go with it are never held back;
+    // they count, so what waits leaves them their room.
+    const historyStamps = [];
+    const HISTORY_WINDOW = 30000, HISTORY_ROOM = 60, HISTORY_GAP = 500;
+    function historyRecent() {
+      const now = global.performance.now();
+      while (historyStamps.length && now - historyStamps[0] >= HISTORY_WINDOW) historyStamps.shift();
+      return now;
+    }
+    function historyWrite(method, data, url) {
+      historyStamps.push(historyRecent());
+      if (url === undefined) global.history[method](data, '');
+      else global.history[method](data, '', url);
+    }
+    // How long a write that can wait still waits (0: it may be made now).
+    function historyRoom({ gap = true } = {}) {
+      const now = historyRecent(), count = historyStamps.length;
+      const spacing = gap && count ? HISTORY_GAP - (now - historyStamps[count - 1]) : 0;
+      const full = count >= HISTORY_ROOM ? historyStamps[count - HISTORY_ROOM] + HISTORY_WINDOW - now : 0;
+      return Math.max(0, Math.ceil(spacing), Math.ceil(full));
+    }
+    // 설정's current item for the address (settings-ui writeHash), with the entry it was asked for. An item chosen in
+    // the index is written at once (unless the budget is full); one followed while scrolling waits with the position
+    // and goes into the same write. A screen change writes a waiting item first (flushSettingsHash): the entry left
+    // keeps the item, as its sub-screens do.
+    let settingsHashWaiting = null;
+    function settingsHash(hash, { now = false } = {}) {
+      settingsHashWaiting = { hash, key: historyKey };
+      if (now && !historyRoom({ gap: false })) flushSettingsHash();
+      else positionScrolled();
+    }
+    // The waiting item, if the entry shown is still the one it was asked for.
+    function takeSettingsHash() {
+      const waiting = settingsHashWaiting; settingsHashWaiting = null;
+      if (!waiting || (global.history.state?.haedo?.key ?? null) !== waiting.key || global.location.hash === '#' + waiting.hash) return null;
+      return global.location.pathname + global.location.search + '#' + waiting.hash;
+    }
+    function flushSettingsHash() {
+      const url = takeSettingsHash();
+      if (!url) return;
+      try { historyWrite('replaceState', global.history.state, url); } catch (_) { /* The item stays shown; the address keeps the last one. */ }
+    }
     // The entry shown keeps its position as it is scrolled, written once the scrolling has rested. An entry left with
     // the browser's own move is no longer the current entry when popstate arrives, so its position was kept in this
     // page's memory only (historyDetails) and a reload lost it. With the app alone putting these entries back, 자료 and
     // 설정 then opened at the top where the browser's own restore had still succeeded (forward, reload, back).
-    // A number in the entry that already holds scrollY; no other store. Written 200ms after the last scroll and at most
-    // twice a second (Safari refuses more than 100 history writes in 30s).
-    let positionTimer = 0, positionWritten = -Infinity;
+    // A number in the entry that already holds scrollY; no other store. Written 200ms after the last scroll, when the
+    // history budget has room (historyRoom).
+    let positionTimer = 0;
     function recordPosition() {
       positionTimer = 0;
       if (disposed) return;
-      const wait = 500 - (global.performance.now() - positionWritten);
+      const wait = historyRoom();
       if (wait > 0) { positionTimer = global.setTimeout(recordPosition, wait); return; }
       // While a screen is being opened or the browser is moving, the current entry is not the screen shown: tried again
       // after it, as the position may have changed meanwhile with no scroll after it (일정 W at 300, `다음` drawn while
       // busy at 184 kept 300 in its entry). The checks below then still refuse an entry that is not the screen shown.
       if (state.busy || historyWait || historyPending || navigationRender !== null) { positionTimer = global.setTimeout(recordPosition, 200); return; }
-      // An original keeps its reading line in its entry (readerHistoryState, written by the reader 0.5s after it rests);
+      // 설정's item waits only while 설정 is shown.
+      const url = state.mode === 'manage' ? takeSettingsHash() : null;
+      settingsHashWaiting = null;
+      let data = global.history.state, moved = false;
+      const recorded = data?.haedo;
+      // An original keeps its reading line in its entry (readerHistoryState, written by the reader once it rests);
       // a second writer there took the history writes past 100 in 30s (Safari's limit).
-      if (state.mode === 'source') return;
-      const recorded = global.history.state?.haedo;
-      if (!state.bundle || recorded?.v !== 1 || recorded.key !== historyKey || recorded.doc !== historyDoc ||
-          recorded.entry?.mode !== state.mode || recorded.entry.workspaceId !== state.bundle.workspaceId || !appRestoresPosition()) return;
-      const top = Math.max(0, Math.round(global.scrollY));
-      if (recorded.entry.scrollY === top) return;
-      try { global.history.replaceState({ haedo: { ...recorded, entry: { ...recorded.entry, scrollY: top } } }, ''); positionWritten = global.performance.now(); }
+      if (state.mode !== 'source' && state.bundle && recorded?.v === 1 && recorded.key === historyKey && recorded.doc === historyDoc &&
+          recorded.entry?.mode === state.mode && recorded.entry.workspaceId === state.bundle.workspaceId && appRestoresPosition()) {
+        const top = Math.max(0, Math.round(global.scrollY));
+        if (recorded.entry.scrollY !== top) { data = { ...data, haedo: { ...recorded, entry: { ...recorded.entry, scrollY: top } } }; moved = true; }
+      }
+      if (!moved && !url) return;
+      try { historyWrite('replaceState', data, url || undefined); }
       catch (_) { /* The position stays in this page's memory. */ }
     }
     function positionScrolled() {
@@ -2237,24 +2292,33 @@
     // line (폴더를 확인하고 있습니다.) went away 80ms after the list was put back; a photo whose recorded size is not its
     // own moves what follows it once it loads. Until the user acts (wheel, touch, pointer, key) or the screen changes, the
     // place is set again whenever the page's height changes, for up to a second after the last change (three at most).
-    // Any other move of the page (a scroll bar dragged, the app bringing a control into view) also ends it: a scroll away
-    // from the place while the height has stayed the same is not the browser keeping what was in view.
+    // Any other move of the page (a scroll bar dragged, a script, the app bringing a control into view) also ends it.
+    // While it holds, the browser's scroll anchoring is off (overflow-anchor on the root), so the page moves only when
+    // someone moves it or its end cuts the place: any move away from the place is then such a move, also when it comes
+    // in the same task as a height change (review 2026-11-23 MINOR-A: scrollTo(900) with 150px put in above went back
+    // to 300, as the old test took a move with a height change for the browser keeping what was in view). Where the
+    // property is not known, a move with the height unchanged is the only one known not to be the browser's.
     let positionHold = null;
     function holdPosition(top, current) {
       positionHold?.();
       if (typeof global.ResizeObserver !== 'function') return;
       const page = document.documentElement, inputs = ['wheel', 'touchstart', 'pointerdown', 'keydown'];
-      let quiet = 0, height = page.scrollHeight;
+      const anchoring = !!global.CSS?.supports?.('overflow-anchor', 'none'), anchor = page.style.overflowAnchor;
+      let quiet = 0, height = page.scrollHeight, stopped = false;
       const stop = () => {
+        if (stopped) return;
+        stopped = true;
         observer.disconnect(); global.clearTimeout(quiet); global.clearTimeout(limit);
         for (const type of inputs) global.removeEventListener(type, stop, true);
         global.removeEventListener('scroll', moved, true);
+        if (anchoring) page.style.overflowAnchor = anchor;
         if (positionHold === stop) positionHold = null;
       };
       // A place below the page's end (cut to the end until the page is long enough) is not a move away.
       const away = () => { const y = Math.round(global.scrollY); return y !== top && !(top > page.scrollHeight - global.innerHeight && y >= page.scrollHeight - global.innerHeight - 1); };
-      const moved = () => { if (page.scrollHeight === height && away()) stop(); };
+      const moved = () => { if ((anchoring || page.scrollHeight === height) && away()) stop(); };
       const observer = new global.ResizeObserver(() => {
+        if (stopped) return;
         if (disposed || !current()) { stop(); return; }
         height = page.scrollHeight;
         global.clearTimeout(quiet); quiet = global.setTimeout(stop, 1000);
@@ -2263,6 +2327,7 @@
       const limit = global.setTimeout(stop, 3000);
       for (const type of inputs) global.addEventListener(type, stop, { capture: true, passive: true });
       global.addEventListener('scroll', moved, { capture: true, passive: true });
+      if (anchoring) page.style.overflowAnchor = 'none';
       positionHold = stop;
       observer.observe(page);
     }
@@ -3533,7 +3598,8 @@
         storage, workspaceId,
         rows: { account: accountRows, workspace: [manage, management], backup: [open], public: [cover, pages] },
         account: { email: auth?.getAccount?.()?.email || '' }, news,
-        isCurrent: () => !disposed && renderToken === renderGeneration && state.mode === 'manage' && state.bundle?.workspaceId === workspaceId
+        isCurrent: () => !disposed && renderToken === renderGeneration && state.mode === 'manage' && state.bundle?.workspaceId === workspaceId,
+        writeHash: settingsHash
       });
       settingsUI.mount(main, { focusItem: !renderRestoresFocus });
       if (sync) refreshSync().catch(failure);
@@ -5439,7 +5505,14 @@
       };
       readerHistoryState = historyState;
       // Written a little after the reading stops (browsers limit how often an entry may be replaced), and on pagehide.
-      const recordHistory = () => { historyTimer = null; if (!disposed && readerHistoryState === historyState && state.mode === 'source' && reader.isConnected) writeRoute('source', 'replace'); };
+      // The line can wait for room in the history budget (historyRoom), as a screen's position does.
+      const recordHistory = () => {
+        historyTimer = null;
+        if (disposed || readerHistoryState !== historyState || state.mode !== 'source' || !reader.isConnected) return;
+        const wait = historyRoom();
+        if (wait > 0) historyTimer = global.setTimeout(recordHistory, wait);
+        else writeRoute('source', 'replace');
+      };
       const scheduleHistory = () => { global.clearTimeout(historyTimer); historyTimer = global.setTimeout(recordHistory, 500); };
       global.addEventListener('scroll', scheduleHistory, { passive: true });
       readerCleanup = () => {
@@ -6993,7 +7066,7 @@
     beforeUnload = event => {
       // The import form keeps its input 400ms after the last key; do not lose that window to a reload.
       if (stageTimer && dirty()) persistStage().catch(failure);
-      recordReaderHistory();
+      recordReaderHistory(); flushSettingsHash();
       if (dirty() || state.sourceDrafts.size || workbench?.dirty() || writer?.isDirty() || sourceEditor?.isDirty() || collection?.dirty() || accountBlogUI?.dirty() || blogManager?.dirty() || preservationUI?.dirty() || obsidianUpdateUI?.dirty() || originalAttachmentsUI?.dirty() || publicCoverUI?.dirty() || fullBackupUI?.busy() || interestUI?.dirty() || externalDiscoveryUI?.dirty() || annualPlanUI?.dirty()) { event.preventDefault(); event.returnValue = ''; }
     };
     visibility = () => {
@@ -7007,7 +7080,7 @@
       flushReadingPosition();
     };
     pagehideReading = () => {
-      flushReadingPosition(); recordReaderHistory(); if (sourceEditor?.isDirty()) sourceEditor.flush().catch(failure);
+      flushReadingPosition(); recordReaderHistory(); flushSettingsHash(); if (sourceEditor?.isDirty()) sourceEditor.flush().catch(failure);
       // The import form keeps its input 400ms after the last key; do not lose that window to a reload.
       if (stageTimer && dirty()) persistStage().catch(failure);
     };
@@ -7069,7 +7142,7 @@
       const returnPage = composeOriginPage();
       viewOrigins.set('page', { mode: 'home', workspaceId: active, scrollY: 0, homeState: { workspaceId: active, tab: 'posts', query: '', limit: 20 }, ...(returnPage ? { returnPage } : {}) });
       const url = new URL(global.location.href); url.searchParams.delete('compose');
-      global.history.replaceState(null, '', url.pathname + url.search + url.hash);
+      historyWrite('replaceState', null, url.pathname + url.search + url.hash);
     }
     if (active) {
       try { state.bundle = await storage.read(active); }

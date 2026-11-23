@@ -820,6 +820,93 @@ async function main() {
       assert.equal(await rest(), 200, 'forward to 자료 after a reload'); assert.equal(await inView(), left2, 'with the same rows in view');
     }, 1440);
 
+    // 2026-11-23 (history review MINOR-A, MINOR-B 1): the place put back is held while the page's height changes, until
+    // someone moves the page (ui.js holdPosition). It never takes the page back from a move: the user's wheel, also when
+    // the page grows above it in the same task as the wheel and again a moment later, and a script's scroll that comes in
+    // the same task as a height change (scrollTo(900) with 150px put in above went back to 300 in 3 of 3 trips).
+    await check('history: a place put back is not held against the wheel or a script scroll, also when the page grows above it', async ({ page }) => {
+      await fixture(page, { many: true });
+      await page.setViewportSize({ width: 1440, height: 600 });
+      const rest = () => page.evaluate(() => new Promise(resolve => { let last = scrollY, same = 0; const tick = () => { if (scrollY === last) same += 1; else { last = scrollY; same = 0; } if (same >= 30) resolve(Math.round(last)); else requestAnimationFrame(tick); }; requestAnimationFrame(tick); }));
+      // A late response: 150px more at the top of the list, above the view.
+      await page.addInitScript(() => { window.__growAbove = () => { const pad = document.createElement('div'); pad.style.height = '150px'; document.querySelector('#lifeSearchResults').prepend(pad); }; });
+      // 자료 at 300 → an original → the browser's back: the app puts 300 back and holds it.
+      const returned = async () => {
+        await page.goto('about:blank'); await page.goto(base + '/index.html?section=records'); await ready(page); await mode(page, 'sources');
+        assert.ok(await page.evaluate(() => document.documentElement.scrollHeight - innerHeight) > 1400, '자료 scrolls at this height');
+        await page.evaluate(() => scrollTo({ top: 300, behavior: 'instant' })); await rest();
+        await page.waitForFunction(() => history.state?.haedo?.entry?.scrollY === 300);
+        // Pressed in the page, so nothing scrolls it into view first.
+        await page.locator('#lifeSearchResults .life-source-open').nth(8).evaluate(node => node.click()); await mode(page, 'source'); await page.locator('#lifeSourceText').waitFor();
+        await page.goBack(); await mode(page, 'sources');
+        await page.waitForFunction(() => Math.round(scrollY) === 300);
+      };
+      await returned();
+      await page.evaluate(() => addEventListener('wheel', () => window.__growAbove(), { once: true }));
+      await page.mouse.move(720, 400); await page.mouse.wheel(0, 400);
+      const wheeled = await rest();
+      assert.ok(wheeled >= 700, 'the wheel moved the page on from 300 (' + wheeled + ')');
+      // Again a moment later: the browser keeps what is in view, and the page is not taken back to 300.
+      await page.evaluate(() => window.__growAbove()); const late = await rest();
+      assert.ok(late > wheeled, 'kept in view as the page grew above (' + wheeled + ' → ' + late + ')');
+      await page.waitForTimeout(1200); assert.equal(await rest(), late, 'the page stays where the wheel took it');
+      await returned();
+      await page.evaluate(() => { scrollTo({ top: 900, behavior: 'instant' }); window.__growAbove(); });
+      assert.equal(await rest(), 900, 'a script scroll in the same task as a height change');
+      await page.waitForTimeout(1200); assert.equal(await rest(), 900, 'and it stays there');
+    }, 1440);
+    // 2026-11-23 (history review MAJOR-A, MINOR-B 2): every history write of the page counts against one budget. 설정 at
+    // 1440 wrote its current item into the hash as it was scrolled and its position after each rest: 98–134 writes in 30s
+    // of reading in short bursts. WebKit (Safari, iPad Chrome) throws a SecurityError past 100 writes in 30s; this check
+    // throws as it does, and then 노트 from the menu did not open and the browser's back left the app. The writes that
+    // can wait stay within 60 in 30s and leave a screen change its room.
+    // Real time, no clock: the limit is a 30s window of real writes, and the app's writes follow its own timers and frames
+    // (page.clock replaces requestAnimationFrame with a timer, which changed the app's timing in R1).
+    await check('history: 30s of reading 설정 in short bursts stays within 60 history writes and the menu still opens 노트', async ({ page, context }) => {
+      await context.addInitScript(() => {
+        // Times of the writes made; a refused one is kept as its negative time.
+        const writes = window.__historyWrites = [];
+        for (const name of ['pushState', 'replaceState']) {
+          const write = history[name];
+          history[name] = function (...args) {
+            const now = performance.now();
+            if (writes.filter(at => at >= 0 && now - at < 30000).length >= 100) { writes.push(-now); throw new DOMException('history.' + name + '() more than 100 times per 30 seconds', 'SecurityError'); }
+            writes.push(now); return write.apply(this, args);
+          };
+        }
+      });
+      await page.setViewportSize({ width: 1440, height: 700 });
+      await page.goto('about:blank'); await page.goto(base + '/index.html?section=manage'); await ready(page); await mode(page, 'manage');
+      await page.waitForTimeout(1000);
+      const start = await page.evaluate(() => ({ n: window.__historyWrites.length, key: history.state?.haedo?.key, length: history.length }));
+      const end = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
+      assert.ok(end > 800, '설정 scrolls at this height (' + end + ')');
+      await page.mouse.move(900, 350);
+      const pauses = [200, 260, 300, 520, 700], began = Date.now();
+      for (let i = 0, y = 0, dir = 1; Date.now() - began < 30000; i++) {
+        await page.mouse.wheel(0, 160 * dir); y += 160 * dir;
+        if (y > end - 200) dir = -1;
+        if (y < 200) dir = 1;
+        await page.waitForTimeout(pauses[i % pauses.length]);
+      }
+      await page.waitForTimeout(800);
+      const run = await page.evaluate(start => {
+        const writes = window.__historyWrites.slice(start.n), made = writes.filter(at => at >= 0);
+        let most = 0;
+        for (const at of made) most = Math.max(most, made.filter(other => other >= at && other - at < 30000).length);
+        return { most, refused: writes.length - made.length, hash: location.hash, key: history.state?.haedo?.key, length: history.length };
+      }, start);
+      assert.match(run.hash, /^#settings-[a-z]+$/, 'the address follows the item read');
+      assert.equal(run.key, start.key, 'the same entry'); assert.equal(run.length, start.length, 'no entry added');
+      assert.equal(run.refused, 0, 'no write refused'); assert.ok(run.most <= 60, 'at most 60 history writes in 30s (' + run.most + ')');
+      // The menu opens 노트 at once, and the browser's back comes back to 설정 in the app.
+      await nav(page, 'home'); await mode(page, 'home'); await homeLoaded(page);
+      assert.equal(new URL(page.url()).searchParams.get('section'), 'notes');
+      await page.goBack(); await mode(page, 'manage');
+      assert.equal(new URL(page.url()).searchParams.get('section'), 'manage');
+      assert.equal(await page.evaluate(() => window.__historyWrites.filter(at => at < 0).length), 0, 'no write refused on the way');
+    }, 1440);
+
     // 2026-11-18 (R2): a post read on, left for another screen and returned to with the browser's back or forward opens
     // where it was left. Until then nothing put a post back: the browser's own restore ran before the post was drawn
     // and was cut to the height of the screen being left (560 came back at 329 or at 0 after a short screen), and a
