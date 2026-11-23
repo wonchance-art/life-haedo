@@ -22,7 +22,7 @@
 .cl-book { width:120px; height:185px; background:#f0f0f2; color:var(--ink-soft); border-left:3px solid #d4d4d9; }
 .cl-film,.cl-artwork { width:120px; height:180px; background:#f0f0f2; color:var(--ink-soft); }
 .cl-video { width:170px; height:100px; background:#f0f0f2; color:var(--ink-soft); }
-.cl-tool,.cl-person,.cl-place,.cl-other { width:88px; height:88px; border-radius:20px; align-items:center; justify-content:center; background:#f0f0f2; color:var(--ink-soft); }
+.cl-tool,.cl-person,.cl-place,.cl-other { width:88px; height:88px; border-radius:var(--haedo-radius, 20px); align-items:center; justify-content:center; background:#f0f0f2; color:var(--ink-soft); }
 .cl-person { border-radius:50%; background:#f0f0f2; }
 .cl-cover svg { width:32px; height:32px; }
 .cl-caption { display:flex; flex-direction:column; gap:4px; width:100%; padding-top:12px; overflow-wrap:anywhere; }
@@ -86,6 +86,8 @@
 .cl-lookup-choice input:checked::after { content:""; position:absolute; top:15px; left:19px; width:6px; height:10px; border:solid #fff; border-width:0 2px 2px 0; transform:rotate(45deg); }
 .cl-lookup-choice input:disabled { opacity:.5; cursor:default; }
 @media(forced-colors:active) { .life-collection .cl-lookup-choice input { appearance:auto; } .cl-lookup-choice input::before,.cl-lookup-choice input::after { display:none; } }
+/* W5 re-review MINOR-2: in forced colours every chip gets the same 1px border, so a chosen filter adds a Highlight outline. */
+@media(forced-colors:active) { .cl-chip-row button[aria-pressed=true],.cl-result-line button[aria-pressed=true],.cl-children button[aria-pressed=true] { outline:2px solid Highlight; outline-offset:-2px; } }
 
 .cl-image-controls { display:flex; align-items:center; flex-wrap:wrap; gap:8px 16px; margin:12px 0 20px; }
 .cl-image-controls p { margin:0; max-width:48ch; }

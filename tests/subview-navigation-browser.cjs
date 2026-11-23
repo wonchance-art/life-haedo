@@ -329,6 +329,34 @@ async function main() {
       await page.locator('#wbError').waitFor({ state: 'hidden' }); await back(page, 'sources');
       assert.equal((await current(page)).workbench.page.intro, '돌아가기 실패에도 보존할 소개');
     });
+    // W5 (2026-11-18, re-review 11-23): 자료's own list and work screens take the large title band from 1101px (the 44px row
+    // keeps the path and the actions) and keep the one-row heading to 1100px. 묶음·다시 찾기 repeat that title in the body
+    // for screen readers only, and entering 묶음·다시 찾기·회고·선택 자료 페이지 by keyboard puts focus on a title that shows.
+    for (const width of [1440, 820]) await check('자료 sub-screens: title band from 1101px, one row to 1100px, hidden repeated titles and a visible focused title at ' + width, async ({ page }) => {
+      for (const view of ['topics', 'collection', 'import', 'activities', 'discover', 'reflection']) {
+        await page.goto(base + '/index.html?section=records&view=' + view); await ready(page); await mode(page, view);
+        const place = await page.evaluate(() => {
+          const h1 = document.querySelector('#lifeApp .life-page-title');
+          return { band: !!h1?.closest('.haedo-title-band'), row: !!h1?.closest('.life-toolbar'), path: !!document.querySelector('#lifeApp .life-toolbar[data-page-head] .haedo-heading-path') };
+        });
+        assert.deepEqual(place, width >= 1101 ? { band: true, row: false, path: true } : { band: false, row: true, path: false }, view + ' at ' + width + ': where the title is');
+      }
+      for (const [view, title] of [['activities', '묶음'], ['discover', '다시 찾기']]) {
+        await page.goto(base + '/index.html?section=records&view=' + view); await ready(page); await mode(page, view);
+        const repeated = await page.locator('#lifeMain .wb-heading h2').evaluate(node => ({ text: node.textContent, hidden: node.classList.contains('life-sr-only') && node.getBoundingClientRect().width <= 1 }));
+        assert.deepEqual(repeated, { text: title, hidden: true }, view + ': the body repeats the title for screen readers only');
+        assert.equal(await heading(page).textContent(), title, view + ': the shown title');
+      }
+      await page.goto(base + '/index.html?section=records'); await ready(page); await mode(page, 'sources');
+      for (const [view, title] of [['activities', '묶음'], ['discover', '다시 찾기'], ['reflection', '회고'], ['page', '선택 자료 페이지']]) {
+        const menu = await openRecordsMenu(page); await menu.getByRole('button', { name: title, exact: true }).focus(); await page.keyboard.press('Enter'); await mode(page, view);
+        await page.waitForFunction(() => /^H[12]$/.test(document.activeElement?.tagName || ''));
+        const focused = await page.evaluate(() => { const node = document.activeElement, box = node.getBoundingClientRect();
+          return { text: node.textContent.trim(), shown: !node.closest('.life-sr-only') && box.width > 1 && box.height > 1 && node.checkVisibility() }; });
+        assert.deepEqual(focused, { text: title, shown: true }, view + ' at ' + width + ': keyboard entry focuses the shown title');
+        await back(page, 'sources');
+      }
+    }, width);
     await check('direct deep links have stable parent fallback and no persistent origin data', async ({ page }) => {
       for (const [view, title, parent] of [['import','가져오기','sources'], ['write','자료 작성','sources'], ['annual-plan','연간 계획','tools'], ['activities','묶음','sources'], ['page','선택 자료 페이지','sources'], ['discover','다시 찾기','sources'], ['transfer','자료 백업·복원','backup'], ['sync','동기화','manage'], ['workbench-backup','자료·구성 백업','backup'], ['public-pages','공개 페이지 관리','manage']]) {
         await page.goto(base + '/index.html?view=' + view); await ready(page); await mode(page, view);

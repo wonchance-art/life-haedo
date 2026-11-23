@@ -672,9 +672,12 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
   background: transparent;
   cursor: pointer;
 }
+/* The editor's caption starts at the photo's left edge, as the reading view's does (W5 re-review NIT): no side padding,
+ * start-aligned (a button centres by default). Its 44px height stays the touch target. */
 .photo-caption-text {
   min-height: 44px;
-  padding: 8px;
+  padding: 8px 0;
+  text-align: start;
   border: 0;
   font: inherit;
   color: var(--ink-soft);

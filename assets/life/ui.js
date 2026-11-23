@@ -1796,7 +1796,10 @@
       }
       if (mode === 'find') main.querySelector('#lifeFindQuery')?.focus();
       if (mode === 'sync' || mode === 'transfer') global.scrollTo({ top: 0, behavior: 'instant' });
-      const heading = (options?.chapterImport && (main.querySelector('#wbChapterImportHeading') || main.querySelector('#wbChapterNote'))) || (options?.book && main.querySelector(options.book.chapterId ? '#wbChapterNote' : '#wbBookHeading')) || main.querySelector('h1,h2') || pageHeading();
+      // The screen's first heading takes focus. When it is said to screen readers only (묶음·다시 찾기·회고·선택 자료 페이지
+      // repeat the heading's name, W5) the visible screen title takes it, so the focus ring shows (W5 re-review MINOR-1).
+      const first = main.querySelector('h1,h2'), firstShown = first && !first.closest('.life-sr-only') ? first : pageHeading() || first;
+      const heading = (options?.chapterImport && (main.querySelector('#wbChapterImportHeading') || main.querySelector('#wbChapterNote'))) || (options?.book && main.querySelector(options.book.chapterId ? '#wbChapterNote' : '#wbBookHeading')) || firstShown;
       // A return or back that puts focus on its origin control (restoreOriginView) does not pass through this heading first.
       if (heading && !restoresFocus && mode !== 'find' && mode !== 'write' && !(mode === 'page' && blogPageTask && blogMode === 'edit') && !options?.searchTarget && !options?.nineTarget && !options?.collectionItemId && !options?.groupId && !reimport) {
         heading.focus({ preventScroll: true });

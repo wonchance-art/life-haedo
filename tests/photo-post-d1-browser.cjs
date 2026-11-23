@@ -181,6 +181,23 @@ async function main() {
       assert.match(await pillName(page), /기존 글 수정 중/);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, 'no sideways scroll at 390');
     });
+    // W5 (Designer, 2026-11-18): a photo's caption starts at the photo's left edge, as the body text does, in reading and
+    // in editing (it was centred). The public blog keeps its own captions (public pages are not changed).
+    for (const width of [1440, 390]) await check('a photo caption starts at the photo\'s left edge in reading and editing at ' + width, { width, height: width > 760 ? 1000 : 844 }, async ({ page }) => {
+      const sample = await readSaved(page); await openPost(page, sample.postIds[0]);
+      const caption = (selector) => page.evaluate(selector => {
+        const figure = document.querySelector('.photo-article figure, .photo-posts figure'), img = figure?.querySelector('img'), node = figure?.querySelector(selector);
+        if (!img || !node) return null;
+        const range = document.createRange(); range.selectNodeContents(node); const first = range.getClientRects()[0];
+        return { text: node.textContent.trim(), align: getComputedStyle(node).textAlign, offset: Math.round(first.left - img.getBoundingClientRect().left) };
+      }, selector);
+      const reading = await caption('figcaption');
+      assert.deepEqual(reading, { text: '익명 샘플로 그린 오후의 산책길', align: 'start', offset: 0 }, width + ': reading');
+      await page.getByRole('button', { name: '글 수정', exact: true }).click(); await title(page).waitFor(); await page.locator('.photo-posts .photo-caption-text').first().waitFor();
+      const editing = await caption('.photo-caption-text');
+      assert.equal(editing?.text, '익명 샘플로 그린 오후의 산책길', width + ': the editor shows the caption');
+      assert.deepEqual([editing.align === 'start' || editing.align === 'left', editing.offset], [true, 0], width + ': editing starts where reading does (' + JSON.stringify(editing) + ')');
+    });
     // W5 re-review MAJOR-2 (2026-11-23): up to 760px the pill's 공개·비공개 word gives way to 수정 중 or to a problem (the
     // icon and the button's name keep the visibility), so the one-line save status keeps its room. With the word kept
     // from 360px, a revised post with a failed upload and a refused save grew the command row to 197px at 360 (the error
