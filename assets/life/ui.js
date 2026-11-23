@@ -204,6 +204,8 @@
     const subviewTitles = { 'annual-plan': '연간 계획', 'source-trash': '자료 휴지통', 'source-edit': '자료 수정', 'naver-capture': '네이버 본문·사진 검토', 'naver-blog': '네이버 블로그 연결', 'account-blog': '계정 보관 상태', 'public-cover': '공개 표지', 'external-discovery': '새 글 찾기', interests: '관심 주제 편집', 'obsidian-update': 'Obsidian 갱신', preservation: '보관 범위·근거 파일', blog: '글 공개·보관', find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '자료 작성', activities: '묶음', page: '선택 자료 페이지',
       discover: '다시 찾기', reflection: '회고', books: '내 책', sync: managedLibrary ? '계정 보관' : '동기화', transfer: '자료 백업·복원',
       'workbench-backup': '자료·구성 백업', 'public-pages': '공개 페이지 관리', backup: '백업·복원' };
+    // The name of a return says where it goes: one table for a subview's return and an original's 돌아가기 (searchReturnButton).
+    const returnLabels = { 'naver-blog': '네이버 블로그 목록으로 돌아가기', 'naver-capture': '본문·사진 검토로 돌아가기', 'account-blog': '계정 보관 상태로 돌아가기', 'external-discovery': '새 글 찾기로 돌아가기', interests: '관심 주제 편집으로 돌아가기', blog: '글 공개·보관으로 돌아가기', find: '검색 결과로 돌아가기', reflection: '회고로 돌아가기', home: '노트로 돌아가기', sources: '자료로 돌아가기', topics: '검색 결과로 돌아가기', tools: '일정으로 돌아가기', manage: '설정으로 돌아가기', backup: '백업·복원으로 돌아가기', collection: '컬렉션으로 돌아가기', activities: '묶음으로 돌아가기', page: '선택 자료 페이지로 돌아가기', books: '책으로 돌아가기', import: '가져오기로 돌아가기', write: '자료 작성으로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기', 'source-trash': '자료 휴지통으로 돌아가기', quarter: '일정으로 돌아가기', month: '일정으로 돌아가기', week: '일정으로 돌아가기', day: '일정으로 돌아가기' };
     // 일정's plan views (the former 계획 section).
     const planningModes = new Set(['tools', 'annual-plan']);
     const TIMELINE_LIST = 'workspace.html';
@@ -428,6 +430,9 @@
         if (!blogPageTask || !['edit', 'read', 'profile'].includes(context.mode)) { global.requestAnimationFrame(syncWritingFocus); return; }
         const previousMode = blogMode;
         blogMode = context.mode;
+        // A post being read is put back by the app, an editor is not (appRestoresPosition). While the browser is
+        // moving its current entry is not this screen's; the next entry written sets it.
+        if (!historyWait) syncScrollRestoration();
         if (context.committed && context.id) blogCommitted = { kind: context.kind === 'legacy' ? 'plain' : context.kind, id: context.id, committed: true };
         renderHeader();
         // Every read/edit/save switch re-applies the one 글쓰기 rule to the post now shown.
@@ -1627,7 +1632,9 @@
           throw postContextChanged(options.exactPost.id);
         }
       }
-      pendingPostReturn = mode === 'page' && options.restorePostOrigin ? { origin: options.restorePostOrigin,
+      // postPosition: a post reopened by the browser's back or forward (restoreHistory), put back like a post returned to.
+      const postReturn = mode === 'page' ? options.restorePostOrigin || options.postPosition || null : null;
+      pendingPostReturn = postReturn ? { origin: postReturn, history: postReturn === options.postPosition,
         navigation: token, workspace, workspaceId, account, input: inputGeneration } : null;
       if (Object.hasOwn(options, 'restoreViewOrigin')) {
         if (options.restoreViewOrigin?.workspaceId === workspaceId) viewOrigins.set(mode, options.restoreViewOrigin);
@@ -1678,7 +1685,7 @@
           (mode !== 'source' || (options?.sourceId && !Object.hasOwn(options, 'returnContext')))) state.returnContext = null;
       state.managementOpen = false;
       if (mode === 'source' && !options?.readerArrangeOpen) state.readerArrangeOpen = false;
-      const { composingPost: _composingPost, schedulePinned, navigationMotion, sectionPosition, sourceEdit, selection, groupId, pagePreview, discovery, writing, reimport, externalImport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, searchTarget, nineTarget, collectionItemId, originFocusKey, featureNavigation, restoreViewOrigin, viewOrigin, exactPost, restorePostOrigin, historyAction, historyTask, materialReader, endTask, restoresFocus, findSection: _findSection, ...viewOptions } = options || {};
+      const { composingPost: _composingPost, postPosition: _postPosition, schedulePinned, navigationMotion, sectionPosition, sourceEdit, selection, groupId, pagePreview, discovery, writing, reimport, externalImport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, searchTarget, nineTarget, collectionItemId, originFocusKey, featureNavigation, restoreViewOrigin, viewOrigin, exactPost, restorePostOrigin, historyAction, historyTask, materialReader, endTask, restoresFocus, findSection: _findSection, ...viewOptions } = options || {};
       if (externalImport) {
         if (mode !== 'import' || externalImport.workspaceId !== state.bundle.workspaceId) return false;
         const input = externalImport.article.privateReader === true
@@ -2153,6 +2160,8 @@
       const entry = historyEntry(mode);
       // Between a reader's renders nothing can measure its line; keep what the entry already holds for this exact version.
       if (mode === 'source' && !entry.reading && recorded?.entry?.reading && sameHistoryScreen(recorded.entry, historyPublic(entry))) entry.reading = recorded.entry.reading;
+      // The same for a screen's position (recordPosition): rewriting the entry of the screen shown keeps what it holds.
+      if (!push && Number.isFinite(recorded?.entry?.scrollY) && sameHistoryScreen(recorded.entry, historyPublic(entry))) entry.scrollY = recorded.entry.scrollY;
       try {
         if (push && !(destination === here && recorded && sameHistoryScreen(recorded.entry, historyPublic(entry)))) {
           const leftKey = historyKey || core.id();
@@ -2174,12 +2183,89 @@
         else if (destination !== here) global.history.replaceState(null, '', destination);
       }
       lastRouteBase = url.pathname + url.search;
-      // 일정's units are put back by the app alone (restoreOriginView; ‹ up opens the parent at its top). Left to the
-      // browser as well (auto), its own restore of the entry, animated by the root's smooth scrolling, was still moving
-      // when the app set the recorded position and Chromium added the step in flight: M left at 162 came back at 175,
-      // ‹ up ended at 15 instead of 0 (2026-11-18, W2 review m-2). The mode belongs to the entry just written; other
-      // screens keep the browser's restore.
-      try { global.history.scrollRestoration = calendarModes.has(mode) ? 'manual' : 'auto'; } catch (_) { /* The app's own restore still runs. */ }
+      syncScrollRestoration(mode);
+    }
+    // One side puts an entry's position back (2026-11-18). The app does it for every screen it reopens at its place:
+    // a list, a calendar unit or a subview once it is drawn (restoreOriginView), an original at its reading line, a post
+    // read again (restorePostReturn). Those entries are `manual`. Left to the browser as well (auto), its own restore of
+    // the entry starts on the screen being left, cut to that screen's height and animated by the root's smooth scrolling.
+    // A post read on to 560 and left for a short screen stood at 79 after back (nothing else put a post back). And where
+    // the app's frame callback is not the browser's own frame (Playwright's clock), that animation was still moving when
+    // the app set the recorded position and Chromium added the step in flight: 일정 M left at 162 came back at 175, ‹ up
+    // ended at 15 instead of 0 (W2 review m-2), 자료 left at 333 came back at 335–369 after an original.
+    // An editor (글쓰기, 수정, 프로필 편집) and 자료로 글쓰기 are not put back by the app, so their entries stay with the
+    // browser (auto); a post is the app's from the moment its reader reports that it is read (onBlogModeChange).
+    // The value belongs to the entry shown, so it is written with every entry and when a post changes between read and edit.
+    function appRestoresPosition(mode = state.mode) {
+      return mode !== 'page' || !materialWritingTask && (!blogPageTask || blogMode === 'read');
+    }
+    function syncScrollRestoration(mode = state.mode) {
+      try { global.history.scrollRestoration = appRestoresPosition(mode) ? 'manual' : 'auto'; } catch (_) { /* The app's own restore still runs. */ }
+    }
+    // The entry shown keeps its position as it is scrolled, written once the scrolling has rested. An entry left with
+    // the browser's own move is no longer the current entry when popstate arrives, so its position was kept in this
+    // page's memory only (historyDetails) and a reload lost it. With the app alone putting these entries back, 자료 and
+    // 설정 then opened at the top where the browser's own restore had still succeeded (forward, reload, back).
+    // A number in the entry that already holds scrollY; no other store. Written 200ms after the last scroll and at most
+    // twice a second (Safari refuses more than 100 history writes in 30s).
+    let positionTimer = 0, positionWritten = -Infinity;
+    function recordPosition() {
+      positionTimer = 0;
+      if (disposed) return;
+      const wait = 500 - (global.performance.now() - positionWritten);
+      if (wait > 0) { positionTimer = global.setTimeout(recordPosition, wait); return; }
+      // While a screen is being opened or the browser is moving, the current entry is not the screen shown: tried again
+      // after it, as the position may have changed meanwhile with no scroll after it (일정 W at 300, `다음` drawn while
+      // busy at 184 kept 300 in its entry). The checks below then still refuse an entry that is not the screen shown.
+      if (state.busy || historyWait || historyPending || navigationRender !== null) { positionTimer = global.setTimeout(recordPosition, 200); return; }
+      // An original keeps its reading line in its entry (readerHistoryState, written by the reader 0.5s after it rests);
+      // a second writer there took the history writes past 100 in 30s (Safari's limit).
+      if (state.mode === 'source') return;
+      const recorded = global.history.state?.haedo;
+      if (!state.bundle || recorded?.v !== 1 || recorded.key !== historyKey || recorded.doc !== historyDoc ||
+          recorded.entry?.mode !== state.mode || recorded.entry.workspaceId !== state.bundle.workspaceId || !appRestoresPosition()) return;
+      const top = Math.max(0, Math.round(global.scrollY));
+      if (recorded.entry.scrollY === top) return;
+      try { global.history.replaceState({ haedo: { ...recorded, entry: { ...recorded.entry, scrollY: top } } }, ''); positionWritten = global.performance.now(); }
+      catch (_) { /* The position stays in this page's memory. */ }
+    }
+    function positionScrolled() {
+      if (positionTimer) global.clearTimeout(positionTimer);
+      positionTimer = global.setTimeout(recordPosition, 200);
+    }
+    // A screen put back at its place can still change height above that place a moment later, and the browser then
+    // keeps what is in view, not the place: 자료 left at 300 came back at 270 after a reload and forward, as its folder
+    // line (폴더를 확인하고 있습니다.) went away 80ms after the list was put back; a photo whose recorded size is not its
+    // own moves what follows it once it loads. Until the user acts (wheel, touch, pointer, key) or the screen changes, the
+    // place is set again whenever the page's height changes, for up to a second after the last change (three at most).
+    // Any other move of the page (a scroll bar dragged, the app bringing a control into view) also ends it: a scroll away
+    // from the place while the height has stayed the same is not the browser keeping what was in view.
+    let positionHold = null;
+    function holdPosition(top, current) {
+      positionHold?.();
+      if (typeof global.ResizeObserver !== 'function') return;
+      const page = document.documentElement, inputs = ['wheel', 'touchstart', 'pointerdown', 'keydown'];
+      let quiet = 0, height = page.scrollHeight;
+      const stop = () => {
+        observer.disconnect(); global.clearTimeout(quiet); global.clearTimeout(limit);
+        for (const type of inputs) global.removeEventListener(type, stop, true);
+        global.removeEventListener('scroll', moved, true);
+        if (positionHold === stop) positionHold = null;
+      };
+      // A place below the page's end (cut to the end until the page is long enough) is not a move away.
+      const away = () => { const y = Math.round(global.scrollY); return y !== top && !(top > page.scrollHeight - global.innerHeight && y >= page.scrollHeight - global.innerHeight - 1); };
+      const moved = () => { if (page.scrollHeight === height && away()) stop(); };
+      const observer = new global.ResizeObserver(() => {
+        if (disposed || !current()) { stop(); return; }
+        height = page.scrollHeight;
+        global.clearTimeout(quiet); quiet = global.setTimeout(stop, 1000);
+        if (Math.round(global.scrollY) !== top) global.scrollTo({ top, behavior: 'instant' });
+      });
+      const limit = global.setTimeout(stop, 3000);
+      for (const type of inputs) global.addEventListener(type, stop, { capture: true, passive: true });
+      global.addEventListener('scroll', moved, { capture: true, passive: true });
+      positionHold = stop;
+      observer.observe(page);
     }
 
     // News: opening an article where it replaces the list pushes an entry; closing it in the app
@@ -2479,7 +2565,12 @@
       try {
         // An entry whose post is gone (deleted, or replaced with no record on this device) opens the list instead.
         const { missingPost, ...restored } = await historyOptions(view, record.idx < from);
-        opened = await navigate(missingPost ? 'home' : view.mode, { ...restored, restoresFocus });
+        // A post read is reopened where it was left: its reader is drawn after its own read, so the position is set
+        // then (restorePostReturn), not here. An entry left with the browser's own move keeps its position in this
+        // page's memory only; without one the post opens at its top. An editor is not put back.
+        const postId = view.blog && !missingPost ? restored.searchTarget?.photoPostId || restored.searchTarget?.postId : null;
+        const postPosition = typeof postId === 'string' ? { postTarget: { id: postId }, scrollY: Number.isFinite(view.scrollY) ? view.scrollY : 0, focusKey: view.focusKey } : null;
+        opened = await navigate(missingPost ? 'home' : view.mode, { ...restored, restoresFocus, ...(postPosition ? { postPosition } : {}) });
         if (missingPost) announce(missingPostNotice);
       }
       catch (cause) {
@@ -2588,15 +2679,20 @@
         target?.focus({ preventScroll: true });
         // The return skipped the heading focus, so a target that could not take focus must not leave focus on <body>.
         if (!document.activeElement || document.activeElement === document.body) focusFirstHeading();
-        // An entry of 일정 has no browser restore (writeRoute): one without a recorded position (a forward entry after a
-        // reload) opens at its top instead of keeping the position of the screen just left.
-        const top = Number.isFinite(origin.scrollY) ? origin.scrollY : calendarModes.has(origin.mode) ? 0 : null;
-        if (!anchor && top !== null) global.scrollTo({ top, behavior: 'instant' });
+        // These entries have no browser restore (syncScrollRestoration): one without a recorded position (a forward entry
+        // after a reload) opens at its top instead of keeping the position of the screen just left. An original has its
+        // own reading line and is left there.
+        const top = Number.isFinite(origin.scrollY) ? origin.scrollY : origin.mode === 'source' ? null : 0;
+        if (!anchor && top !== null) {
+          global.scrollTo({ top, behavior: 'instant' });
+          holdPosition(top, () => token === navigationGeneration && state.mode === origin.mode);
+        }
       });
+      // Every screen is put back once it is drawn: set before that, the position was cut to the height of the frame
+      // still empty (컬렉션 left at 142 came back at 0). A screen drawn at once has a settled promise.
       if (origin.mode === 'find') findRenderPromise.then(restore);
       else if (origin.mode === 'home') homeRenderPromise.then(restore);
-      else if (origin.mode === 'naver-capture' || origin.mode === 'naver-blog' || origin.mode === 'external-discovery' || origin.mode === 'account-blog' || origin.mode === 'blog' || calendarModes.has(origin.mode) && schedule) mainRenderPromise.then(restore);
-      else restore();
+      else Promise.resolve(mainRenderPromise).then(restore);
     }
 
     async function returnFromBlog(context = {}) {
@@ -2689,7 +2785,7 @@
         heading.replaceChildren(node('span', scheduleParts.title, 'schedule-title-full'), short);
       }
       if (subviewTitles[state.mode] && state.mode !== 'external-discovery' && !(state.mode === 'page' && blogPageTask && blogMode === 'edit')) {
-        const labels = { 'naver-blog': '네이버 블로그 목록으로 돌아가기', 'naver-capture': '본문·사진 검토로 돌아가기', 'account-blog': '계정 보관 상태로 돌아가기', 'external-discovery': '새 글 찾기로 돌아가기', interests: '관심 주제 편집으로 돌아가기', blog: '글 공개·보관으로 돌아가기', find: '검색 결과로 돌아가기', reflection: '회고로 돌아가기', home: '노트로 돌아가기', sources: '자료로 돌아가기', topics: '검색 결과로 돌아가기', tools: '일정으로 돌아가기', manage: '설정으로 돌아가기', backup: '백업·복원으로 돌아가기', collection: '컬렉션으로 돌아가기', activities: '묶음으로 돌아가기', page: '선택 자료 페이지로 돌아가기', books: '책으로 돌아가기', import: '가져오기로 돌아가기', write: '자료 작성으로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기' , quarter: '일정으로 돌아가기', month: '일정으로 돌아가기', week: '일정으로 돌아가기', day: '일정으로 돌아가기' };
+        const labels = returnLabels;
         const origin = subviewOrigin();
         const back = iconButton(state.mode === 'naver-blog' && currentNaverMediaOrigin() ? '읽던 원문으로 돌아가기' : origin.postTarget ? '읽던 글로 돌아가기' : labels[origin.mode] || labels.sources, 'back', guarded(returnFromSubview));
         back.id = state.mode === 'write' ? 'lifeWritingClose' : 'lifeSubviewReturn';
@@ -3189,7 +3285,9 @@
 
     function restorePostReturn(context) {
       const pending = pendingPostReturn;
-      if (!pending || context.mode !== 'read' || context.id !== pending.origin.postTarget.id) return;
+      if (!pending || context.id !== pending.origin.postTarget.id) return;
+      // A history entry that reopens its post in the editor is not put back, also not when that edit is saved later.
+      if (context.mode !== 'read') { if (pending.history) pendingPostReturn = null; return; }
       pendingPostReturn = null;
       requestAnimationFrame(() => {
         if (disposed || state.mode !== 'page' || navigationGeneration !== pending.navigation || workspaceGeneration !== pending.workspace ||
@@ -3198,6 +3296,7 @@
         for (let parent = target?.parentElement; parent && parent !== main; parent = parent.parentElement) if (parent.tagName === 'DETAILS') parent.open = true;
         target?.focus({ preventScroll: true });
         global.scrollTo({ top: pending.origin.scrollY, behavior: 'instant' });
+        holdPosition(pending.origin.scrollY, () => navigationGeneration === pending.navigation && state.mode === 'page');
       });
     }
 
@@ -3844,7 +3943,13 @@
         while (ancestor && ancestor !== root) { if (ancestor.tagName === 'DETAILS') ancestor.open = true; ancestor = ancestor.parentElement; }
         if (panel?.hidden) Array.from(main.querySelectorAll('[aria-controls]')).find(el => el.getAttribute('aria-controls') === panel.id)?.click();
         target?.focus({ preventScroll: true });
-        if (!context.homeAnchor) global.scrollTo({ top: context.scrollY, behavior: 'instant' });
+        // A return without a recorded position opens the screen at its top with the focused control in view (the browser
+        // puts nothing back here, syncScrollRestoration), not at the position the original was read at.
+        if (!context.homeAnchor) {
+          global.scrollTo({ top: Number.isFinite(context.scrollY) ? context.scrollY : 0, behavior: 'instant' });
+          if (!Number.isFinite(context.scrollY)) target?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+          else holdPosition(context.scrollY, () => navigation === navigationGeneration && state.mode === context.mode);
+        }
       });
       if (context.focusKey === context.mode + ':reading-resume') {
         const pending = readingResumePromise;
@@ -3854,18 +3959,30 @@
         pending.then(() => { if (pending === homeRenderPromise) restore(); });
       }
       else if (context.mode === 'find') findRenderPromise.then(restore);
-      else if (context.mode === 'naver-capture' || context.mode === 'naver-blog' || context.mode === 'interests' || context.mode === 'external-discovery' || context.mode === 'blog') mainRenderPromise.then(restore);
-      // A calendar unit is drawn after its read (as restoreOriginView waits): set before that, the position was cut to the
-      // empty frame's height (D left at 1169 came back at 58 from a reader's 돌아가기, 2026-11-18).
-      else if (calendarModes.has(context.mode) && schedule) mainRenderPromise.then(restore);
-      else restore();
+      // Every other screen is put back once it is drawn (as restoreOriginView waits): set before that, the position was
+      // cut to the empty frame's height (일정 D left at 1169 came back at 58 from a reader's 돌아가기, 2026-11-18).
+      else Promise.resolve(mainRenderPromise).then(restore);
     }
 
     function searchReturnButton() {
-      const labels = { 'naver-capture': '본문·사진 검토로 돌아가기', 'naver-blog': '네이버 블로그 목록으로 돌아가기', 'external-discovery': '새 글 찾기로 돌아가기', interests: '관심 주제 편집으로 돌아가기', blog: '글 공개·보관으로 돌아가기', home: '노트로 돌아가기', activities: '묶음으로 돌아가기', page: '선택 자료 페이지로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기', reflection: '회고로 돌아가기', books: '책으로 돌아가기' };
-      const back = iconButton(labels[state.returnContext?.mode] || '검색 결과로 돌아가기', 'back', guarded(returnToResults));
+      // Named after the screen it returns to (returnLabels), as a subview's return is: an original opened from 일정's
+      // D or W was named 검색 결과로 돌아가기 while it went back to that calendar unit, one from 자료 휴지통 likewise.
+      // 자료's list is 검색 결과 while a search word narrows it (r2-search), otherwise 자료.
+      const back = iconButton(searchReturnName(), 'back', guarded(returnToResults));
       back.id = 'lifeSearchReturn';
       return back;
+    }
+    function searchReturnName() {
+      const mode = state.returnContext?.mode;
+      return mode === 'sources' ? (state.sourcesSearch.trim() ? '검색 결과로 돌아가기' : returnLabels.sources) : returnLabels[mode] || '검색 결과로 돌아가기';
+    }
+    // The list beside an original (from 1101px) can be searched while it is read: the return is named again.
+    function renameSearchReturn() {
+      const back = main.querySelector('#lifeSearchReturn'), name = searchReturnName();
+      if (!back || back.getAttribute('aria-label') === name) return;
+      back.setAttribute('aria-label', name);
+      const tooltip = back.querySelector('.life-tooltip');
+      if (tooltip) tooltip.textContent = name;
     }
 
     async function returnFromRelated() {
@@ -4262,7 +4379,7 @@
           state.recordKind = next; limit = SEARCH_PAGE_SIZE; draw(); tabsHost.querySelector('#lifeRecordKind-' + next)?.focus({ preventScroll: true });
         } }));
       }
-      const bar = searchField(pane, '자료에서 찾기', () => { limit = SEARCH_PAGE_SIZE; draw(); readerMatchRefresh?.(); }, 'sourcesSearch', '자료에서 찾기', 'lifePaneSearch');
+      const bar = searchField(pane, '자료에서 찾기', () => { limit = SEARCH_PAGE_SIZE; draw(); readerMatchRefresh?.(); renameSearchReturn(); }, 'sourcesSearch', '자료에서 찾기', 'lifePaneSearch');
       bar.classList.add('records-pane-search');
       pane.append(tabsHost, count, list, more);
       draw();
@@ -7021,6 +7138,7 @@
     }
     unbindNavigation = global.HaedoNavigation?.bind(section => guarded(() => navigateSection(section))());
     global.addEventListener('popstate', popstate);
+    global.addEventListener('scroll', positionScrolled, { passive: true });
     wideHeading?.addEventListener?.('change', pageHeadingWidth);
     return { dispose, flushDraft, checkpoint };
 
@@ -7140,6 +7258,7 @@
       cleanup(() => unifiedSearch?.dispose());
       cleanup(() => unbindNavigation?.());
       cleanup(() => global.removeEventListener('popstate', popstate));
+      cleanup(() => { global.removeEventListener('scroll', positionScrolled); if (positionTimer) global.clearTimeout(positionTimer); positionTimer = 0; positionHold?.(); });
       cleanup(() => wideHeading?.removeEventListener?.('change', pageHeadingWidth));
       cleanup(() => document.removeEventListener('pointerdown', closeFeatureMenusOutside));
       cleanup(() => document.removeEventListener('focusin', closeFeatureMenusOnFocus));

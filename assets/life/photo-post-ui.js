@@ -2314,6 +2314,16 @@
           image.alt = op.insert.photo.alt || op.insert.photo.caption || p.name;
           image.width = (p.view || p).width;
           image.height = (p.view || p).height;
+          // These attributes give the photo its place before it has loaded (photo-post.css). A recorded size that is
+          // not the loaded one is replaced by the loaded one, so the loaded photo is laid out as its own size.
+          if (!portable)
+            image.addEventListener("load", () => {
+              const width = image.naturalWidth, height = image.naturalHeight;
+              if (width > 0 && height > 0 && (String(width) !== image.getAttribute("width") || String(height) !== image.getAttribute("height"))) {
+                image.width = width;
+                image.height = height;
+              }
+            });
           image.loading = portable ? "eager" : "lazy";
           b.append(image);
           figure.append(b);
