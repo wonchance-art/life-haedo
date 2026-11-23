@@ -49,7 +49,11 @@ async function main() {
     await S.check('A. read 가, open 나, change the list width, reopen 가: the same paragraph (1440)', async () => {
       const { page, context } = await S.open({ width: 1440, height: 900 });
       const ids = await R.seed(page, [{ title: '문서 가', text: paragraphs('가', 400) }, { title: '문서 나', text: paragraphs('나', 40) }]);
-      const pane = async index => { await page.locator(`#lifeRecordsPaneList .records-row[data-version-id="${ids[index].versionId}"] .records-row-open`).click(); await settle(page); await frames(page); await frames(page); };
+      // The row is pressed where it is on screen (R.pressAt), as a person would, and it must be in view and uncovered
+      // there. Playwright's click() may first scroll the page to bring the row into its own view: in the 2026-11-23 review
+      // trace (W5 rows, CPU 4×) it moved the page 16px (15000 → 14984) before the press. The app then reopened the line at
+      // the place really left, and that fell outside half a line of `before`, measured before that scroll.
+      const pane = async index => { await R.pressAt(page, `#lifeRecordsPaneList .records-row[data-version-id="${ids[index].versionId}"] .records-row-open`); await settle(page); await frames(page); await frames(page); };
       await R.openSource(page, ids[0].versionId);
       await page.locator('.haedo-split-handle').focus(); await page.keyboard.press('Home'); await frames(page);
       await R.wheel(page, 15000); await page.waitForTimeout(500);

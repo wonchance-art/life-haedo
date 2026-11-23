@@ -1,4 +1,4 @@
-/* 자료 목록의 행 표시 도우미 (2026-11-03 부드러운 판 묶음 C).
+/* 자료 목록의 행 표시 도우미 (2026-11-03 부드러운 판 묶음 C, 2026-11-18 노션 방향 W4: 날짜·시각은 꼬리표 줄 끝).
  * 읽기 전용 표시만 만든다. 저장·동기화·검색 규칙은 ui.js와 core.js에 남는다. */
 (function (root) {
   'use strict';
@@ -39,12 +39,14 @@
     const parts = stamp(value, now), cell = element(document, parts ? 'time' : 'span', null, 'records-when');
     if (!parts) { cell.append(element(document, 'span', '날짜 없음', 'records-day')); return cell; }
     cell.dateTime = parts.iso; cell.title = parts.label;
-    cell.append(element(document, 'span', parts.day, 'records-day'), element(document, 'span', parts.time, 'records-time'));
+    cell.append(element(document, 'span', parts.day, 'records-day'), document.createTextNode(' '), element(document, 'span', parts.time, 'records-time'));
     return cell;
   }
-  function badges(document, values) {
+  // The badge line of a row. `tail` (the row's date and time, from when()) ends the line (노션 방향 W4).
+  function badges(document, values, tail) {
     const row = element(document, 'p', null, 'records-badges');
     for (const value of values.filter(Boolean)) row.append(element(document, 'span', value, 'records-badge'));
+    if (tail) row.append(tail);
     return row;
   }
   // Text tabs over one result list. Arrow keys move between tabs; the list stays the same element.

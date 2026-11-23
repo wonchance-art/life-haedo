@@ -10,6 +10,7 @@ const path = require('node:path');
 const { FakeCloud, accounts, base, cloud, openManagement, openBackupCenter } = require('./life-sync-browser.cjs');
 const { playwright, ready, settle, makeContext, observe, nav } = require('./unified-home-browser.cjs');
 const { inspect } = require('../scripts/check-site-design.cjs');
+const { toggleRecordSelection, recordRowMenuItem } = require('./helpers/feature-menus.cjs');
 const phase = process.env.SEARCH_PHASE || 'after';
 const output = path.resolve(__dirname, '../.local/search-quality');
 const oldQuote = '옛기억🌱구절';
@@ -73,9 +74,16 @@ async function activateMore(page, size) {
 async function pagination(page, count, size, capture) {
   await measureInput(page, ''); await measureInput(page, '정원');
   assert.equal(await cards(page).count(), 40); assert.match(await page.locator('#lifeSearchCount').textContent(), new RegExp(`자료 ${count + 1}개.*40개 표시`));
-  await page.locator('#lifeSelectionToggle').click(); await page.locator('.life-source-select').first().click();
+  await toggleRecordSelection(page); await page.locator('.life-source-select').first().click();
   const first = cards(page).first(); const selectedVersion = await first.getAttribute('data-version-id');
-  await first.locator('.life-result-info').click();
+  // 자료 출처 정보 is an item of the row's ⋯ (2026-11-18 노션 방향 W4); afterwards focus is on the row's title button.
+  // Esc on the open row menu closes it and puts focus on the title button as well.
+  await first.locator('.records-row-more > summary').click(); assert.equal(await first.locator('.records-row-more').evaluate(el => el.open), true);
+  assert.deepEqual(await first.locator('.records-row-more .life-destination').evaluateAll(nodes => nodes.map(node => node.textContent)), ['자료 출처 정보', '폴더로 이동']);
+  await page.keyboard.press('Escape');
+  assert.deepEqual(await first.evaluate(el => ({ open: el.querySelector('.records-row-more').open, focus: document.activeElement === el.querySelector('.life-source-open') })), { open: false, focus: true }, 'Esc on the row menu returns focus to the row title');
+  await (await recordRowMenuItem(first, '.life-result-info')).click();
+  assert.equal(await first.locator('.life-source-open').evaluate(el => document.activeElement === el), true, 'after 자료 출처 정보 focus is on the row title');
   await first.evaluate(el => { window.__firstSearchCard = el; window.__firstSearchInfo = el.querySelector('.life-result-details'); });
   await activateMore(page, size);
   assert.equal(await cards(page).count(), 80);
@@ -167,14 +175,14 @@ async function scopes(page, server, device) {
   // An actual query edit also resets the previously revealed receipt batch.
   if (await page.locator('#lifeSearch').inputValue() === '') await measureInput(page, '작업공간전환준비검색');
   await measureInput(page, '');
-  await page.locator('#lifeSelectionToggle').click(); await page.locator('.life-source-select').first().click(); await page.locator('#lifeSearchMore').click();
+  await toggleRecordSelection(page); await page.locator('.life-source-select').first().click(); await page.locator('#lifeSearchMore').click();
   await filters(page); await page.locator('#lifeSearchSpacing').check();
   await openBackupCenter(page); await page.getByRole('button', { name: '내보내기·사본 복원', exact: true }).click(); await page.locator('#lifeNewWorkspaceName').fill('익명 빈 작업공간');
   await page.getByRole('button', { name: '빈 작업공간 만들기', exact: true }).click(); await settle(page); await page.locator('#lifeSearch').waitFor();
   assert.notEqual(await page.evaluate(() => HaedoLife.Shell.storage.getActive()), original);
   assert.equal(await cards(page).count(), 0); assert.equal(await page.locator('#lifeSearch').inputValue(), ''); assert.equal(await page.locator('#lifeSearchSpacing').isChecked(), false); assert.equal(await page.locator('#lifeSelectionBar').isHidden(), true);
   await openManagement(page); await page.locator('#lifeWorkspace').selectOption(original); await settle(page); await page.locator('#lifeSearch').waitFor(); assert.equal(await cards(page).count(), 40); assert.equal(await page.locator('.life-source-select[aria-pressed="true"]').count(), 0); assert.equal(await page.locator('#lifeSelectionBar').isHidden(), true);
-  await page.locator('#lifeSelectionToggle').click(); await page.locator('.life-source-select').first().click();
+  await toggleRecordSelection(page); await page.locator('.life-source-select').first().click();
   await page.evaluate(() => { window.__searchLogout = HaedoAuth.client.auth.signOut({ scope: 'local' }); }); await page.waitForFunction(() => document.querySelector('#lifeApp').hidden && !HaedoLife.Shell.storage);
   server.oauthAccounts.set(device, accounts.b); await page.locator('[data-life-login]').click(); await page.locator('#googleLogin').click(); await page.waitForURL(u => u.pathname.endsWith('/index.html')); await ready(page); await nav(page, 'records');
   assert.equal(await cards(page).count(), 0); assert.equal(await page.locator('#lifeSearch').inputValue(), ''); assert.equal(await page.locator('#lifeSearchSpacing').isChecked(), false); assert.equal(await page.locator('#lifeSelectionBar').isHidden(), true);

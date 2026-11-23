@@ -30,7 +30,7 @@
 .nv-capture-body { max-width: 70ch; margin-block: 24px; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: 18px; line-height: 1.85; }
 .nv-capture-omissions { margin-block: 16px; padding-inline-start: 22px; color: var(--ink-soft); font-size: 14px; line-height: 1.75; overflow-wrap: anywhere; }
 .nv-capture-photo { min-width: 0; margin: 24px 0 32px; }
-.nv-capture-photo img { display: block; width: 100%; height: auto; border-radius: 12px; }
+.nv-capture-photo img { display: block; width: 100%; height: auto; border-radius: var(--haedo-radius, 8px); }
 .nv-capture-photo figcaption { margin-top: 8px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; line-height: 1.7; }
 .nv-capture-photo p { overflow-wrap: anywhere; }
 .naver-capture > .life-actions,.nv-capture-photos > .life-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-block: 20px; }

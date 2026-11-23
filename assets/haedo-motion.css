@@ -34,11 +34,11 @@ body.haedo-shell[data-writing-focus]:has(.photo-editor) .life-main { padding-top
 body.haedo-shell[data-writing-focus]:has(.photo-editor) .life-app { padding-bottom: env(safe-area-inset-bottom,0px); }
 
 .haedo-shell .home-list-toolbar { border-bottom: 0; }
-.haedo-shell .home-tabs { gap: 2px; padding: 3px; border-radius: 12px; background: var(--paper-2); }
-.haedo-shell .home-tabs > .home-tab { min-height: 44px; padding: 8px; border-radius: 9px; }
+.haedo-shell .home-tabs { gap: 2px; padding: 3px; border-radius: var(--haedo-control-radius, 6px); background: var(--paper-2); }
+.haedo-shell .home-tabs > .home-tab { min-height: 44px; padding: 8px; border-radius: calc(var(--haedo-control-radius, 6px) - 2px); }
 .haedo-shell .home-tabs > .home-tab[aria-selected=true] { background: var(--paper); box-shadow: 0 1px 3px rgb(24 37 34 / .08); }
 .haedo-shell .home-tabs > .home-tab[aria-selected=true]::after { display: none; }
-.haedo-shell .home-search-toggle { border-radius: 12px; }
+.haedo-shell .home-search-toggle { border-radius: var(--haedo-control-radius, 6px); }
 
 @media (max-width: 760px) {
   .haedo-shell .life-toolbar.haedo-page-heading { margin-inline: -20px; padding-inline: 20px; }

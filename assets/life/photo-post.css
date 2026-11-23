@@ -24,7 +24,7 @@
 .photo-status {
   position: relative;
   min-height: 1.6em;
-  border-radius: 8px;
+  border-radius: var(--haedo-control-radius, 6px);
   transition: color 140ms ease, background-color 140ms ease;
 }
 .photo-status-check { display: none; width: 18px; height: 18px; flex: none; }
@@ -78,7 +78,7 @@
   width: 96px;
   height: 72px;
   object-fit: cover;
-  border-radius: 12px;
+  border-radius: var(--haedo-radius, 8px);
 }
 .wb-post-feed {
   max-width: 680px;
@@ -120,21 +120,25 @@
 }
 /* D1 (2026-11-04): the privacy pill and the quiet autosave state share one line. */
 .photo-command-state { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; }
-/* The privacy pill opens 글 정보: a 44px button whose face is the 36px pill. */
+/* The privacy pill opens 글 정보: a 44px button whose face is a 28px chip (노션 방향 W3, 2026-11-18: the
+   selected surface, 6px corners, ink). 공개 and 비공개 differ by picture and word, never by colour; a
+   problem adds its words in the error colour on the error surface. */
 .photo-privacy {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   flex: none;
+  min-width: 44px;
   min-height: 44px;
   max-width: 100%;
   margin: 0;
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--ink, #182522);
+  color: var(--ink, #37352f);
   font: inherit;
   font-size: var(--haedo-text-meta, 13px);
-  font-weight: 600;
+  font-weight: var(--haedo-weight-medium, 500);
   line-height: 1.2;
   white-space: nowrap;
   cursor: pointer;
@@ -143,19 +147,19 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  min-height: 36px;
-  padding: 0 10px 0 12px;
-  border-radius: 999px;
-  background: var(--soft, #eaf1ed);
+  min-height: 28px;
+  padding: 0 8px;
+  border-radius: var(--haedo-control-radius, 6px);
+  background-color: var(--haedo-selected, #f3f3f3);
 }
 .photo-privacy svg { flex: none; width: 16px; height: 16px; }
-.photo-privacy-face > svg:last-child { color: var(--ink-soft, #5d6b65); }
-.photo-privacy:hover > .photo-privacy-face { background: #dfe9e4; }
-.photo-privacy[data-state="public"] { color: var(--color-primary, #145b50); }
-.photo-privacy[data-state="problem"] > .photo-privacy-face { background: var(--error-soft, #fff2f4); }
+.photo-privacy-face > svg:last-child { color: var(--ink-soft, #5f5e5b); }
+/* Hover adds the hover tint over the chip's own surface (both are tokens). */
+.photo-privacy:hover > .photo-privacy-face { background-image: linear-gradient(var(--haedo-hover, rgba(55, 53, 47, .04)), var(--haedo-hover, rgba(55, 53, 47, .04))); }
+.photo-privacy[data-state="problem"] > .photo-privacy-face { background-color: var(--error-soft, #fff2f4); }
 .photo-privacy-problem { color: var(--color-error, #a3243d); }
-.photo-privacy-problem::before { content: "· "; color: var(--ink-soft, #5d6b65); }
-.photo-privacy-note { color: var(--ink-soft, #5d6b65); font-weight: 500; }
+.photo-privacy-problem::before { content: "· "; color: var(--ink-soft, #5f5e5b); }
+.photo-privacy-note { color: var(--ink-soft, #5f5e5b); }
 .photo-privacy-note::before { content: "· "; }
 .photo-recovery-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 12px; }
 .photo-recovery-actions[hidden] { display: none; }
@@ -230,16 +234,16 @@
 .photo-commandbar > .photo-save {
   margin: 0;
   padding-inline: 20px;
-  background: var(--ink, #18181b);
+  background: var(--haedo-accent, #145b50);
   color: #fff;
   border: 0;
-  border-radius: 999px;
-  font-weight: 600;
+  border-radius: var(--haedo-control-radius, 6px);
+  font-weight: var(--haedo-weight-semibold, 600);
 }
-.photo-commandbar > .photo-save:hover { background: #35353b; }
-.photo-icon-button { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex: none; padding: 10px; border: 0; border-radius: 50%; color: var(--ink, #18181b); background: transparent; cursor: pointer; }
+.photo-commandbar > .photo-save:hover { background: var(--haedo-accent-hover, #104a41); }
+.photo-icon-button { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex: none; padding: 10px; border: 0; border-radius: var(--haedo-control-radius, 6px); color: var(--ink, #37352f); background: transparent; cursor: pointer; }
 .photo-icon-button svg { flex: none; width: 20px; height: 20px; }
-.photo-icon-button:hover { background: var(--soft, #f7f7f8); }
+.photo-icon-button:hover { background: var(--haedo-hover, rgba(55, 53, 47, .04)); }
 .photo-posts :focus-visible { outline: 2px solid var(--haedo-focus, var(--color-primary, #145b50)); outline-offset: 3px; }
 .photo-posts :is(button, summary, input, textarea)[disabled] { opacity: .45; cursor: default; }
 .photo-more {
@@ -260,15 +264,21 @@
   list-style: none;
 }
 .photo-more > summary::-webkit-details-marker { display: none; }
+/* The open menu floats: it does not grow its row (ui.css gives an open .life-details a bottom padding). */
+.photo-more[open] { padding-bottom: 0; }
+/* An open ⋯ shows the selected surface and a 1.5px ink ring (a second cue, as the heading controls do). */
+.photo-posts .photo-more[open] > summary { background: var(--haedo-selected, #f3f3f3); color: var(--ink, #37352f); box-shadow: inset 0 0 0 1.5px var(--ink, #37352f); }
+/* ⋯ menu (notion-visual-contract.md 메뉴·시트): white, 1px line, the floating shadow, 8px corners, 44px items. */
 .photo-more-menu {
   position: absolute;
   right: 0;
   top: 100%;
   width: min(300px, calc(100vw - 40px));
-  padding: 8px;
+  padding: 4px;
   border: 1px solid var(--line, #ececee);
-  border-radius: 16px;
-  background: var(--paper);
+  border-radius: var(--haedo-radius, 8px);
+  background: var(--paper, #fff);
+  box-shadow: 0 0 0 1px rgba(15, 15, 15, .05), 0 3px 6px rgba(15, 15, 15, .1), 0 9px 24px rgba(15, 15, 15, .2);
   z-index: 9;
   max-height: min(360px, calc(100svh - 112px - env(safe-area-inset-top, 0px)));
   overflow-y: auto;
@@ -284,23 +294,55 @@
   justify-content: flex-start;
   padding-inline: 12px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--haedo-control-radius, 6px);
+  font-weight: var(--haedo-weight-regular, 400);
 }
-.photo-more-menu > button:hover { background: var(--soft, #f7f7f8); }
+.photo-more-menu > button:hover { background: var(--haedo-hover, rgba(55, 53, 47, .04)); }
 .photo-more-menu > button.photo-delete { margin-top: 4px; color: var(--color-error, #a3243d); }
 .photo-more-menu > .photo-server-scope { margin: 4px 12px 8px; font-size: 13px; line-height: 1.6; color: var(--ink-soft, #66666f); }
-.photo-read-actions { width: 100%; max-width: 680px; margin-inline: auto; display: flex; align-items: center; gap: 8px; padding: calc(10px + env(safe-area-inset-top, 0px)) 0 10px; border-bottom: 1px solid var(--line, #ececee); flex-wrap: nowrap; }
-.photo-read-tools { display: flex; align-items: center; gap: 4px; margin-left: auto; flex: none; }
-.photo-read-tools > .photo-read-edit { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; margin: 0; padding: 0 12px; border: 0; border-radius: 12px; background: transparent; color: var(--ink, #182522); font-size: var(--haedo-text-control, 15px); }
-.photo-read-tools > .photo-read-edit:hover { background: var(--soft, #eaf1ed); }
-.photo-read-tools > .photo-read-edit svg { flex: none; width: 20px; height: 20px; }
+/* Reading tool row (노션 방향 W3, 2026-11-18, notion-visual-contract.md 글 읽기): one line — 뒤로 · the pill ·
+   수정 (목록에 다시 보이기 for a hidden post) · 통합 검색 · ⋯. 뒤로 stays at the left edge and the rest ends
+   the row; from 1101px the path fills the space between them. The row keeps the editor row's height, so
+   the title does not move between reading and editing (D1). */
+.photo-read-actions { width: 100%; max-width: 680px; margin-inline: auto; display: flex; align-items: center; justify-content: flex-end; gap: 4px; padding: calc(10px + env(safe-area-inset-top, 0px)) 0 10px; border-bottom: 1px solid var(--line, #ececee); flex-wrap: nowrap; }
+.photo-read-actions > button:first-child { margin-right: auto; }
+.photo-read-path { display: none; }
+.photo-read-tools { display: flex; align-items: center; gap: 4px; flex: none; }
+/* The row's icon controls (뒤로 and 통합 검색 come from the app heading) share one look: muted, 6px corners. */
+.photo-read-actions :is(.photo-icon-button, .life-icon-button) { border-radius: var(--haedo-control-radius, 6px); color: var(--ink-soft, #5f5e5b); }
+.photo-read-actions :is(.photo-icon-button, .life-icon-button):hover { background: var(--haedo-hover, rgba(55, 53, 47, .04)); color: var(--ink, #37352f); }
+.photo-read-actions .photo-privacy-face > svg:last-child { display: none; }
+/* 수정 and 목록에 다시 보이기 are words without a frame. 수정 shows its picture only below 360px. */
+.photo-read-tools > .life-button:not(.life-icon-button) { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 44px; min-height: 44px; margin: 0; padding: 0 12px; border: 0; border-radius: var(--haedo-control-radius, 6px); background: transparent; color: var(--ink, #37352f); font-size: var(--haedo-text-control, 15px); font-weight: var(--haedo-weight-medium, 500); white-space: nowrap; }
+.photo-read-tools > .life-button:not(.life-icon-button):hover { background: var(--haedo-hover, rgba(55, 53, 47, .04)); }
+.photo-read-tools > .photo-read-edit svg { display: none; flex: none; width: 20px; height: 20px; }
 .photo-read-actions .photo-more-menu { max-width: calc(100vw - 40px); }
+@media (min-width: 1101px) {
+  /* 뒤로 + path (14px muted: the menu's current item › this post), as the 노트·일정 heading does. */
+  .photo-read-path { display: flex; flex: 1; align-items: center; gap: 4px; min-width: 0; color: var(--haedo-muted, #5f5e5b); font-size: 14px; line-height: 1.5; }
+  .photo-read-path > * { flex: none; }
+  .photo-read-path > svg { width: 14px; height: 14px; }
+  .photo-read-path > .photo-read-path-title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink, #37352f); }
+}
 @media (max-width: 760px) {
-  /* The global compose control keeps its 44px corner target while the reader
-     retains back, privacy, labelled edit, download, more and search. Tools may
-     wrap to a second row rather than lose their labels or touch targets. */
-  .photo-read-actions { padding: calc(6px + env(safe-area-inset-top, 0px)) 44px 6px 0; gap: 4px; flex-wrap: wrap; }
-  .photo-read-tools { gap: 0; }
+  /* The global compose control keeps its 44px corner on the right. The five controls are one line; a
+     pill that says a problem (or 공개 확인 못 함) and 목록에 다시 보이기 keep their words and may take a
+     second line. The menu opens under the whole row, so it stays on screen at 320px. */
+  .photo-read-actions { position: relative; padding: calc(6px + env(safe-area-inset-top, 0px)) 44px 6px 0; flex-wrap: wrap; }
+  .photo-read-actions .photo-more { position: static; }
+  .photo-read-actions .photo-more-menu { top: calc(100% - 6px); width: min(300px, 100%); max-width: none; }
+  /* An alert or notice above the row (a failed backup, a storage problem) starts at the top of the screen,
+     where 글쓰기 is fixed: its words stop before that control. The success line sits under the post and the
+     quiet one is not drawn, so they keep their own box. */
+  .photo-posts[data-mode="read"] > .photo-status:not(.life-save-quiet):not([data-state="success"]) { padding-right: 44px; }
+}
+@media (max-width: 359px) {
+  /* Below 360px the pill and 수정 are pictures (lock or globe, edit); their names do not change. A pill
+     without a picture (publication not known) or with a problem keeps its words. */
+  .photo-read-actions .photo-privacy:is([data-state="private"], [data-state="public"]) .photo-privacy-label { display: none; }
+  .photo-read-tools > .photo-read-edit { padding: 0; color: var(--ink-soft, #5f5e5b); }
+  .photo-read-tools > .photo-read-edit svg { display: block; }
+  .photo-read-tools > .photo-read-edit > span { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
 .photo-entry-excerpt {
   white-space: pre-wrap;
@@ -316,8 +358,8 @@
 .photo-entry > strong {
   font-size: 21px;
   line-height: 1.5;
-  font-weight: 650;
-  letter-spacing: -.025em;
+  font-weight: var(--haedo-weight-semibold, 600);
+  letter-spacing: -.01em;
   overflow-wrap: anywhere;
 }
 .photo-retained > summary {
@@ -423,7 +465,7 @@
   padding: 16px 0 8px;
   background: transparent;
   min-height: 0;
-  letter-spacing: -.03em;
+  letter-spacing: -.01em;
   line-height: 1.4;
   display: block;
   resize: none;
@@ -463,24 +505,24 @@
   padding: 4px;
   gap: 0;
   border: 1px solid var(--line, #e3e9e6);
-  border-radius: 999px;
+  border-radius: var(--haedo-radius, 8px);
   background: var(--paper, #fff);
-  box-shadow: 0 6px 20px rgb(24 37 34 / .10), 0 1px 3px rgb(24 37 34 / .06);
+  box-shadow: 0 3px 6px rgba(15, 15, 15, .1), 0 9px 24px rgba(15, 15, 15, .12);
 }
 .photo-toolbar-floating .photo-history { margin-left: 4px; padding-left: 4px; border-left: 1px solid var(--line, #e3e9e6); }
 .photo-toolbar-floating .ql-formats { margin: 0; }
 .photo-posts .ql-toolbar button,
-.photo-posts .ql-toolbar .photo-format-options > summary { border-radius: 999px; }
+.photo-posts .ql-toolbar .photo-format-options > summary { border-radius: var(--haedo-control-radius, 6px); }
 .photo-toolbar-floating .photo-format-panel { top: auto; bottom: calc(100% + 8px); }
 .photo-keyboard-close { display: none !important; }
 @media (pointer: coarse) { .photo-keyboard-close { display: inline-flex !important; } }
 }
 .photo-format-options { position: static; flex: none; border: 0; padding: 0; margin: 0; }
-.photo-format-options > summary { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 8px 12px; border-radius: 999px; font-size: 13px; color: var(--ink-soft, #66666f); cursor: pointer; list-style: none; }
+.photo-format-options > summary { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 8px 12px; border-radius: var(--haedo-control-radius, 6px); font-size: 13px; color: var(--ink-soft, #66666f); cursor: pointer; list-style: none; }
 .photo-format-options > summary::-webkit-details-marker { display: none; }
 .photo-format-options > summary svg { width: 14px; height: 14px; }
 .photo-format-options[open] > summary, .photo-format-options > summary:hover { background: var(--soft, #f7f7f8); color: var(--ink, #18181b); }
-.photo-format-panel { position: absolute; display: flex; flex-wrap: wrap; align-items: center; top: calc(100% + 8px); left: 0; width: 286px; max-width: calc(100vw - 40px); max-height: min(280px, calc(100svh - 240px - env(safe-area-inset-top, 0px))); overflow-y: auto; overscroll-behavior-y: contain; padding: 8px; border: 1px solid var(--line, #ececee); border-radius: 14px; background: var(--paper, #fff); z-index: 7; scrollbar-width: thin; scrollbar-color: var(--field-line, #c9c9cf) transparent; }
+.photo-format-panel { position: absolute; display: flex; flex-wrap: wrap; align-items: center; top: calc(100% + 8px); left: 0; width: 286px; max-width: calc(100vw - 40px); max-height: min(280px, calc(100svh - 240px - env(safe-area-inset-top, 0px))); overflow-y: auto; overscroll-behavior-y: contain; padding: 8px; border: 1px solid var(--line, #ececee); border-radius: var(--haedo-radius, 8px); background: var(--paper, #fff); z-index: 7; scrollbar-width: thin; scrollbar-color: var(--field-line, #c9c9cf) transparent; }
 .photo-format-panel .ql-expanded .ql-picker-options { position: relative; }
 .photo-posts .ql-toolbar button {
   width: auto;
@@ -489,7 +531,7 @@
   height: auto;
   padding: 12px;
   color: var(--ink);
-  border-radius: 10px;
+  border-radius: var(--haedo-control-radius, 6px);
   float: none;
 }
 .photo-posts .ql-toolbar button:hover { background: var(--soft, #f7f7f8); }
@@ -522,7 +564,7 @@
 }
 .photo-posts .ql-picker-options {
   background: var(--paper);
-  border-radius: 10px;
+  border-radius: var(--haedo-control-radius, 6px);
   border-color: var(--line, #ececee);
   box-shadow: none;
 }
@@ -568,11 +610,20 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
   fill: var(--ink);
 }
 .photo-posts .ql-snow .ql-active .ql-stroke {
-  stroke: #3156d3;
+  stroke: var(--haedo-ink, #37352f);
 }
-.photo-posts .ql-snow .ql-active .ql-fill { fill: #3156d3; }
-.photo-posts .ql-toolbar button.ql-active { background: #edf1ff; }
-.photo-posts .ql-editor a, .photo-article a { color: #3156d3; text-underline-offset: 3px; }
+.photo-posts .ql-snow .ql-active .ql-fill { fill: var(--haedo-ink, #37352f); }
+/* Quill paints its buttons and pickers #06c on hover, focus and when active; here they stay ink (W5: no blue in the app,
+   the pressed state is told by the surface and ring below, not by colour). */
+.photo-posts .ql-toolbar :is(button, .ql-picker-label, .ql-picker-item):is(:hover, :focus, .ql-active, .ql-selected) { color: var(--haedo-ink, #37352f); }
+.photo-posts .ql-toolbar :is(button, .ql-picker-label, .ql-picker-item):is(:hover, :focus, .ql-active, .ql-selected) :is(.ql-stroke, .ql-stroke-miter) { stroke: var(--haedo-ink, #37352f); }
+.photo-posts .ql-toolbar :is(button, .ql-picker-label, .ql-picker-item):is(:hover, :focus, .ql-active, .ql-selected) .ql-fill { fill: var(--haedo-ink, #37352f); }
+/* A pressed format: the selected surface and a 1.5px ink ring (W5, 2026-11-18; was a blue tint and blue icon). */
+.photo-posts .ql-toolbar button.ql-active { background: var(--haedo-selected, rgba(55, 53, 47, .06)); box-shadow: inset 0 0 0 1.5px var(--haedo-ink, #37352f); }
+/* A link inside a post keeps the text ink, in the editor and the reader alike (W1 table: 글 안 링크). Its
+   underline is then the only cue, so it uses the field line (3.50:1 on white), not a fainter decoration. */
+.photo-posts .ql-editor a, .photo-article a { color: var(--haedo-link, var(--ink, #37352f)); text-decoration: underline; text-decoration-color: var(--field-line, #8a8984); text-underline-offset: 4px; }
+.photo-posts .ql-editor a:hover, .photo-article a:hover { text-decoration-color: currentColor; }
 /* Private AI authorship mark in the editor (D1, 2026-11-04): the same mark as the
    owner's reading views' .blog-ai-text (blog-public.css). The dots are a background
    along the bottom edge, so an underline or a link drawn as text decoration never
@@ -587,7 +638,11 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
 }
-.photo-posts .ql-toolbar .photo-author-toggle[aria-pressed="true"] { background: #edf1ff; color: #3156d3; }
+.photo-posts .ql-toolbar .photo-author-toggle[aria-pressed="true"] { background: var(--haedo-selected, rgba(55, 53, 47, .06)); color: var(--haedo-ink, #37352f); box-shadow: inset 0 0 0 1.5px var(--haedo-ink, #37352f); }
+/* W5: in forced colours the selected surface and ink ring are dropped, so a Highlight outline marks a format that is on. */
+@media (forced-colors: active) {
+  .photo-posts .ql-toolbar :is(button.ql-active, .photo-author-toggle[aria-pressed="true"]) { outline: 2px solid Highlight; outline-offset: -2px; }
+}
 .photo-block,
 .photo-read-image {
   margin: 28px 0;
@@ -595,12 +650,19 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
 .photo-block img,
 .photo-read-image img {
   display: block;
-  width: auto;
   max-width: 100%;
   height: auto;
   margin-inline: auto;
   image-orientation: from-image;
-  border-radius: 16px;
+  border-radius: var(--haedo-radius, 8px);
+}
+/* A photo being read has no width here: its width and height attributes (the photo's recorded size, the view copy's
+   for HEIC) give its width, capped at the column as when loaded, and its ratio, so it keeps its place before it has
+   loaded. With width:auto it was 0 until loaded, and a post put back at 560 by back or forward stood at 1026 once the
+   photos above had loaded (2026-11-23). renderRead corrects a recorded size that is not the loaded one. The editor's
+   photos keep width:auto. */
+.photo-block img {
+  width: auto;
 }
 .photo-block {
   min-height: 44px;
@@ -617,9 +679,12 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
   background: transparent;
   cursor: pointer;
 }
+/* The editor's caption starts at the photo's left edge, as the reading view's does (W5 re-review NIT): no side padding,
+ * start-aligned (a button centres by default). Its 44px height stays the touch target. */
 .photo-caption-text {
   min-height: 44px;
-  padding: 8px;
+  padding: 8px 0;
+  text-align: start;
   border: 0;
   font: inherit;
   color: var(--ink-soft);
@@ -634,7 +699,7 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
   color: var(--ink-soft);
   font-size: 14px;
   line-height: 1.7;
-  text-align: center;
+  text-align: start;
   margin-top: 12px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -714,21 +779,28 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
 }
 .photo-article .photo-read-heading {
   font-size: var(--haedo-text-title-large, 28px);
-  font-weight: 700;
+  font-weight: var(--haedo-weight-bold, 700);
   line-height: 1.4;
-  letter-spacing: -.03em;
+  letter-spacing: -.01em;
   margin: 0;
   padding: 16px 0 20px;
 }
-.photo-read-foot { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--line, #e3e9e6); }
-.photo-article .photo-read-meta { margin: 0; font-size: var(--haedo-text-meta, 13px); line-height: 1.6; color: var(--ink-soft, #5d6b65); }
-.photo-read-mark::before { content: " · "; }
+/* End of the post (W3, 2026-11-18): a 1px line, then the date (updatedAt) with 숨긴 글·초안, the save state
+   (shown only when it is a problem, 2026-11-16) with its retry, and 내 글로 돌아가기. */
+.photo-read-foot { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--line, #ededec); }
+.photo-article .photo-read-meta { margin: 0; font-size: var(--haedo-text-meta, 13px); line-height: 1.6; color: var(--haedo-meta, var(--ink-soft, #6f6e69)); }
+.photo-read-mark { color: var(--ink-soft, #5f5e5b); font-weight: var(--haedo-weight-medium, 500); }
+.photo-read-mark::before { content: " · "; color: var(--haedo-meta, var(--ink-soft, #6f6e69)); font-weight: var(--haedo-weight-regular, 400); }
 .photo-read-sync { display: flex; flex-wrap: wrap; align-items: center; gap: 0 8px; margin-top: 4px; }
-.photo-read-sync .photo-server-status { margin: 0; font-size: var(--haedo-text-meta, 13px); line-height: 1.6; color: var(--ink-soft, #5d6b65); }
+.photo-read-sync .photo-server-status { margin: 0; font-size: var(--haedo-text-meta, 13px); line-height: 1.6; color: var(--ink-soft, #5f5e5b); }
 .photo-read-sync .photo-server-status:is([data-state="error"], [data-state="refresh"]) { color: var(--color-error, #a3243d); }
 .photo-read-sync .photo-server-actions { margin: 0; padding: 0; }
-.photo-read-sync .photo-server-actions > button { min-height: 44px; padding: 0 8px; border: 0; background: transparent; color: var(--color-primary, #145b50); font-size: var(--haedo-text-meta, 13px); font-weight: 600; }
+/* 다시 시도 and the conflict link are text actions: ink, 600 and an underline (not colour alone). */
+.photo-read-sync .photo-server-actions > button { min-height: 44px; padding: 0 8px; border: 0; border-radius: var(--haedo-control-radius, 6px); background: transparent; color: var(--ink, #37352f); font-size: var(--haedo-text-meta, 13px); font-weight: var(--haedo-weight-semibold, 600); text-decoration: underline; text-decoration-color: var(--field-line, #8a8984); text-underline-offset: 4px; }
+.photo-read-sync .photo-server-actions > button:hover { background: var(--haedo-hover, rgba(55, 53, 47, .04)); text-decoration-color: currentColor; }
 .photo-read-return { margin-top: 24px; }
+.photo-read-return > .life-button { min-height: 44px; border: 1px solid var(--field-line, #8a8984); border-radius: var(--haedo-control-radius, 6px); background: var(--paper, #fff); color: var(--ink, #37352f); font-size: var(--haedo-text-control, 15px); font-weight: var(--haedo-weight-medium, 500); }
+.photo-read-return > .life-button:hover { background: var(--haedo-hover, rgba(55, 53, 47, .04)); }
 .photo-line {
   white-space: pre-wrap;
   margin-block: 0 18px;
@@ -758,7 +830,7 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
   max-height: 94dvh;
   padding: 20px;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: var(--haedo-radius, 8px);
   background: var(--paper, #fff);
   color: var(--ink, #20212a);
 }
@@ -790,13 +862,18 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
 @media (max-width: 760px) {
   /* One compact row (44px controls + 6px padding = 56px). The scope line is
      still the save button's description and is explained in the more menu. */
-  .photo-commandbar { gap: 4px; min-height: 0; padding-block: 6px; }
+  .photo-commandbar { position: relative; gap: 4px; min-height: 0; padding-block: 6px; }
+  /* The editor's ⋯ opens under the whole command row, as the reader's does, so the menu stays on screen
+     down to 320px (anchored to ⋯ it ran off the left edge from 360px down). */
+  .photo-commandbar > .photo-more { position: static; }
+  .photo-commandbar > .photo-more > .photo-more-menu { top: calc(100% - 6px); width: min(300px, 100%); max-width: none; }
   .photo-command-state { gap: 8px; }
   /* A compact pill leaves the one-line status room for its short texts. */
-  .photo-privacy-face { padding: 0 10px; }
   .photo-privacy-face > svg:last-child { display: none; }
   /* Revising a saved post on a phone: the icon keeps the visibility, the word gives way to 수정 중
-     (the button's name still says both), so the one-line save status keeps its room. */
+     (the button's name still says both), so the one-line save status keeps its room. W5 kept the word from 360px; the
+     re-review (11-23, MAJOR-2) found the save status cut (바꾼 …) and a failure stacked one character per line, so up to
+     760px the icon carries the visibility again (photo-post-d1 checks 360, 375 and 390). */
   .photo-privacy-face:has(> svg:first-child):has(.photo-privacy-note) > .photo-privacy-label { display: none; }
   .photo-privacy-face:has(> svg:first-child) > .photo-privacy-note::before { content: none; }
   /* The same in the editor when a draft could not be uploaded: the icon keeps the visibility and
@@ -894,16 +971,17 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
   overflow-y: auto;
   overscroll-behavior: contain;
   border: 1px solid var(--line, #e3e9e6);
-  border-radius: 16px;
+  border-radius: var(--haedo-radius, 8px);
   background: var(--paper, #fff);
-  color: var(--ink, #182522);
+  box-shadow: 0 0 0 1px rgba(15, 15, 15, .05), 0 3px 6px rgba(15, 15, 15, .1), 0 9px 24px rgba(15, 15, 15, .2);
+  color: var(--ink, #37352f);
   font-family: var(--haedo-font, inherit);
 }
-.photo-info::backdrop { background: rgb(24 37 34 / .32); }
+.photo-info::backdrop { background: rgb(55 53 47 / .32); }
 .photo-info-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 8px 0 20px; }
-.photo-info-head h2 { margin: 0; font-size: var(--haedo-text-body, 17px); font-weight: 700; line-height: 1.4; }
-.photo-info-head .photo-icon-button { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 12px; border: 0; border-radius: 50%; background: transparent; color: var(--ink, #182522); cursor: pointer; }
-.photo-info-head .photo-icon-button:hover { background: var(--soft, #eaf1ed); }
+.photo-info-head h2 { margin: 0; font-size: var(--haedo-text-body, 17px); font-weight: var(--haedo-weight-semibold, 600); line-height: 1.4; }
+.photo-info-head .photo-icon-button { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 12px; border: 0; border-radius: var(--haedo-control-radius, 6px); background: transparent; color: var(--ink-soft, #5f5e5b); cursor: pointer; }
+.photo-info-head .photo-icon-button:hover { background: var(--haedo-hover, rgba(55, 53, 47, .04)); color: var(--ink, #37352f); }
 .photo-info-head .photo-icon-button svg { width: 20px; height: 20px; }
 .photo-info-rows { margin: 0; padding: 4px 20px 20px; }
 .photo-info-row { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 12px; padding: 12px 0; border-top: 1px solid var(--line, #e3e9e6); }
@@ -914,7 +992,8 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
 .photo-info-line > svg { flex: none; width: 16px; height: 16px; }
 .photo-info-row > dd[data-state="error"] > .photo-info-value { color: var(--color-error, #a3243d); }
 .photo-info-note { margin: 4px 0 0; font-size: var(--haedo-text-meta, 13px); line-height: 1.6; color: var(--ink-soft, #5d6b65); }
-.photo-info-action { display: inline-flex; align-items: center; min-height: 44px; margin-top: 8px; }
+/* 공개하기 and the sheet's retries: the same framed 44px button as 내 글로 돌아가기 (field line, 6px). */
+.photo-info .photo-info-action { display: inline-flex; align-items: center; min-height: 44px; margin-top: 8px; border-color: var(--field-line, #8a8984); border-radius: var(--haedo-control-radius, 6px); font-weight: var(--haedo-weight-medium, 500); }
 .photo-info :focus-visible { outline: 2px solid var(--haedo-focus, var(--color-primary, #145b50)); outline-offset: 2px; }
 @media (max-width: 760px) {
   .photo-info {
@@ -923,7 +1002,7 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
     max-height: 85dvh;
     margin: auto 0 0;
     border-width: 1px 0 0;
-    border-radius: 16px 16px 0 0;
+    border-radius: var(--haedo-radius, 8px) var(--haedo-radius, 8px) 0 0;
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 }

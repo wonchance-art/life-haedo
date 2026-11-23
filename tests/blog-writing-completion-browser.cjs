@@ -132,6 +132,8 @@ async function main() {
       assert.deepEqual({ ...after, collection: null }, { ...original, collection: null }); original = after;
       if (await page.locator('.photo-more').evaluate(n => n.open)) await page.locator('.photo-more > summary').click();
       await click('글 저장'); await page.locator('.photo-article').waitFor(); primary = (await read()).docs.find(v => v.id === primaryId); await capture(page, 'reading');
+      // 2026-11-18 W3: 사진 포함 백업 is the first item of the reader's ⋯.
+      await page.locator('.photo-read-actions .photo-more > summary').click();
       primaryZip = (await getDownload(() => click('사진 포함 백업'))).bytes;
     });
 

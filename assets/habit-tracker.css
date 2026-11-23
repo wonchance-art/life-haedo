@@ -86,8 +86,9 @@ button.habit-tracker-title > strong { display: block; font-size: var(--haedo-tex
   .habit-compact-go { grid-area: go; }
   .habit-compact-row { padding-block: 8px 12px; }
 }
-/* 일정 M's side column from 1101px (2026-11-16 notes-menu: 습관·행복도 sits in the 280px side column of every unit):
-   the same two-line row, and a dot never wider than its day's column (31 days in about 248px). */
+/* 일정 M's side column from 1101px (2026-11-16 notes-menu: 습관·행복도 sits in the side column of every unit): the same
+   two-line row. To 1279px that column stands under M's calendar, up to 560px wide (schedule.css, 2026-11-18), so the
+   table is the one of 761–1100px: 31 dots on one line under the day numbers. */
 @media (min-width: 1101px) {
   .schedule-aside :is(.habit-compact-head, .habit-compact-row) { grid-template-columns: minmax(0, 1fr) auto 16px; grid-template-areas: "name count go" "days days go"; row-gap: 8px; }
   .schedule-aside .habit-compact-head > :is(.habit-compact-name, .habit-compact-count) { display: none; }
@@ -98,10 +99,12 @@ button.habit-tracker-title > strong { display: block; font-size: var(--haedo-tex
   .schedule-aside .habit-compact-go { grid-area: go; }
   .schedule-aside .habit-compact-row { padding-block: 8px 12px; }
 }
-/* Where 31 days in a row would make a dot smaller than 10px (the 280px side column from 1101px, a phone), the dots keep
-   10px (contract 월 보기 습관 표) and wrap, 16 to a line, in day order (2026-11-16 노션 방향 m5; until then 8px). The day
-   numbers above them belong to the one-line row and are left out; today's dot has an ink ring instead. */
-@media (min-width: 1101px) {
+/* Where 31 days in a row would make a dot smaller than 10px (the 280px side column beside M's calendar, a phone), the
+   dots keep 10px (contract 월 보기 습관 표) and wrap, 16 to a line, in day order (2026-11-16 노션 방향 m5; until then 8px).
+   The day numbers above them belong to the one-line row and are left out; today's dot has an ink ring instead.
+   The column is beside the calendar from 1280px: the same width as schedule.css's rule that puts it under M's calendar
+   to 1279px (2026-11-18; from 1101px until then, which left the 280px shape in the 560px column under the calendar). */
+@media (min-width: 1280px) {
   .schedule-aside .habit-compact-head { display: none; }
   .schedule-aside .habit-compact-row .habit-compact-days { display: grid; grid-template-columns: repeat(16, 10px); justify-content: start; gap: 6px 4px; max-width: none; }
   .schedule-aside .habit-compact-dot[data-today] { box-shadow: 0 0 0 1.5px #fff, 0 0 0 3px var(--ink); }

@@ -224,7 +224,7 @@ async function main() {
     });
     if (phase === 'after') await check('failed writes preserve Korean/photo input; ZIP restores original bytes and account boundaries hold', async ({ page, server, device }) => {
       await page.goto(base + '/index.html'); await shellReady(page); await login(page, server, device); const sample = await seed(page); await page.reload(); await ready(page); await home(page); await openPost(page, sample.postIds[0]);
-      const download = page.waitForEvent('download'); await page.getByRole('button', { name: '사진 포함 백업', exact: true }).click(); const zip = await fs.readFile(await (await download).path());
+      await page.locator('.photo-read-actions .photo-more > summary').click(); const download = page.waitForEvent('download'); await page.getByRole('button', { name: '사진 포함 백업', exact: true }).click(); const zip = await fs.readFile(await (await download).path());
       await page.getByRole('button', { name: '글 수정', exact: true }).click(); await page.locator('#photoTitle').waitFor();
       await page.evaluate(() => { window.__snsPut = IDBObjectStore.prototype.put; IDBObjectStore.prototype.put = function (...args) { const request = __snsPut.apply(this, args); if (args[0]?.key?.startsWith('photo-post:')) this.transaction.abort(); return request; }; });
       await page.locator('#photoTitle').fill('실패해도 남아야 할 한글 입력'); await page.locator('.photo-status[role="alert"]').waitFor();

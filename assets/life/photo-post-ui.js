@@ -2314,6 +2314,16 @@
           image.alt = op.insert.photo.alt || op.insert.photo.caption || p.name;
           image.width = (p.view || p).width;
           image.height = (p.view || p).height;
+          // These attributes give the photo its place before it has loaded (photo-post.css). A recorded size that is
+          // not the loaded one is replaced by the loaded one, so the loaded photo is laid out as its own size.
+          if (!portable)
+            image.addEventListener("load", () => {
+              const width = image.naturalWidth, height = image.naturalHeight;
+              if (width > 0 && height > 0 && (String(width) !== image.getAttribute("width") || String(height) !== image.getAttribute("height"))) {
+                image.width = width;
+                image.height = height;
+              }
+            });
           image.loading = portable ? "eager" : "lazy";
           b.append(image);
           figure.append(b);
@@ -2382,7 +2392,7 @@
         );
         const style = page.createElement("style");
         style.textContent =
-          "*{box-sizing:border-box}body{margin:0;color:#18181b;background:#fff;font:18px/1.95 -apple-system,BlinkMacSystemFont,'Noto Sans',sans-serif}article{max-width:680px;margin:auto;padding:40px 24px;overflow-wrap:anywhere}h1{font-size:2em;line-height:1.5}h3{font-size:1.7em}h4{font-size:1.35em}.photo-line{white-space:pre-wrap;margin:0 0 18px}figure{margin:28px 0}img{display:block;width:auto;max-width:100%;height:auto;margin:auto}figcaption{font-size:15px;line-height:1.7;text-align:center;white-space:pre-wrap}blockquote{margin-inline:0;padding-left:20px;border-left:2px solid #ddd}a{color:#3156d3;overflow-wrap:anywhere}.pp-attachments{margin-top:36px}.pp-attachment{padding:18px 0;border-top:1px solid #ddd}.pp-shape,.pp-object-actions{display:none}.pp-attachment-copy{display:flex;flex-direction:column}.pp-attachment-title{display:block;min-height:44px}.life-meta{font-size:14px;color:#66666f}@media(max-width:600px){body{font-size:17px}article{padding:24px 20px}}@media print{article{max-width:none;padding:0}img{max-height:90vh;object-fit:contain}figure{break-inside:avoid}}";
+          "*{box-sizing:border-box}body{margin:0;color:#18181b;background:#fff;font:18px/1.95 -apple-system,BlinkMacSystemFont,'Noto Sans',sans-serif}article{max-width:680px;margin:auto;padding:40px 24px;overflow-wrap:anywhere}h1{font-size:2em;line-height:1.5}h3{font-size:1.7em}h4{font-size:1.35em}.photo-line{white-space:pre-wrap;margin:0 0 18px}figure{margin:28px 0}img{display:block;width:auto;max-width:100%;height:auto;margin:auto}figcaption{font-size:15px;line-height:1.7;text-align:start;white-space:pre-wrap}blockquote{margin-inline:0;padding-left:20px;border-left:2px solid #ddd}a{color:#3156d3;overflow-wrap:anywhere}.pp-attachments{margin-top:36px}.pp-attachment{padding:18px 0;border-top:1px solid #ddd}.pp-shape,.pp-object-actions{display:none}.pp-attachment-copy{display:flex;flex-direction:column}.pp-attachment-title{display:block;min-height:44px}.life-meta{font-size:14px;color:#66666f}@media(max-width:600px){body{font-size:17px}article{padding:24px 20px}}@media print{article{max-width:none;padding:0}img{max-height:90vh;object-fit:contain}figure{break-inside:avoid}}";
         page.head.append(style);
         const article = page.createElement("article"),
           heading = page.createElement("h1");
@@ -3692,9 +3702,10 @@
           });
       } else if (mode === "edit") renderEditor();
       else {
-        // D1 (soft redesign): one line above the title — the privacy pill that
-        // opens 글 정보, then edit, backup and more. Date and save state move
-        // to the end of the post.
+        // D1 (soft redesign) and 노션 방향 W3 (2026-11-18, notion-visual-contract.md 글 읽기): one line above the
+        // title — 뒤로 · the privacy pill that opens 글 정보 · 수정 (목록에 다시 보이기 for a hidden post) · 통합 검색
+        // (ui.js puts it before ⋯) · ⋯. 사진 포함 백업 is the first item of ⋯ and 삭제 its last. Date and save
+        // state end the post.
         const actions = el("div", null, "life-actions photo-read-actions");
         actions.classList.toggle("photo-read-standalone", standalone);
         if (readBackAction)
@@ -3704,10 +3715,24 @@
           }), "back", readBackText));
         else if (!standalone)
           actions.append(iconControl(button("사진 글 목록", list), "back", "사진 글 목록"));
+        const shownTitle = doc.title || (doc.photos.length ? "사진 " + doc.photos.length + "장" : "내 글");
+        // From 1101px the path follows 뒤로: the menu's current item, then this post. It repeats the menu and
+        // the title under it, so it is not read twice (the same rule as 노트·일정's path, home.css). Only the
+        // top-level reading screen has it (its 뒤로 comes from the app heading): a post read inside the older
+        // list, or one that returns to 작성 준비 or 9칸 구성, goes back somewhere the path does not name.
+        if (standalone && !readBackAction) {
+          const path = el("span", null, "photo-read-path"),
+            section = document.querySelector('[data-haedo-navigation] a[data-haedo-section="' + (document.body.dataset.haedoSection || "") + '"]')?.getAttribute("aria-label");
+          path.setAttribute("aria-hidden", "true");
+          if (section) path.append(el("span", section), glyph("forward", 14));
+          path.append(el("span", shownTitle, "photo-read-path-title"));
+          actions.append(path);
+        }
         actions.append(privacyPill());
         const tools = el("div", null, "photo-read-tools");
         if (doc.archived) tools.append(button("목록에 다시 보이기", () => archive(false)));
         else {
+          // 수정 is its word from 360px and its picture below that; the name stays 글 수정.
           const edit = button("글 수정", () => open(doc.id, true));
           edit.classList.add("photo-read-edit");
           edit.replaceChildren(glyph("edit"), el("span", "수정"));
@@ -3715,10 +3740,10 @@
           edit.title = "글 수정";
           tools.append(edit);
         }
-        tools.append(iconControl(button("사진 포함 백업", backup), "download", "사진 포함 백업"));
         const more = el("details", null, "photo-more life-details"),
           menu = el("div", null, "photo-more-menu");
         more.append(iconControl(el("summary"), "more", "더 보기"), menu);
+        menu.append(button("사진 포함 백업", backup));
         if (doc.status === "saved") {
           for (const [label, callback, action] of [["이 글 공개·보관", onManageServer, "manage"], ["근거 포함 파일", onPreservePost, "preserve"]]) {
             if (typeof callback !== "function") continue;
@@ -3743,7 +3768,7 @@
         actions.append(tools);
         host.append(actions);
         const article = el("article", null, "photo-article"),
-          heading = el("h2", doc.title || (doc.photos.length ? "사진 " + doc.photos.length + "장" : "내 글"), "photo-read-heading");
+          heading = el("h2", shownTitle, "photo-read-heading");
         if (!doc.title.trim()) heading.classList.add("life-sr-only");
         heading.tabIndex = -1;
         article.append(heading);

@@ -342,8 +342,11 @@
       current = id;
       for (const [key, link] of links) { if (key === id) link.setAttribute('aria-current', 'true'); else link.removeAttribute('aria-current'); }
     }
-    function writeHash(id) {
+    function writeHash(id, { now = false } = {}) {
       // 앱의 기록(history.state)을 유지한 채 주소의 해시만 바꾼다. 새 기록 항목을 만들지 않는다.
+      // 앱이 쓰기를 맡으면(options.writeHash) 앱의 기록 쓰기 예산을 함께 쓴다: 고른 항목은 바로, 스크롤로 따라간 항목은
+      // 스크롤이 멈춘 뒤 위치와 한 번에 쓴다(WebKit은 30초에 100번이 넘는 기록 쓰기를 거절한다).
+      if (typeof options.writeHash === 'function') { options.writeHash('settings-' + id, { now }); return; }
       try {
         const url = new URL(root.location.href); url.hash = 'settings-' + id;
         if (url.href !== root.location.href) root.history.replaceState(root.history.state, '', url.pathname + url.search + url.hash);
@@ -362,7 +365,7 @@
       const box = sections.get(id);
       if (scroll) box.scrollIntoView({ block: 'start', behavior: 'instant' });
       if (focus) focusTarget(box)?.focus({ preventScroll: true });
-      if (shouldWrite) writeHash(id);
+      if (shouldWrite) writeHash(id, { now: true });
       return true;
     }
 

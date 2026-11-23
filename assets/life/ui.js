@@ -204,6 +204,8 @@
     const subviewTitles = { 'annual-plan': '연간 계획', 'source-trash': '자료 휴지통', 'source-edit': '자료 수정', 'naver-capture': '네이버 본문·사진 검토', 'naver-blog': '네이버 블로그 연결', 'account-blog': '계정 보관 상태', 'public-cover': '공개 표지', 'external-discovery': '새 글 찾기', interests: '관심 주제 편집', 'obsidian-update': 'Obsidian 갱신', preservation: '보관 범위·근거 파일', blog: '글 공개·보관', find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '자료 작성', activities: '묶음', page: '선택 자료 페이지',
       discover: '다시 찾기', reflection: '회고', books: '내 책', sync: managedLibrary ? '계정 보관' : '동기화', transfer: '자료 백업·복원',
       'workbench-backup': '자료·구성 백업', 'public-pages': '공개 페이지 관리', backup: '백업·복원' };
+    // The name of a return says where it goes: one table for a subview's return and an original's 돌아가기 (searchReturnButton).
+    const returnLabels = { 'naver-blog': '네이버 블로그 목록으로 돌아가기', 'naver-capture': '본문·사진 검토로 돌아가기', 'account-blog': '계정 보관 상태로 돌아가기', 'external-discovery': '새 글 찾기로 돌아가기', interests: '관심 주제 편집으로 돌아가기', blog: '글 공개·보관으로 돌아가기', find: '검색 결과로 돌아가기', reflection: '회고로 돌아가기', home: '노트로 돌아가기', sources: '자료로 돌아가기', topics: '검색 결과로 돌아가기', tools: '일정으로 돌아가기', manage: '설정으로 돌아가기', backup: '백업·복원으로 돌아가기', collection: '컬렉션으로 돌아가기', activities: '묶음으로 돌아가기', page: '선택 자료 페이지로 돌아가기', books: '책으로 돌아가기', import: '가져오기로 돌아가기', write: '자료 작성으로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기', 'source-trash': '자료 휴지통으로 돌아가기', quarter: '일정으로 돌아가기', month: '일정으로 돌아가기', week: '일정으로 돌아가기', day: '일정으로 돌아가기' };
     // 일정's plan views (the former 계획 section).
     const planningModes = new Set(['tools', 'annual-plan']);
     const TIMELINE_LIST = 'workspace.html';
@@ -290,10 +292,14 @@
     error.hidden = true;
     const header = node('div', null, 'life-header');
     const toolbar = node('div', null, 'life-toolbar');
-    // 노트·일정 from 1101px keep their large title after the toolbar (renderHeader); the screen's title is found in either.
+    // 노트·일정, and the 자료 list·뉴스·설정 (W4), from 1101px keep their large title after the toolbar (renderHeader);
+    // the screen's title is found in either.
     const wideHeading = global.matchMedia?.('(min-width: 1101px)') || null;
+    // W5 (2026-11-18): 자료's own list and work screens (주제·컬렉션·가져오기·묶음·다시 찾기·회고) take the same wide heading
+    // as 자료. Focused editors (자료 작성, 선택 자료 페이지, 책 — its list shares the mode with its editor) keep one row.
+    const pageHeadModes = new Set(['sources', 'external-discovery', 'manage', 'topics', 'collection', 'import', 'activities', 'discover', 'reflection']);
     const pageHeading = () => toolbar.querySelector('h1') || root?.querySelector(':scope > .haedo-title-band h1') || null;
-    const pageHeadingWidth = () => { if (!disposed && state.bundle && (state.mode === 'home' || calendarModes.has(state.mode))) renderHeader(); };
+    const pageHeadingWidth = () => { if (!disposed && state.bundle && (state.mode === 'home' || calendarModes.has(state.mode) || pageHeadModes.has(state.mode))) renderHeader(); };
     const planningNavigation = node('div', null, 'life-planning-navigation');
     planningNavigation.hidden = true;
     main = node('main', null, 'life-main');
@@ -424,6 +430,9 @@
         if (!blogPageTask || !['edit', 'read', 'profile'].includes(context.mode)) { global.requestAnimationFrame(syncWritingFocus); return; }
         const previousMode = blogMode;
         blogMode = context.mode;
+        // A post being read is put back by the app, an editor is not (appRestoresPosition). While the browser is
+        // moving its current entry is not this screen's; the next entry written sets it.
+        if (!historyWait) syncScrollRestoration();
         if (context.committed && context.id) blogCommitted = { kind: context.kind === 'legacy' ? 'plain' : context.kind, id: context.id, committed: true };
         renderHeader();
         // Every read/edit/save switch re-applies the one 글쓰기 rule to the post now shown.
@@ -1491,13 +1500,16 @@
         state.remoteChanged = true;
         announce('보관한 자료가 변경되었습니다. 현재 입력을 유지합니다. 최신 내용 확인을 눌러 주세요.');
         renderHeader();
+        // What a person has open on the 자료 list is not redrawn under them: the 폴더 관리 panel (a section shown by
+        // removing `hidden`, no longer a <details>), a row's 폴더로 이동 form, its 자료 출처 정보 and its ⋯ menu (W4).
+        const listHeld = () => !!main.querySelector('#lifeFolderManage:not([hidden]),.source-folder-assignment[open],.life-result-details:not([hidden]),.records-row-more[open]');
         if (managedLibrary && state.mode === 'sources' && !dirty() && !sourceEditor?.isDirty() &&
-            !main.querySelector('#lifeFolderManage[open],.source-folder-assignment[open]') &&
+            !listHeld() &&
             !main.contains(document.activeElement)) {
           const workspaceId = state.bundle.workspaceId, workspace = workspaceGeneration, input = inputGeneration;
           const canApply = () => !disposed && workspace === workspaceGeneration && workspaceId === state.bundle?.workspaceId &&
             state.mode === 'sources' && input === inputGeneration && !state.busy && !dirty() && !sourceEditor?.isDirty() &&
-            !container.hidden && !main.querySelector('#lifeFolderManage[open],.source-folder-assignment[open]') &&
+            !container.hidden && !listHeld() &&
             !main.contains(document.activeElement);
           refreshData({ canApply }).then(applied => {
             if (applied !== true || !canApply()) return;
@@ -1620,7 +1632,9 @@
           throw postContextChanged(options.exactPost.id);
         }
       }
-      pendingPostReturn = mode === 'page' && options.restorePostOrigin ? { origin: options.restorePostOrigin,
+      // postPosition: a post reopened by the browser's back or forward (restoreHistory), put back like a post returned to.
+      const postReturn = mode === 'page' ? options.restorePostOrigin || options.postPosition || null : null;
+      pendingPostReturn = postReturn ? { origin: postReturn, history: postReturn === options.postPosition,
         navigation: token, workspace, workspaceId, account, input: inputGeneration } : null;
       if (Object.hasOwn(options, 'restoreViewOrigin')) {
         if (options.restoreViewOrigin?.workspaceId === workspaceId) viewOrigins.set(mode, options.restoreViewOrigin);
@@ -1671,7 +1685,7 @@
           (mode !== 'source' || (options?.sourceId && !Object.hasOwn(options, 'returnContext')))) state.returnContext = null;
       state.managementOpen = false;
       if (mode === 'source' && !options?.readerArrangeOpen) state.readerArrangeOpen = false;
-      const { composingPost: _composingPost, schedulePinned, navigationMotion, sectionPosition, sourceEdit, selection, groupId, pagePreview, discovery, writing, reimport, externalImport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, searchTarget, nineTarget, collectionItemId, originFocusKey, featureNavigation, restoreViewOrigin, viewOrigin, exactPost, restorePostOrigin, historyAction, historyTask, materialReader, endTask, restoresFocus, findSection: _findSection, ...viewOptions } = options || {};
+      const { composingPost: _composingPost, postPosition: _postPosition, schedulePinned, navigationMotion, sectionPosition, sourceEdit, selection, groupId, pagePreview, discovery, writing, reimport, externalImport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, searchTarget, nineTarget, collectionItemId, originFocusKey, featureNavigation, restoreViewOrigin, viewOrigin, exactPost, restorePostOrigin, historyAction, historyTask, materialReader, endTask, restoresFocus, findSection: _findSection, ...viewOptions } = options || {};
       if (externalImport) {
         if (mode !== 'import' || externalImport.workspaceId !== state.bundle.workspaceId) return false;
         const input = externalImport.article.privateReader === true
@@ -1789,7 +1803,9 @@
       }
       if (mode === 'find') main.querySelector('#lifeFindQuery')?.focus();
       if (mode === 'sync' || mode === 'transfer') global.scrollTo({ top: 0, behavior: 'instant' });
-      const heading = (options?.chapterImport && (main.querySelector('#wbChapterImportHeading') || main.querySelector('#wbChapterNote'))) || (options?.book && main.querySelector(options.book.chapterId ? '#wbChapterNote' : '#wbBookHeading')) || main.querySelector('h1,h2') || pageHeading();
+      // The screen's first heading takes focus. When it is said to screen readers only (묶음·다시 찾기·회고·선택 자료 페이지
+      // repeat the heading's name, W5) the visible screen title takes it, so the focus ring shows (W5 re-review MINOR-1).
+      const heading = (options?.chapterImport && (main.querySelector('#wbChapterImportHeading') || main.querySelector('#wbChapterNote'))) || (options?.book && main.querySelector(options.book.chapterId ? '#wbChapterNote' : '#wbBookHeading')) || shownFirstHeading();
       // A return or back that puts focus on its origin control (restoreOriginView) does not pass through this heading first.
       if (heading && !restoresFocus && mode !== 'find' && mode !== 'write' && !(mode === 'page' && blogPageTask && blogMode === 'edit') && !options?.searchTarget && !options?.nineTarget && !options?.collectionItemId && !options?.groupId && !reimport) {
         heading.focus({ preventScroll: true });
@@ -2108,6 +2124,8 @@
       if (!global.HaedoNavigation) return;
       // While the browser is moving, its current entry is not this screen's.
       if (historyWait) return;
+      // 설정's item still waiting goes into the entry it belongs to before that entry is left or rewritten.
+      flushSettingsHash();
       const push = action === true || action === 'push';
       const url = new URL(global.location.href);
       const section = sectionFor(mode);
@@ -2143,27 +2161,191 @@
       const entry = historyEntry(mode);
       // Between a reader's renders nothing can measure its line; keep what the entry already holds for this exact version.
       if (mode === 'source' && !entry.reading && recorded?.entry?.reading && sameHistoryScreen(recorded.entry, historyPublic(entry))) entry.reading = recorded.entry.reading;
+      // The same for a screen's position (recordPosition): rewriting the entry of the screen shown keeps what it holds.
+      if (!push && Number.isFinite(recorded?.entry?.scrollY) && sameHistoryScreen(recorded.entry, historyPublic(entry))) entry.scrollY = recorded.entry.scrollY;
       try {
         if (push && !(destination === here && recorded && sameHistoryScreen(recorded.entry, historyPublic(entry)))) {
           const leftKey = historyKey || core.id();
           const left = leaving && leaving.key === historyKey ? leaving.entry : historyDetails.get(leftKey) || recorded?.entry || entry;
           // Update the entry being left only while it is still this screen's entry.
-          if (leaving && leaving.key === historyKey) global.history.replaceState(historyRecord(leaving.entry, historyIndex, leftKey, recorded?.back), '', here);
+          if (leaving && leaving.key === historyKey) historyWrite('replaceState', historyRecord(leaving.entry, historyIndex, leftKey, recorded?.back), here);
           const key = core.id();
           historyIndex += 1; historyKey = key;
-          global.history.pushState(historyRecord(entry, historyIndex, key, historyBack(left, leftKey)), '', destination);
+          historyWrite('pushState', historyRecord(entry, historyIndex, key, historyBack(left, leftKey)), destination);
         } else {
           const key = historyKey || core.id();
           const next = historyRecord(entry, historyIndex, key, recorded?.back);
           historyKey = key;
-          if (destination !== here || JSON.stringify(recorded) !== JSON.stringify(next.haedo)) global.history.replaceState(next, '', destination);
+          if (destination !== here || JSON.stringify(recorded) !== JSON.stringify(next.haedo)) historyWrite('replaceState', next, destination);
         }
       } catch (_) {
         // A state that cannot be stored still keeps the address correct.
-        if (push) global.history.pushState(null, '', destination);
-        else if (destination !== here) global.history.replaceState(null, '', destination);
+        if (push) historyWrite('pushState', null, destination);
+        else if (destination !== here) historyWrite('replaceState', null, destination);
       }
       lastRouteBase = url.pathname + url.search;
+      syncScrollRestoration(mode);
+    }
+    // One side puts an entry's position back (2026-11-18). The app does it for every screen it reopens at its place:
+    // a list, a calendar unit or a subview once it is drawn (restoreOriginView), an original at its reading line, a post
+    // read again (restorePostReturn). Those entries are `manual`. Left to the browser as well (auto), its own restore of
+    // the entry starts on the screen being left, cut to that screen's height and animated by the root's smooth scrolling.
+    // A post read on to 560 and left for a short screen stood at 79 after back (nothing else put a post back). And where
+    // the app's frame callback is not the browser's own frame (Playwright's clock), that animation was still moving when
+    // the app set the recorded position and Chromium added the step in flight: 일정 M left at 162 came back at 175, ‹ up
+    // ended at 15 instead of 0 (W2 review m-2), 자료 left at 333 came back at 335–369 after an original.
+    // An editor (글쓰기, 수정, 프로필 편집) and 자료로 글쓰기 are not put back by the app, so their entries stay with the
+    // browser (auto); a post is the app's from the moment its reader reports that it is read (onBlogModeChange).
+    // The value belongs to the entry shown, so it is written with every entry and when a post changes between read and edit.
+    function appRestoresPosition(mode = state.mode) {
+      return mode !== 'page' || !materialWritingTask && (!blogPageTask || blogMode === 'read');
+    }
+    function syncScrollRestoration(mode = state.mode) {
+      try { global.history.scrollRestoration = appRestoresPosition(mode) ? 'manual' : 'auto'; } catch (_) { /* The app's own restore still runs. */ }
+    }
+    // The app's history writes on this page go through historyWrite, so the writes that can wait share one budget with
+    // those that cannot (2026-11-23 review MAJOR-A). WebKit (Safari, iPad Chrome) throws a SecurityError past 100
+    // pushState/replaceState calls in 30s. 설정 at 1440 wrote its current item into the hash as it was scrolled and its
+    // position after each rest, 98–139 writes in 30s together; past WebKit's limit 노트 from the menu did not open and
+    // Back left the app. The writes that can wait (a screen's position, an original's reading line, 설정's item in the
+    // hash) are made only with room: 0.5s after the last write of any kind and fewer than 40 writes in the last 30s, so
+    // they never take the page past 40. A screen change (pushState) and the writes that go with it are never held back;
+    // they count, and one change costs 1–4 writes (push, the entry left, a waiting item, the screen's own replace), so
+    // 15–60 changes in the same 30s still fit under WebKit's 100.
+    // The one write outside it: platform-auth.js scrubCallback replaces the address once, before the app starts, to
+    // take OAuth values out of it.
+    const historyStamps = [];
+    const HISTORY_WINDOW = 30000, HISTORY_ROOM = 40, HISTORY_GAP = 500;
+    function historyRecent() {
+      const now = global.performance.now();
+      while (historyStamps.length && now - historyStamps[0] >= HISTORY_WINDOW) historyStamps.shift();
+      return now;
+    }
+    function historyWrite(method, data, url) {
+      historyStamps.push(historyRecent());
+      if (url === undefined) global.history[method](data, '');
+      else global.history[method](data, '', url);
+    }
+    // How long a write that can wait still waits (0: it may be made now).
+    function historyRoom({ gap = true } = {}) {
+      const now = historyRecent(), count = historyStamps.length;
+      const spacing = gap && count ? HISTORY_GAP - (now - historyStamps[count - 1]) : 0;
+      const full = count >= HISTORY_ROOM ? historyStamps[count - HISTORY_ROOM] + HISTORY_WINDOW - now : 0;
+      return Math.max(0, Math.ceil(spacing), Math.ceil(full));
+    }
+    // 설정's current item for the address (settings-ui writeHash), with the entry it was asked for. It goes before the
+    // position in the budget: written as soon as there is room (an item chosen in the index without the 0.5s gap; one
+    // followed while scrolling at once when 0.5s have passed), not after the scrolling rests, so a reload right after
+    // scrolling opens the item read (review hbrev MINOR-1: the address a reload opens is taken before beforeunload).
+    // Without room it waits for it (writeSettingsHash), and a position write made first carries it. A screen change,
+    // a hidden tab and the page's unload write a waiting item at once (flushSettingsHash): the entry left keeps the
+    // item, as its sub-screens do.
+    let settingsHashWaiting = null, settingsHashTimer = 0;
+    function settingsHash(hash, { now = false } = {}) {
+      settingsHashWaiting = { hash, key: historyKey };
+      if (now && !historyRoom({ gap: false })) { flushSettingsHash(); return; }
+      writeSettingsHash();
+    }
+    function writeSettingsHash() {
+      if (settingsHashTimer) global.clearTimeout(settingsHashTimer);
+      settingsHashTimer = 0;
+      if (disposed || !settingsHashWaiting) return;
+      if (state.mode !== 'manage') { settingsHashWaiting = null; return; }
+      const wait = historyRoom();
+      if (wait > 0) { settingsHashTimer = global.setTimeout(writeSettingsHash, wait); return; }
+      if (state.busy || historyWait || historyPending || navigationRender !== null) { settingsHashTimer = global.setTimeout(writeSettingsHash, 200); return; }
+      flushSettingsHash();
+    }
+    // The waiting item, if the entry shown is still the one it was asked for.
+    function takeSettingsHash() {
+      const waiting = settingsHashWaiting; settingsHashWaiting = null;
+      if (!waiting || (global.history.state?.haedo?.key ?? null) !== waiting.key || global.location.hash === '#' + waiting.hash) return null;
+      return global.location.pathname + global.location.search + '#' + waiting.hash;
+    }
+    function flushSettingsHash() {
+      const url = takeSettingsHash();
+      if (!url) return;
+      try { historyWrite('replaceState', global.history.state, url); } catch (_) { /* The item stays shown; the address keeps the last one. */ }
+    }
+    // The entry shown keeps its position as it is scrolled, written once the scrolling has rested. An entry left with
+    // the browser's own move is no longer the current entry when popstate arrives, so its position was kept in this
+    // page's memory only (historyDetails) and a reload lost it. With the app alone putting these entries back, 자료 and
+    // 설정 then opened at the top where the browser's own restore had still succeeded (forward, reload, back).
+    // A number in the entry that already holds scrollY; no other store. Written 200ms after the last scroll, when the
+    // history budget has room (historyRoom).
+    let positionTimer = 0;
+    function recordPosition() {
+      positionTimer = 0;
+      if (disposed) return;
+      const wait = historyRoom();
+      if (wait > 0) { positionTimer = global.setTimeout(recordPosition, wait); return; }
+      // While a screen is being opened or the browser is moving, the current entry is not the screen shown: tried again
+      // after it, as the position may have changed meanwhile with no scroll after it (일정 W at 300, `다음` drawn while
+      // busy at 184 kept 300 in its entry). The checks below then still refuse an entry that is not the screen shown.
+      if (state.busy || historyWait || historyPending || navigationRender !== null) { positionTimer = global.setTimeout(recordPosition, 200); return; }
+      // 설정's item waits only while 설정 is shown.
+      const url = state.mode === 'manage' ? takeSettingsHash() : null;
+      settingsHashWaiting = null;
+      let data = global.history.state, moved = false;
+      const recorded = data?.haedo;
+      // An original keeps its reading line in its entry (readerHistoryState, written by the reader once it rests);
+      // a second writer there took the history writes past 100 in 30s (Safari's limit).
+      if (state.mode !== 'source' && state.bundle && recorded?.v === 1 && recorded.key === historyKey && recorded.doc === historyDoc &&
+          recorded.entry?.mode === state.mode && recorded.entry.workspaceId === state.bundle.workspaceId && appRestoresPosition()) {
+        const top = Math.max(0, Math.round(global.scrollY));
+        if (recorded.entry.scrollY !== top) { data = { ...data, haedo: { ...recorded, entry: { ...recorded.entry, scrollY: top } } }; moved = true; }
+      }
+      if (!moved && !url) return;
+      try { historyWrite('replaceState', data, url || undefined); }
+      catch (_) { /* The position stays in this page's memory. */ }
+    }
+    function positionScrolled() {
+      if (positionTimer) global.clearTimeout(positionTimer);
+      positionTimer = global.setTimeout(recordPosition, 200);
+    }
+    // A screen put back at its place can still change height above that place a moment later, and the browser then
+    // keeps what is in view, not the place: 자료 left at 300 came back at 270 after a reload and forward, as its folder
+    // line (폴더를 확인하고 있습니다.) went away 80ms after the list was put back; a photo whose recorded size is not its
+    // own moves what follows it once it loads. Until the user acts (wheel, touch, pointer, key) or the screen changes, the
+    // place is set again whenever the page's height changes, for up to a second after the last change (three at most).
+    // Any other move of the page (a scroll bar dragged, a script, the app bringing a control into view) also ends it.
+    // While it holds, the browser's scroll anchoring is off (overflow-anchor on the root), so the page moves only when
+    // someone moves it or its end cuts the place: any move away from the place is then such a move, also when it comes
+    // in the same task as a height change (review 2026-11-23 MINOR-A: scrollTo(900) with 150px put in above went back
+    // to 300, as the old test took a move with a height change for the browser keeping what was in view). Where the
+    // property is not known, a move with the height unchanged is the only one known not to be the browser's.
+    let positionHold = null;
+    function holdPosition(top, current) {
+      positionHold?.();
+      if (typeof global.ResizeObserver !== 'function') return;
+      const page = document.documentElement, inputs = ['wheel', 'touchstart', 'pointerdown', 'keydown'];
+      const anchoring = !!global.CSS?.supports?.('overflow-anchor', 'none'), anchor = page.style.overflowAnchor;
+      let quiet = 0, height = page.scrollHeight, stopped = false;
+      const stop = () => {
+        if (stopped) return;
+        stopped = true;
+        observer.disconnect(); global.clearTimeout(quiet); global.clearTimeout(limit);
+        for (const type of inputs) global.removeEventListener(type, stop, true);
+        global.removeEventListener('scroll', moved, true);
+        if (anchoring) page.style.overflowAnchor = anchor;
+        if (positionHold === stop) positionHold = null;
+      };
+      // A place below the page's end (cut to the end until the page is long enough) is not a move away.
+      const away = () => { const y = Math.round(global.scrollY); return y !== top && !(top > page.scrollHeight - global.innerHeight && y >= page.scrollHeight - global.innerHeight - 1); };
+      const moved = () => { if ((anchoring || page.scrollHeight === height) && away()) stop(); };
+      const observer = new global.ResizeObserver(() => {
+        if (stopped) return;
+        if (disposed || !current()) { stop(); return; }
+        height = page.scrollHeight;
+        global.clearTimeout(quiet); quiet = global.setTimeout(stop, 1000);
+        if (Math.round(global.scrollY) !== top) global.scrollTo({ top, behavior: 'instant' });
+      });
+      const limit = global.setTimeout(stop, 3000);
+      for (const type of inputs) global.addEventListener(type, stop, { capture: true, passive: true });
+      global.addEventListener('scroll', moved, { capture: true, passive: true });
+      if (anchoring) page.style.overflowAnchor = 'none';
+      positionHold = stop;
+      observer.observe(page);
     }
 
     // News: opening an article where it replaces the list pushes an entry; closing it in the app
@@ -2463,7 +2645,12 @@
       try {
         // An entry whose post is gone (deleted, or replaced with no record on this device) opens the list instead.
         const { missingPost, ...restored } = await historyOptions(view, record.idx < from);
-        opened = await navigate(missingPost ? 'home' : view.mode, { ...restored, restoresFocus });
+        // A post read is reopened where it was left: its reader is drawn after its own read, so the position is set
+        // then (restorePostReturn), not here. An entry left with the browser's own move keeps its position in this
+        // page's memory only; without one the post opens at its top. An editor is not put back.
+        const postId = view.blog && !missingPost ? restored.searchTarget?.photoPostId || restored.searchTarget?.postId : null;
+        const postPosition = typeof postId === 'string' ? { postTarget: { id: postId }, scrollY: Number.isFinite(view.scrollY) ? view.scrollY : 0, focusKey: view.focusKey } : null;
+        opened = await navigate(missingPost ? 'home' : view.mode, { ...restored, restoresFocus, ...(postPosition ? { postPosition } : {}) });
         if (missingPost) announce(missingPostNotice);
       }
       catch (cause) {
@@ -2541,8 +2728,14 @@
 
     // The first heading that actually takes focus: on 일정 the first main heading (the author name) has no
     // tabindex, so the toolbar heading is tried next instead of leaving focus on <body>.
+    // A first heading said to screen readers only (묶음·다시 찾기·회고·선택 자료 페이지, W5) is skipped, so focus
+    // lands on the shown title after back/forward as it does on entry (W5 re-review MINOR-A).
+    function shownFirstHeading() {
+      const first = main.querySelector('h1,h2');
+      return first && !first.closest('.life-sr-only') ? first : pageHeading() || first;
+    }
     function focusFirstHeading() {
-      for (const heading of [main.querySelector('h1,h2'), pageHeading()]) {
+      for (const heading of [shownFirstHeading(), pageHeading(), main.querySelector('h1,h2')]) {
         heading?.focus({ preventScroll: true });
         if (document.activeElement && document.activeElement !== document.body) return;
       }
@@ -2567,17 +2760,25 @@
         const target = (origin.focusKey && controls.find(el => el.dataset.focusKey === origin.focusKey)) ||
           (receivedActions.length === 1 ? receivedActions[0] : null) ||
           (origin.focusId && controls.find(el => el.id === origin.focusId)) || controls.find(el =>
-          el.tagName === origin.focusTag && (el.getAttribute('aria-label') || el.textContent) === origin.focusName) || main.querySelector('#lifeFindQuery,#lifeSearch,h1,h2') || pageHeading();
+          el.tagName === origin.focusTag && (el.getAttribute('aria-label') || el.textContent) === origin.focusName) || main.querySelector('#lifeFindQuery,#lifeSearch') || shownFirstHeading();
         for (let parent = target?.parentElement; parent && parent !== main; parent = parent.parentElement) if (parent.tagName === 'DETAILS') parent.open = true;
         target?.focus({ preventScroll: true });
         // The return skipped the heading focus, so a target that could not take focus must not leave focus on <body>.
         if (!document.activeElement || document.activeElement === document.body) focusFirstHeading();
-        if (!anchor && Number.isFinite(origin.scrollY)) global.scrollTo({ top: origin.scrollY, behavior: 'instant' });
+        // These entries have no browser restore (syncScrollRestoration): one without a recorded position (a forward entry
+        // after a reload) opens at its top instead of keeping the position of the screen just left. An original has its
+        // own reading line and is left there.
+        const top = Number.isFinite(origin.scrollY) ? origin.scrollY : origin.mode === 'source' ? null : 0;
+        if (!anchor && top !== null) {
+          global.scrollTo({ top, behavior: 'instant' });
+          holdPosition(top, () => token === navigationGeneration && state.mode === origin.mode);
+        }
       });
+      // Every screen is put back once it is drawn: set before that, the position was cut to the height of the frame
+      // still empty (컬렉션 left at 142 came back at 0). A screen drawn at once has a settled promise.
       if (origin.mode === 'find') findRenderPromise.then(restore);
       else if (origin.mode === 'home') homeRenderPromise.then(restore);
-      else if (origin.mode === 'naver-capture' || origin.mode === 'naver-blog' || origin.mode === 'external-discovery' || origin.mode === 'account-blog' || origin.mode === 'blog' || calendarModes.has(origin.mode) && schedule) mainRenderPromise.then(restore);
-      else restore();
+      else Promise.resolve(mainRenderPromise).then(restore);
     }
 
     async function returnFromBlog(context = {}) {
@@ -2613,6 +2814,8 @@
       const activeMenu = document.activeElement?.closest('.life-feature-menu');
       const menuFocus = activeMenu && toolbar.contains(activeMenu) && main.dataset.mode === state.mode ?
         { id: activeMenu.id, key: document.activeElement.dataset.focusKey, summary: document.activeElement.tagName === 'SUMMARY' } : null;
+      // 뉴스 설정 sits in this row (W4): a header rebuilt by a background update keeps its focus.
+      const newsSettingsFocus = main.dataset.mode === state.mode && document.activeElement?.id === 'discoveryNewsSettings' && toolbar.contains(document.activeElement);
       toolbar.replaceChildren();
       root.querySelector('#lifePhotoScreenHeading')?.remove();
       root.querySelector(':scope > .haedo-title-band')?.remove();
@@ -2660,8 +2863,15 @@
       // list) has its own: 노트 · 통합 검색 · 글 메뉴 (2026-11-16 notes-menu).
       const scheduleParts = calendarModes.has(state.mode) && global.HaedoLife.ScheduleUI ? scheduleHeader() : null;
       if (scheduleParts) heading.textContent = scheduleParts.title;
+      // D on a narrow phone shows its weekday short so the title stays one line beside 오늘 ‹ › (schedule.css, to 374px).
+      // The heading is still named by the whole date: the short text is not read out.
+      if (scheduleParts?.titleShort) {
+        const short = node('span', scheduleParts.titleShort, 'schedule-title-short');
+        short.setAttribute('aria-hidden', 'true');
+        heading.replaceChildren(node('span', scheduleParts.title, 'schedule-title-full'), short);
+      }
       if (subviewTitles[state.mode] && state.mode !== 'external-discovery' && !(state.mode === 'page' && blogPageTask && blogMode === 'edit')) {
-        const labels = { 'naver-blog': '네이버 블로그 목록으로 돌아가기', 'naver-capture': '본문·사진 검토로 돌아가기', 'account-blog': '계정 보관 상태로 돌아가기', 'external-discovery': '새 글 찾기로 돌아가기', interests: '관심 주제 편집으로 돌아가기', blog: '글 공개·보관으로 돌아가기', find: '검색 결과로 돌아가기', reflection: '회고로 돌아가기', home: '노트로 돌아가기', sources: '자료로 돌아가기', topics: '검색 결과로 돌아가기', tools: '일정으로 돌아가기', manage: '설정으로 돌아가기', backup: '백업·복원으로 돌아가기', collection: '컬렉션으로 돌아가기', activities: '묶음으로 돌아가기', page: '선택 자료 페이지로 돌아가기', books: '책으로 돌아가기', import: '가져오기로 돌아가기', write: '자료 작성으로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기' , quarter: '일정으로 돌아가기', month: '일정으로 돌아가기', week: '일정으로 돌아가기', day: '일정으로 돌아가기' };
+        const labels = returnLabels;
         const origin = subviewOrigin();
         const back = iconButton(state.mode === 'naver-blog' && currentNaverMediaOrigin() ? '읽던 원문으로 돌아가기' : origin.postTarget ? '읽던 글로 돌아가기' : labels[origin.mode] || labels.sources, 'back', guarded(returnFromSubview));
         back.id = state.mode === 'write' ? 'lifeWritingClose' : 'lifeSubviewReturn';
@@ -2688,8 +2898,8 @@
       // 노트·일정 (2026-11-16 노션 방향): from 1101px the sticky 44px top row is the path and the actions, and the title
       // is the large page title at the top of the body, after that row, so it scrolls away (home.css). The path repeats
       // the menu's current item, so it is not read twice. Up to 1100px the one-row heading stays.
-      if (!postHeading && (state.mode === 'home' || scheduleParts) && wideHeading?.matches) {
-        const path = node('span', section === 'notes' ? '노트' : '일정', 'haedo-heading-path');
+      if (!postHeading && (state.mode === 'home' || scheduleParts || pageHeadModes.has(state.mode)) && wideHeading?.matches) {
+        const path = node('span', ({ notes: '노트', schedule: '일정', records: '자료', news: '뉴스' })[section] || '설정', 'haedo-heading-path');
         path.setAttribute('aria-hidden', 'true');
         toolbar.dataset.pageHead = 'true';
         toolbar.append(path);
@@ -2704,19 +2914,6 @@
       actions.setAttribute('role', 'toolbar'); actions.setAttribute('aria-label', '화면 동작');
       if (scheduleParts) { toolbar.dataset.schedule = state.mode; actions.append(scheduleParts.views, scheduleParts.today, scheduleParts.step); }
       else delete toolbar.dataset.schedule;
-      if (section === 'records') {
-        if (state.mode === 'sources') {
-          const select = iconButton('기록 선택', 'check', guarded(() => {
-            state.selecting = !state.selecting;
-            if (!state.selecting) selectedVersions.clear();
-            render();
-            main.parentNode.querySelector('#lifeSelectionToggle')?.focus({ preventScroll: true });
-          }));
-          select.id = 'lifeSelectionToggle';
-          select.setAttribute('aria-pressed', String(state.selecting));
-          actions.append(select);
-        }
-      }
       if (!focused && (section === 'records' || section === 'schedule' && !planningModes.has(state.mode))) {
         const nav = node('nav', null, 'life-nav life-context-nav');
         nav.setAttribute('aria-label', '기록 보기');
@@ -2730,6 +2927,9 @@
         // Home exposes these actions with labels in its shortcut row.
         if (section === 'records') { nav.append(add); actions.append(nav); }
       }
+      // 뉴스: 뉴스 설정 is this screen's own heading action (W4). The control belongs to DiscoveryUI and is the same
+      // element across rebuilds; an earlier DiscoveryUI without it keeps its control in the tab row.
+      if (state.mode === 'external-discovery') { const control = externalDiscoveryUI?.settingsControl?.(); if (control) actions.append(control); }
       // A plan screen's heading is ‹ + title + its own add control only (2026-11-08 S1); 연간 계획 has none.
       if (!['source', 'find', 'annual-plan'].includes(state.mode)) {
         const find = iconButton('통합 검색', 'search', guarded(() => navigate('find'))); find.id = 'lifeFindOpen'; actions.append(find);
@@ -2752,7 +2952,7 @@
           if (disposed || headingToken !== headingGeneration || state.mode !== 'page' || blogKind !== 'photo' || blogMode !== 'read') return;
           const row = main.querySelector('.photo-posts[data-mode="read"] > .photo-read-actions');
           if (back && row && !row.querySelector(':scope > button[aria-label*="돌아가기"], :scope > button[aria-label="사진 글 목록"]')) row.prepend(back);
-          if (find && row && !row.querySelector('#lifeFindOpen')) row.querySelector('.photo-read-tools')?.append(find);
+          if (find && row && !row.querySelector('#lifeFindOpen')) row.querySelector('.photo-read-tools > .photo-more')?.before(find); // W3: 통합 검색 before ⋯
         });
       }
       if (state.remoteChanged && state.mode !== 'find') {
@@ -2786,6 +2986,7 @@
           [...(menu?.querySelectorAll('[data-focus-key]') || [])].find(item => item.dataset.focusKey === menuFocus.key);
         control?.focus({ preventScroll: true });
       }
+      if (newsSettingsFocus) toolbar.querySelector('#discoveryNewsSettings')?.focus({ preventScroll: true });
     }
 
     function destinationRow(label, description, href, glyph) {
@@ -2888,6 +3089,26 @@
       if (blog) group('글 메뉴', [['글 공개·보관', 'edit', 'blog'], ['계정 보관 상태', 'cloud', 'account-blog', 'homeAccountBlog'],
         ['프로필 편집', 'user', 'page', 'homeProfileEdit', { blogContext: true, pageProfileEdit: true }]]);
       else {
+        // 자료 목록's own actions (W4): 기록 선택 and 폴더 관리 moved here from the heading and the folder bar.
+        // After either, and after Esc, focus is on this menu's ⋯; neither leaves it on a control inside the closed menu.
+        if (state.mode === 'sources') {
+          const list = group('목록', []);
+          const select = actionRow('기록 선택', '', 'check', () => {
+            state.selecting = !state.selecting;
+            if (!state.selecting) selectedVersions.clear();
+            menu.open = false;
+            render();
+            toolbar.querySelector('#lifeRecordsMenu > summary')?.focus({ preventScroll: true });
+          });
+          select.id = 'lifeSelectionToggle'; select.dataset.focusKey = 'records:menu:select';
+          select.setAttribute('aria-pressed', String(state.selecting));
+          list.append(select);
+          if (global.HaedoLife.SourceFoldersUI) {
+            const manageFolders = actionRow('폴더 관리', '', 'folder', () => { menu.open = false; sourceFoldersMount?.openManage(); });
+            manageFolders.id = 'lifeFolderManageOpen'; manageFolders.dataset.focusKey = 'records:menu:folders';
+            list.append(manageFolders);
+          }
+        }
         group('모아 보기', [['컬렉션', 'bookmark', 'collection'], ['묶음', 'link', 'activities'], ['선택 자료 페이지', 'user', 'page']]);
         group('활용', [['다시 찾기', 'search', 'discover'], ['회고', 'book', 'reflection'], ['책 만들기', 'book', 'books']]);
         const management = group('가져오기·관리', [
@@ -2910,6 +3131,12 @@
         if (event.key !== 'Escape' || !menu.open) return;
         event.preventDefault(); event.stopPropagation(); menu.open = false; summary.focus({ preventScroll: true });
       });
+      // On a low screen the menu scrolls inside its panel. `data-more` says items remain below, and the panel draws
+      // its end fade while it does (records.css), the same cue as the news tab row.
+      const more = () => { panel.dataset.more = String(panel.scrollTop + panel.clientHeight < panel.scrollHeight - 1); };
+      panel.addEventListener('scroll', more, { passive: true });
+      menu.addEventListener('toggle', () => { if (menu.open) more(); });
+      if (typeof global.ResizeObserver === 'function') new global.ResizeObserver(more).observe(panel);
       return menu;
     }
 
@@ -3144,7 +3371,9 @@
 
     function restorePostReturn(context) {
       const pending = pendingPostReturn;
-      if (!pending || context.mode !== 'read' || context.id !== pending.origin.postTarget.id) return;
+      if (!pending || context.id !== pending.origin.postTarget.id) return;
+      // A history entry that reopens its post in the editor is not put back, also not when that edit is saved later.
+      if (context.mode !== 'read') { if (pending.history) pendingPostReturn = null; return; }
       pendingPostReturn = null;
       requestAnimationFrame(() => {
         if (disposed || state.mode !== 'page' || navigationGeneration !== pending.navigation || workspaceGeneration !== pending.workspace ||
@@ -3153,6 +3382,7 @@
         for (let parent = target?.parentElement; parent && parent !== main; parent = parent.parentElement) if (parent.tagName === 'DETAILS') parent.open = true;
         target?.focus({ preventScroll: true });
         global.scrollTo({ top: pending.origin.scrollY, behavior: 'instant' });
+        holdPosition(pending.origin.scrollY, () => navigationGeneration === pending.navigation && state.mode === 'page');
       });
     }
 
@@ -3374,7 +3604,7 @@
           // 뉴스 목록을 기다리며 전역 이동을 막지 않는다. 다른 화면으로 옮겼으면 열지 않는다.
           Promise.resolve(mainRenderPromise).then(() => {
             if (disposed || token !== navigationGeneration || state.mode !== 'external-discovery') return;
-            const toggle = main.querySelector('#discoveryNewsSettings');
+            const toggle = toolbar.querySelector('#discoveryNewsSettings') || main.querySelector('#discoveryNewsSettings');
             if (toggle && !main.querySelector('#discoveryNewsSettingsPanel')?.checkVisibility?.()) toggle.click();
           }).catch(failure);
         }),
@@ -3384,7 +3614,8 @@
         storage, workspaceId,
         rows: { account: accountRows, workspace: [manage, management], backup: [open], public: [cover, pages] },
         account: { email: auth?.getAccount?.()?.email || '' }, news,
-        isCurrent: () => !disposed && renderToken === renderGeneration && state.mode === 'manage' && state.bundle?.workspaceId === workspaceId
+        isCurrent: () => !disposed && renderToken === renderGeneration && state.mode === 'manage' && state.bundle?.workspaceId === workspaceId,
+        writeHash: settingsHash
       });
       settingsUI.mount(main, { focusItem: !renderRestoresFocus });
       if (sync) refreshSync().catch(failure);
@@ -3799,7 +4030,13 @@
         while (ancestor && ancestor !== root) { if (ancestor.tagName === 'DETAILS') ancestor.open = true; ancestor = ancestor.parentElement; }
         if (panel?.hidden) Array.from(main.querySelectorAll('[aria-controls]')).find(el => el.getAttribute('aria-controls') === panel.id)?.click();
         target?.focus({ preventScroll: true });
-        if (!context.homeAnchor) global.scrollTo({ top: context.scrollY, behavior: 'instant' });
+        // A return without a recorded position opens the screen at its top with the focused control in view (the browser
+        // puts nothing back here, syncScrollRestoration), not at the position the original was read at.
+        if (!context.homeAnchor) {
+          global.scrollTo({ top: Number.isFinite(context.scrollY) ? context.scrollY : 0, behavior: 'instant' });
+          if (!Number.isFinite(context.scrollY)) target?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+          else holdPosition(context.scrollY, () => navigation === navigationGeneration && state.mode === context.mode);
+        }
       });
       if (context.focusKey === context.mode + ':reading-resume') {
         const pending = readingResumePromise;
@@ -3809,15 +4046,30 @@
         pending.then(() => { if (pending === homeRenderPromise) restore(); });
       }
       else if (context.mode === 'find') findRenderPromise.then(restore);
-      else if (context.mode === 'naver-capture' || context.mode === 'naver-blog' || context.mode === 'interests' || context.mode === 'external-discovery' || context.mode === 'blog') mainRenderPromise.then(restore);
-      else restore();
+      // Every other screen is put back once it is drawn (as restoreOriginView waits): set before that, the position was
+      // cut to the empty frame's height (일정 D left at 1169 came back at 58 from a reader's 돌아가기, 2026-11-18).
+      else Promise.resolve(mainRenderPromise).then(restore);
     }
 
     function searchReturnButton() {
-      const labels = { 'naver-capture': '본문·사진 검토로 돌아가기', 'naver-blog': '네이버 블로그 목록으로 돌아가기', 'external-discovery': '새 글 찾기로 돌아가기', interests: '관심 주제 편집으로 돌아가기', blog: '글 공개·보관으로 돌아가기', home: '노트로 돌아가기', activities: '묶음으로 돌아가기', page: '선택 자료 페이지로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기', reflection: '회고로 돌아가기', books: '책으로 돌아가기' };
-      const back = iconButton(labels[state.returnContext?.mode] || '검색 결과로 돌아가기', 'back', guarded(returnToResults));
+      // Named after the screen it returns to (returnLabels), as a subview's return is: an original opened from 일정's
+      // D or W was named 검색 결과로 돌아가기 while it went back to that calendar unit, one from 자료 휴지통 likewise.
+      // 자료's list is 검색 결과 while a search word narrows it (r2-search), otherwise 자료.
+      const back = iconButton(searchReturnName(), 'back', guarded(returnToResults));
       back.id = 'lifeSearchReturn';
       return back;
+    }
+    function searchReturnName() {
+      const mode = state.returnContext?.mode;
+      return mode === 'sources' ? (state.sourcesSearch.trim() ? '검색 결과로 돌아가기' : returnLabels.sources) : returnLabels[mode] || '검색 결과로 돌아가기';
+    }
+    // The list beside an original (from 1101px) can be searched while it is read: the return is named again.
+    function renameSearchReturn() {
+      const back = main.querySelector('#lifeSearchReturn'), name = searchReturnName();
+      if (!back || back.getAttribute('aria-label') === name) return;
+      back.setAttribute('aria-label', name);
+      const tooltip = back.querySelector('.life-tooltip');
+      if (tooltip) tooltip.textContent = name;
     }
 
     async function returnFromRelated() {
@@ -3913,7 +4165,8 @@
     }
 
     function sourceFeedCard(source, version) {
-      const card = node('article', null, 'life-card life-source-card');
+      // W5: the 주제 rows use the 자료 row (records.css .records-row: title one line, excerpt two, one meta line, whole row opens).
+      const card = node('article', null, 'life-card life-source-card records-row');
       const key = resultFocusKey('topics', source.id, 'original');
       const open = button(sourceLabel(source), guarded(() => openResult('topics', key, { sourceId: source.id, sourceVersionId: version.id })), 'life-source-open');
       open.dataset.focusKey = key;
@@ -4139,10 +4392,10 @@
       if (current) control.setAttribute('aria-current', 'true');
       control.setAttribute('aria-label', '발췌를 원문에서 보기: ' + record.text.slice(0, 80) + ' · ' + (source ? sourceLabel(source) : '출처 없음'));
       control.append(markedText(record.text, query, 'records-quote'));
-      card.append(RecordsList.when(document, record.createdAt), control);
+      card.append(control);
       if (record.note) card.append(markedText(record.note, query, 'records-note'));
       card.append(RecordsList.badges(document, ['발췌', source ? sourceLabel(source) : '출처 없음', record.topic || null,
-        index && index < versions.length ? '이전 버전' : null, record.sourceRefs.length > 1 ? '출처 ' + record.sourceRefs.length + '개' : null]));
+        index && index < versions.length ? '이전 버전' : null, record.sourceRefs.length > 1 ? '출처 ' + record.sourceRefs.length + '개' : null], RecordsList.when(document, record.createdAt)));
       return card;
     }
 
@@ -4187,7 +4440,7 @@
         if (hit.versionIndex < hit.versionCount) facts.push('이전 버전');
         if (hit.matchedBy === 'note') facts.push('저장한 문장·메모 일치');
         if (reading && version.id !== state.sourceVersionId) facts.push('이전 버전 읽는 중');
-        item.append(RecordsList.when(document, version.importedAt), control, RecordsList.badges(document, facts));
+        item.append(control, RecordsList.badges(document, facts, RecordsList.when(document, version.importedAt)));
         return item;
       };
       // True while the open version has no row of its own in the list just drawn.
@@ -4213,7 +4466,7 @@
           state.recordKind = next; limit = SEARCH_PAGE_SIZE; draw(); tabsHost.querySelector('#lifeRecordKind-' + next)?.focus({ preventScroll: true });
         } }));
       }
-      const bar = searchField(pane, '자료에서 찾기', () => { limit = SEARCH_PAGE_SIZE; draw(); readerMatchRefresh?.(); }, 'sourcesSearch', '자료에서 찾기', 'lifePaneSearch');
+      const bar = searchField(pane, '자료에서 찾기', () => { limit = SEARCH_PAGE_SIZE; draw(); readerMatchRefresh?.(); renameSearchReturn(); }, 'sourcesSearch', '자료에서 찾기', 'lifePaneSearch');
       bar.classList.add('records-pane-search');
       pane.append(tabsHost, count, list, more);
       draw();
@@ -4314,7 +4567,7 @@
       controls.append(iconButton('선택 모두 해제', 'close', () => { selectedVersions.clear(); update(); selectionSummary.focus(); }));
       const cancelSelection = button('선택 취소', () => {
         selectedVersions.clear(); state.selecting = false; render();
-        toolbar.querySelector('#lifeSelectionToggle')?.focus({ preventScroll: true });
+        toolbar.querySelector('#lifeRecordsMenu > summary')?.focus({ preventScroll: true });
       });
       selectionBar.append(selectionDetails, selectionStatus, controls, cancelSelection);
       function updateSelection(matches) {
@@ -4411,7 +4664,7 @@
             heading.append(choose);
           }
           heading.append(open);
-          card.append(RecordsList.when(document, version.importedAt), heading);
+          card.append(heading);
           if (hit.locator) {
             card.dataset.locatorStart = String(hit.locator.start); card.dataset.locatorEnd = String(hit.locator.end);
             const context = node('p', null, 'life-search-context');
@@ -4421,16 +4674,14 @@
           } else if (!query && !records.length && version.contentText) {
             card.append(node('p', version.contentText.slice(0, 180) + (version.contentText.length > 180 ? '…' : ''), 'life-search-context'));
           }
-          const footer = node('div', null, 'life-feed-footer');
-          // Badges show stored facts only: origin, coverage, exact version and why it matched.
+          // Badges show stored facts only: origin, coverage, exact version and why it matched. The stored date and time end the line.
           const facts = [sourceOrigin(source)];
           if (version.coverage.status !== 'full_text') facts.push(({ partial: '본문 일부', link_only: '본문 미확보', unknown: '범위 미확인' })[version.coverage.status] || '범위 미확인');
           if (hit.versionCount > 1) facts.push('버전 ' + hit.versionIndex + '/' + hit.versionCount);
           if (hit.versionIndex < hit.versionCount) facts.push('이전 버전');
           if (state.sourcesSearch.trim() && hit.matchedBy === 'title') facts.push('제목 일치');
           if (hit.matchedBy === 'note') facts.push('저장한 문장·메모 일치');
-          const badges = RecordsList.badges(document, facts); badges.classList.add('life-meta', 'life-source-meta');
-          footer.append(badges);
+          const badges = RecordsList.badges(document, facts, RecordsList.when(document, version.importedAt)); badges.classList.add('life-meta', 'life-source-meta');
           const details = node('section', null, 'life-result-details');
           details.id = 'lifeResultDetails-' + version.id;
           details.hidden = true;
@@ -4438,14 +4689,58 @@
           details.append(node('p', '버전 ' + hit.versionIndex + '/' + hit.versionCount + (hit.versionIndex === hit.versionCount ? '' : ' · 이전 버전'), 'life-meta'));
           if (state.sourcesSearch.trim() && hit.matchedBy === 'title') details.append(node('p', '제목에서 일치 · 본문에는 일치하는 구절 없음', 'life-meta'));
           details.append(metadata(source, version, true));
-          const info = iconButton('자료 출처 정보 · ' + sourceLabel(source), 'info', () => {}, 'life-result-info');
-          disclosure(info, details);
-          // The row's own actions end it as one group on the right edge.
-          const rowTools = node('div', null, 'records-row-tools'); rowTools.setAttribute('role', 'toolbar'); rowTools.setAttribute('aria-label', '자료 동작 · ' + sourceLabel(source));
-          rowTools.append(info);
-          if (folders) rowTools.append(folders.assignmentControl({ sourceIds: [source.id], buttonLabel: '폴더로 이동 · ' + sourceLabel(source) }));
-          footer.append(rowTools);
-          card.append(footer, details);
+          // The row's own actions are one ⋯ on its right edge (W4, Designer 기본값 5): 자료 출처 정보 and 폴더로 이동.
+          // What either opens appears under the row. After choosing an item, and after Esc, focus is on the row's
+          // title button, never on an item inside the closed menu.
+          const rowTools = node('div', null, 'records-row-tools');
+          const rowMenu = node('details', null, 'life-feature-menu records-row-more');
+          const rowSummary = node('summary', null, 'life-icon-button'); rowSummary.setAttribute('aria-label', '자료 동작 · ' + sourceLabel(source));
+          rowSummary.append(global.HaedoLife.Icons.create('more'));
+          const rowPanel = node('div', null, 'life-feature-menu-panel records-row-menu');
+          const toTitle = () => open.focus({ preventScroll: true });
+          const menuItem = (name, glyph, action, className) => {
+            const item = button(null, () => { rowMenu.open = false; action(); }, 'life-destination life-action-row' + (className ? ' ' + className : ''));
+            item.setAttribute('aria-label', name + ' · ' + sourceLabel(source));
+            const copy = node('span', null, 'life-destination-copy'); copy.append(node('strong', name));
+            item.append(global.HaedoLife.Icons.create(glyph), copy);
+            return item;
+          };
+          const showInfo = shown => { details.hidden = !shown; info.setAttribute('aria-expanded', String(shown)); };
+          const info = menuItem('자료 출처 정보', 'info', () => { showInfo(details.hidden); toTitle(); }, 'life-result-info');
+          info.setAttribute('aria-controls', details.id); info.setAttribute('aria-expanded', 'false');
+          details.addEventListener('keydown', event => {
+            if (event.key !== 'Escape' || details.hidden) return;
+            event.preventDefault(); event.stopPropagation(); showInfo(false); toTitle();
+          });
+          rowPanel.append(info);
+          let assignment = null;
+          if (folders) {
+            // After 이동 the list is redrawn, so this row is gone: focus the same material's title button in the new
+            // list (the folder choice when the material is no longer listed), unless focus has already been placed.
+            const afterMove = () => requestAnimationFrame(() => {
+              if (disposed || state.mode !== 'sources' || state.bundle?.workspaceId !== workspaceId || !list.isConnected) return;
+              const active = document.activeElement;
+              if (active && active !== document.body && active.isConnected && !active.disabled) return;
+              ([...list.querySelectorAll('.life-source-open')].find(control => control.dataset.sourceId === source.id) || main.querySelector('#lifeFolderFilter'))?.focus({ preventScroll: true });
+            });
+            assignment = folders.assignmentControl({ sourceIds: [source.id], buttonLabel: '폴더로 이동 · ' + sourceLabel(source), embedded: true, focusReturn: () => open, onSaved: afterMove });
+            assignment.id = 'lifeFolderMove-' + version.id;
+            const move = menuItem('폴더로 이동', 'folder', () => {
+              assignment.open = !assignment.open;
+              if (assignment.open) assignment.querySelector('select')?.focus({ preventScroll: true }); else toTitle();
+            }, 'records-row-folder');
+            move.setAttribute('aria-controls', assignment.id); move.setAttribute('aria-expanded', 'false');
+            assignment.addEventListener('toggle', () => move.setAttribute('aria-expanded', String(assignment.open)));
+            rowPanel.append(move);
+          }
+          rowMenu.append(rowSummary, rowPanel);
+          rowMenu.addEventListener('keydown', event => {
+            if (event.key !== 'Escape' || !rowMenu.open) return;
+            event.preventDefault(); event.stopPropagation(); rowMenu.open = false; toTitle();
+          });
+          rowTools.append(rowMenu);
+          card.append(badges, rowTools, details);
+          if (assignment) card.append(assignment);
           if (records.length) {
             const notes = node('section', null, 'life-record-notes');
             notes.setAttribute('aria-label', '저장한 문장·메모');
@@ -4478,9 +4773,14 @@
       origin.input.addEventListener('change', () => { state.originFilter = origin.input.value; update(); });
       spacing.input.addEventListener('change', () => { state.ignoreKoreanSpacing = spacing.input.checked; update(); });
       main.append(filters);
+      // The kind tabs and, on their right, the folder choice share one row (W4). 폴더 관리 opens from the 자료 메뉴 (⋯)
+      // into #lifeFolderBar; closing it, or Esc, returns focus to that ⋯.
+      const tabRow = node('div', null, 'records-tab-row'), folderFilter = node('div', null, 'records-folder-filter');
+      tabRow.append(kindTabs, folderFilter);
       if (folders) {
         const folderHost = node('section'); folderHost.id = 'lifeFolderBar'; main.append(folderHost);
-        sourceFoldersMount = folders.mountList(folderHost, { filter: state.folderFilter, onFilter: value => { state.folderFilter = value; update(); } });
+        sourceFoldersMount = folders.mountList(folderHost, { filter: state.folderFilter, onFilter: value => { state.folderFilter = value; update(); }, filterHost: folderFilter,
+          onManageClose: () => toolbar.querySelector('#lifeRecordsMenu > summary')?.focus({ preventScroll: true }) });
         sourceFoldersUpdate = ({ reason } = {}) => {
           if (!list.isConnected) return;
           // Explicit refresh must keep an open move form and its chosen destination.
@@ -4497,7 +4797,7 @@
       }
       main.append(importResult);
       renderReadingResume(main, 'sources');
-      main.append(selectionBar, kindTabs, count, list, more);
+      main.append(selectionBar, tabRow, count, list, more);
       update();
       // 2026-11-07 owner request: no reading column until an original is opened. On wide screens
       // the list itself uses the wider frame (assets/life/records.css); the reader appears beside it on open.
@@ -5221,7 +5521,14 @@
       };
       readerHistoryState = historyState;
       // Written a little after the reading stops (browsers limit how often an entry may be replaced), and on pagehide.
-      const recordHistory = () => { historyTimer = null; if (!disposed && readerHistoryState === historyState && state.mode === 'source' && reader.isConnected) writeRoute('source', 'replace'); };
+      // The line can wait for room in the history budget (historyRoom), as a screen's position does.
+      const recordHistory = () => {
+        historyTimer = null;
+        if (disposed || readerHistoryState !== historyState || state.mode !== 'source' || !reader.isConnected) return;
+        const wait = historyRoom();
+        if (wait > 0) historyTimer = global.setTimeout(recordHistory, wait);
+        else writeRoute('source', 'replace');
+      };
       const scheduleHistory = () => { global.clearTimeout(historyTimer); historyTimer = global.setTimeout(recordHistory, 500); };
       global.addEventListener('scroll', scheduleHistory, { passive: true });
       readerCleanup = () => {
@@ -6775,12 +7082,12 @@
     beforeUnload = event => {
       // The import form keeps its input 400ms after the last key; do not lose that window to a reload.
       if (stageTimer && dirty()) persistStage().catch(failure);
-      recordReaderHistory();
+      recordReaderHistory(); flushSettingsHash();
       if (dirty() || state.sourceDrafts.size || workbench?.dirty() || writer?.isDirty() || sourceEditor?.isDirty() || collection?.dirty() || accountBlogUI?.dirty() || blogManager?.dirty() || preservationUI?.dirty() || obsidianUpdateUI?.dirty() || originalAttachmentsUI?.dirty() || publicCoverUI?.dirty() || fullBackupUI?.busy() || interestUI?.dirty() || externalDiscoveryUI?.dirty() || annualPlanUI?.dirty()) { event.preventDefault(); event.returnValue = ''; }
     };
     visibility = () => {
       if (!document.hidden) return;
-      recordReaderHistory();
+      recordReaderHistory(); flushSettingsHash();
       if (dirty()) persistStage().catch(failure);
       if (workbench?.dirty()) workbench.checkpoint().catch(failure);
       if (publicCoverUI?.dirty()) publicCoverUI.flush().catch(failure);
@@ -6789,7 +7096,7 @@
       flushReadingPosition();
     };
     pagehideReading = () => {
-      flushReadingPosition(); recordReaderHistory(); if (sourceEditor?.isDirty()) sourceEditor.flush().catch(failure);
+      flushReadingPosition(); recordReaderHistory(); flushSettingsHash(); if (sourceEditor?.isDirty()) sourceEditor.flush().catch(failure);
       // The import form keeps its input 400ms after the last key; do not lose that window to a reload.
       if (stageTimer && dirty()) persistStage().catch(failure);
     };
@@ -6851,7 +7158,7 @@
       const returnPage = composeOriginPage();
       viewOrigins.set('page', { mode: 'home', workspaceId: active, scrollY: 0, homeState: { workspaceId: active, tab: 'posts', query: '', limit: 20 }, ...(returnPage ? { returnPage } : {}) });
       const url = new URL(global.location.href); url.searchParams.delete('compose');
-      global.history.replaceState(null, '', url.pathname + url.search + url.hash);
+      historyWrite('replaceState', null, url.pathname + url.search + url.hash);
     }
     if (active) {
       try { state.bundle = await storage.read(active); }
@@ -6925,6 +7232,7 @@
     }
     unbindNavigation = global.HaedoNavigation?.bind(section => guarded(() => navigateSection(section))());
     global.addEventListener('popstate', popstate);
+    global.addEventListener('scroll', positionScrolled, { passive: true });
     wideHeading?.addEventListener?.('change', pageHeadingWidth);
     return { dispose, flushDraft, checkpoint };
 
@@ -7044,6 +7352,7 @@
       cleanup(() => unifiedSearch?.dispose());
       cleanup(() => unbindNavigation?.());
       cleanup(() => global.removeEventListener('popstate', popstate));
+      cleanup(() => { global.removeEventListener('scroll', positionScrolled); if (positionTimer) global.clearTimeout(positionTimer); positionTimer = 0; if (settingsHashTimer) global.clearTimeout(settingsHashTimer); settingsHashTimer = 0; positionHold?.(); });
       cleanup(() => wideHeading?.removeEventListener?.('change', pageHeadingWidth));
       cleanup(() => document.removeEventListener('pointerdown', closeFeatureMenusOutside));
       cleanup(() => document.removeEventListener('focusin', closeFeatureMenusOnFocus));

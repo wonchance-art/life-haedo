@@ -3343,6 +3343,9 @@
       const heading = el('div', null, 'wb-row wb-heading');
       const title = el('h2', MODES[mode], 'life-heading wb-grow'); title.tabIndex = -1;
       if (['page', 'related', 'workbench-backup'].includes(mode)) { heading.classList.add('wb-heading-quiet'); title.classList.add('life-sr-only'); }
+      // W5 (2026-11-18): 묶음·다시 찾기 are already named by the screen's heading (subviewTitles); the same words again
+      // under it are said to screen readers only, as 선택 자료 페이지 and 책. The row keeps its 지금 저장 at the end.
+      else if (['activities', 'discover'].includes(mode)) { heading.classList.add('wb-heading-named'); title.classList.add('life-sr-only'); }
       saveControl = (mode === 'page' ? discoveryIcon : icon)('지금 저장', 'check', () => flush()); saveControl.hidden = ['public-pages', 'related', 'workbench-backup'].includes(mode) || !!incoming;
       heading.append(title, saveControl);
       statusNode = el('p', '구성을 불러오는 중…', 'life-meta wb-save-status'); statusNode.id = 'wbStatus';
