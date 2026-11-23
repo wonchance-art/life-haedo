@@ -4,6 +4,107 @@
 
 **보안 권고 확인 절차(3회차 추가):** OSV 일괄 조회 0건은 안전 근거가 아니다. 3회차에 DOMPurify GHSA-qm7q·fast-xml-parser GHSA-7cfw가 OSV에 아직 없었고 각 저장소 Security 탭에만 있었다. 동봉·Edge 의존성마다 **GitHub 저장소 Security 탭(advisories)** 을 함께 읽는다.
 
+## 주간 기술 동향 점검 — 2026-11-23 (4회차)
+
+기준: 저장소 `origin/main` 8c3c54f(`haedo-v222`, 11-17 병합 #262), 조사 작업 트리 b1fb704. 조사는 읽기 전용이다(저장소 편집·운영 DB 조회 없음). 확인일은 모두 2026-11-23이고, 11-16 이후 새로 생기거나 바뀐 것만 적는다.
+
+**도구 제약:** `gh api /advisories`는 쓰지 않고 각 저장소 Security 탭을 WebFetch로 읽었다. DOMPurify Security 탭은 1쪽(10건)만 읽혔다. OSV `querybatch`(24개 패키지)와 npm registry는 정상이었다. developer.apple.com 릴리스 노트 HTML은 본문이 읽히지 않아 공개 JSON(`/tutorials/data/...json`)과 개발자 릴리스 RSS로 대신 읽었다. Supabase changelog는 앞쪽 100k자(최근 항목)만 읽었다. OWASP는 웹 검색으로만 확인했다(공식 발표 목록을 직접 읽지 않음).
+
+### 1. 동봉 라이브러리·Edge 의존성
+
+| 항목 | 바뀐 점 | 앱 영향 | 분류 | 출처 |
+|---|---|---|---|---|
+| DOMPurify 3.4.17(`vendor/dompurify`) | **3.5.0(11-22).** GHSA-hrxw-jjj6-2g2j(Low, 11-23 공개): `SAFE_FOR_TEMPLATES` 우회(nested `form` 재파싱). 그 밖에 `IN_PLACE` 실패 시 닫힘, `CUSTOM_ELEMENT_HANDLING` 이름공간 검사, hook 안의 `sanitize()` 호출이 바깥 설정을 덮던 문제를 고쳤다. 동작 변경은 DOM 노드 입력, `IN_PLACE`, hook, 사용자 정의 요소에 한정된다. **"No further 3.4.x release"**: 3.4 계열은 이제 수정판이 없다 | 유일한 호출 `assets/life/source-markdown.js:192`는 **문자열 입력**에 `RETURN_DOM_FRAGMENT`·`ALLOWED_TAGS`·`ALLOWED_ATTR`·`FORBID_TAGS`(`form`·`svg`·`template` 포함)·`FORBID_ATTR`·`SANITIZE_DOM`만 쓴다. `SAFE_FOR_TEMPLATES`·`IN_PLACE`·`addHook`·`setConfig`·`CUSTOM_ELEMENT_HANDLING` 사용 0건이고 클라이언트 템플릿 엔진(Vue·AngularJS)도 없다. 3.5.0의 동작 변경도 이 호출에 해당하지 않는다 | 관찰(다음 vendor 갱신 때 **3.5.0**으로 올림. 3.4 지원이 끝나 우선순위를 올린다) | https://github.com/cure53/DOMPurify/releases/tag/3.5.0 , https://github.com/cure53/DOMPurify/security/advisories/GHSA-hrxw-jjj6-2g2j |
+| supabase-js 2.117.2(`vendor/supabase`) | 2.119.1(11-18): `X-Client-Info` 헤더 내용. 2.119.2(11-19): storage-js가 객체 요청 URL을 정규화하고 버킷 경계를 벗어나는 키(`../other/...`)를 로컬에서 거절한다(PR #2878). 보안 권고나 GHSA 표시는 없다. Security 탭 권고는 0건 | 앱의 Storage 경로는 모두 UUID·해시·고정 접두사로 만들고 정규식으로 검사한다(`assets/life/blog-remote.js:7-8,347`, `library-originals-remote.js:8-9,51`). 버킷 이름도 상수다. 서버 쪽 소유자 접두사 RLS가 따로 있다. 방어를 한 겹 더하는 수정일 뿐 앱에 노출된 경로는 없다 | 관찰(다음 vendor 갱신 후보) | https://github.com/supabase/supabase-js/releases , https://github.com/supabase/supabase-js/pull/2878 |
+| @tiptap/* 3.32.2, prosemirror-view 1.42.9 외(`vendor/tiptap`) | tiptap 3.35.0(11-20): 캡처 그룹이 있는 input rule에서 마지막 글자가 두 번 들어가던 문제를 고쳤다. 3.34.0은 11-13에 나왔다. **prosemirror-view 1.43.0(11-19): 브라우저가 `compositionend`를 보내지 않으면 조합 상태에 갇히던 문제를 고쳤다.** IE 지원을 뺐고, 마우스 선택을 라이브러리가 직접 처리하며, 다른 스키마에서 붙여넣을 때 나던 충돌을 고쳤다. inputrules 1.7.0, transform 1.12.7, history 1.5.2(되돌리기 선택 위치)도 나왔다. 보안 수정은 없다. 동봉판의 옛 권고 GHSA-c8x8-7fp4-3x9w(<1.42.3)는 해당하지 않는다 | 번들은 여전히 화면에 연결되지 않았다. 참조는 `assets/life/post-markdown-editor.js` 하나이고, 그 파일을 불러오는 HTML과 `sw.js` SHELL 항목은 0건이다. `compositionend` 수정은 한글 IME와 직결되므로 B2 연결 때 같이 올릴 이유가 커졌다 | 관찰(B2 연결 때 tiptap 3.35.0·prosemirror-view 1.43.0·model 1.25.13과 함께. 1.43.0의 마우스 선택 변경은 iPad 터치 선택으로 회귀 확인) | https://github.com/ueberdosis/tiptap/releases , https://prosemirror.net/docs/changelog/ |
+| undici 7.30.1(`haedo-naver-blog`·`haedo-discovery-private` deno.lock) | 11-05 이후 새 권고는 없다. 7.x 최신은 여전히 7.30.2이고 8.13.0·8.13.1(11-20)은 다른 계열이다 | 2회차 판정 유지(cheerio `/slim`만 쓰고 undici 사용 0건). 두 lock은 아직 `undici@7.30.1`이다 | 관찰(다음 Edge 배포 때 lock 7.30.2) | https://github.com/nodejs/undici/security |
+| fast-xml-parser(`haedo-rss/vendor`, `haedo-news-wide` 공유) | 11-14 이후 새 권고와 새 판이 없다(최신 5.12.1, 마지막 권고 11-13) | 지난 회차의 "적용 필요"는 저장소에 반영됐다(719224f, `origin/main`에 포함, `tests/fixtures/rss/package-lock.json` 5.12.1). 운영 배포 상태는 이 세션에서 확인하지 않았다 | 완료(저장소) / 배포 미확인 | https://github.com/NaturalIntelligence/fast-xml-parser/security |
+| markdown-it 15.0.3, js-yaml 5.5.0, Quill 2.0.3, idb 8.0.3, fflate 0.8.3, Pretendard 1.3.9, cheerio 1.2.0 | 새 판이나 새 권고가 없다. Security 탭 기준 markdown-it 마지막 권고는 10-16, js-yaml은 08-26, Quill은 0건이다. OSV에는 Quill GHSA-v3m3·lodash-es 2건만 있고, 이는 1회차 판정과 같다 | — | 무관 | npm registry, https://api.osv.dev/v1/querybatch , 각 저장소 Security 탭 |
+| lucide-static 1.51.0 → 1.78.0, daisyUI 5.7.16 → 5.8.2 | 아이콘 추가와 CSS 테마판만 나왔고 보안 판은 없다 | — | 무관 | npm registry |
+
+### 2. Safari·WebKit·Apple
+
+| 항목 | 바뀐 점 | 앱 영향 | 분류 | 출처 |
+|---|---|---|---|---|
+| Apple 보안 릴리스 | iOS·iPadOS·macOS는 11-09의 27.2.1 이후 새 항목이 없다(11-12·11-18 HomeView, 11-13 tvOS만) | — | 무관 | https://support.apple.com/en-us/100100 |
+| iOS/iPadOS 27.3 beta 2(11-16, iOS·iPadOS는 11-19 beta 2 v2), macOS 27.3 beta 2(11-16) | Safari 27.3은 아직 beta다 | 정식 출시 대기 | 관찰 | https://developer.apple.com/news/releases/rss/releases.rss |
+| Safari 27.3 beta 릴리스 노트: **`color-scheme: only light`로 Adaptive Dark Mode를 끌 수 있다(191328852)** | 1회차 기록("beta 1은 `only` 미지원")과 다르다. 문서 Last-Modified는 11-14라서 지난 회차(11-16)에 놓쳤을 수 있다 | 앱은 `color-scheme: light`만 선언한다(`assets/app.css:3`, `assets/life/ui.css:4`). 그래서 사용자가 Adaptive Dark Mode를 켜면 변환 대상이고, 검증한 대비가 깨질 수 있다. 끄는 방법은 이제 정해졌다: 두 줄을 `only light`로 바꾸면 된다. 표준 CSS라 다른 브라우저에도 해가 없지만, 적용은 디자인 판단이다 | 관찰(정식 출시 때 결정. 선택지는 `only light` 하나로 확정. 디자인 판단이라 소유자·Designer 확인) | https://developer.apple.com/documentation/safari-release-notes/safari-27_3-release-notes |
+| Safari 27.3 beta의 그 밖의 항목(재확인) | `interactive-widget`, IME 확정 시 요소 삭제 수정, dead key `compositionend` 수정, URLPattern(SW 라우팅) 수정, `fetch()` 스트리밍 요청 본문, Temporal | 2회차 판정 유지 | 관찰(정식 출시 대기) | 같은 출처 |
+| Safari Technology Preview 257(11-18) | 동시 `CacheStorage` 작업 오류, `Cache.put()`이 요청을 갱신하지 않던 문제, manifest를 항상 UTF-8로 해석, `pagehide` beacon 유실, 닫힌 `<details>` 글꼴 폭, Adaptive Dark Mode 그라디언트 성능 등을 고쳤다 | `sw.js`는 `cache.addAll`·`cache.put`(`sw.js:57,81`)을 쓰고 `<details>`는 12곳에서 쓴다. 모두 버그 수정 쪽이라 코드 변경은 필요 없다. View Transitions·`content-visibility` 사용은 0건이다 | 관찰/무관 | https://webkit.org/blog/18652/release-notes-for-safari-technology-preview-257/ |
+| GPC WebKit API(11-18) | `WKWebView` 앱용 설정이다 | 웹 앱 무관 | 무관 | https://webkit.org/blog/18646/global-privacy-control-gpc-webkit-api/ |
+
+### 3. Chromium
+
+| 항목 | 바뀐 점 | 앱 영향 | 분류 | 출처 |
+|---|---|---|---|---|
+| **Chrome 158 stable(데스크톱 11-17, 158.0.8127.36/.37 Win·Mac)** | 보안 수정 204건(Critical 6). 게시물에 "in the wild" 표시는 없다. 157.0.8103.80·.81(11-12·11-18), Extended 156.0.8078.108(11-17)도 나왔다 | 앱 코드 무관. 소유자가 Mac Chrome을 쓴다면 158로 업데이트한다. iPad·iPhone Chrome은 WebKit이라 해당 없다 | 관찰(소유자 Mac Chrome 업데이트) | https://chromereleases.googleblog.com/2026/11/ , https://chromiumdash.appspot.com/fetch_releases?channel=Stable&platform=Mac |
+| Chrome 159 early stable(11-18, 159.0.8154.13), 160 dev | 159: 단축 스크롤 컨테이너의 scroll snap, `AccentColor`, background 목록 계산값, Sanitizer `javascriptURLs`. 160: View Transitions `shadowRoots`, XML MIME 판정 정리, CSS corner shorthand | 앱이 기대는 `scrollend`(`assets/life/discovery-ui.js`), `:has()`(18개 파일), forced-colors(14개), `details`/`summary`, `history.scrollRestoration`(`assets/life/ui.js`)을 바꾸는 항목은 없다. scroll-snap·View Transitions·`content-visibility` 사용도 0건이다 | 무관 | https://chromestatus.com/api/v0/features?milestone=159 , https://chromestatus.com/api/v0/features?milestone=160 |
+
+### 4. Supabase
+
+| 항목 | 바뀐 점 | 앱 영향 | 분류 | 출처 |
+|---|---|---|---|---|
+| Auth v2.198.0(11-16) | Go 1.27.4·x/net 보안 갱신. OAuth 서버(`/oauth/token`)가 발급한 토큰은 OAuth 엔드포인트와 읽기 전용 접근만 허용한다. **AAL이 null인 옛 세션을 무효화한다** | 앱은 Google 제공자 `signInWithOAuth`(`assets/platform-auth.js:398`)로 일반 세션을 쓰고, Supabase를 OAuth 서버로 쓰지 않는다. 그래서 토큰 제한은 무관하다. 옛 세션 무효화는 호스팅 적용 시점을 알 수 없고, 기기에서 한 번 다시 로그인하게 될 수 있다(입력 보존은 앱 안전 원칙대로) | 관찰(소유자가 갑자기 로그아웃되면 원인 후보) | https://github.com/supabase/auth/releases |
+| Storage·Auth·PostgREST·supabase-js 보안 권고 | 11-09 이후 새 권고가 없다(Storage 마지막 11-06, Auth 03-11, PostgREST·supabase-js 0건) | 2회차 판정 유지. 운영 S3 프로토콜 상태는 여전히 미확인 | 관찰(유지) | https://github.com/supabase/storage/security , https://github.com/supabase/auth/security |
+| Changelog | 11-16 Breaking: Management API·MCP로 브랜치를 병합하려면 Production Branches 읽기·쓰기 토큰이 필요하다. 11-17: 대시보드에서 사용자 정의 OIDC 제공자 등록 | 앱은 브랜치 병합을 쓰지 않는다. 총괄의 MCP 운영 SQL 경로도 브랜치 병합을 쓰지 않는다 | 무관 | https://supabase.com/changelog |
+| Edge Runtime 1.79.2·1.79.3(11-18·11-20) | AI 확장 onnxruntime 자산, brotli 해제 복사 줄임 | — | 무관 | https://github.com/supabase/edge-runtime/releases |
+| 레거시 키 일정 | 변동 없음("by the end of 2026", 수동으로 끄기 전까지 유효) | 1회차 대기 항목 그대로(소유자 몫) | 변동 없음 | https://supabase.com/docs/guides/api/api-keys |
+
+### 5. Anthropic API
+
+| 항목 | 바뀐 점 | 앱 영향 | 분류 | 출처 |
+|---|---|---|---|---|
+| 모델 수명 | 변동 없음. `claude-haiku-5-5`는 2027-10-07, `claude-sonnet-5-5`는 2027-09-28 전에 퇴역하지 않는다. 09-30 이후 새 퇴역 공지 없음 | 앱은 두 모델만 쓴다(`supabase/functions/haedo-ai/handler.mjs:49`, 마이그레이션 `20261104090000_life_ai_usage.sql:31`) | 무관 | https://platform.claude.com/docs/en/about-claude/model-deprecations |
+| 요금 | 변동 없음. Haiku 5.5는 $0.10/$0.50(100K 초과 시 $0.50/$2.50), Sonnet 5.5는 $2/$10, `inference_geo:"us"`는 1.1배 | 마이그레이션 단가 표(`20261104090000_life_ai_usage.sql:56-64`)와 일치 | 무관 | https://platform.claude.com/docs/en/about-claude/pricing |
+| 보존 | 변동 없음(30일, 정책 위반 표시 시 최대 2년, 문서 최종 갱신 2026-07-01) | 첫 사용 안내 문구 결정(1회차)과 일치 | 무관 | https://privacy.claude.com/en/articles/7996866-how-long-do-you-store-my-organization-s-data |
+| 릴리스 노트 11-16~11-17 | 텍스트 워터마크(Opus 4.6·4.5, Sonnet 4.5, Haiku 4.5만), 조직 webhook 키 이벤트, Linked billing(beta) | 해당 모델과 기능을 쓰지 않는다 | 무관 | https://platform.claude.com/docs/en/release-notes/overview |
+
+### 6. 접근성·보안 표준
+
+| 항목 | 바뀐 점 | 앱 영향 | 분류 | 출처 |
+|---|---|---|---|---|
+| W3C WAI·TR | WAI 뉴스는 11-10 글 하나뿐이고 지난 회차에 이미 봤다. W3C 뉴스는 11-17 TAG 선거. Web App Manifest WD를 11-18에 다시 개정했다. 마지막 개정일은 WCAG 2.2 2024-12-12, ARIA 1.3 06-04, CSP3·IndexedDB 3.0 10-13, Trusted Types 09-17, Service Workers 11-02로 모두 11-16 이후 갱신이 없다 | — | 무관/관찰 | https://www.w3.org/WAI/news/ , https://www.w3.org/news/feed/ , https://www.w3.org/TR/appmanifest/ |
+| OWASP | 11월 새 표준·Top 10 발표를 찾지 못했다(검색 기준, 이사회 일정만 있음) | — | 무관(미확인: 공식 발표 목록 직접 대조 안 함) | https://owasp.org/ |
+
+### 3회차 관찰 항목 현황
+
+- fast-xml-parser 5.12.1: 저장소 반영 완료(719224f). `haedo-news-wide` 소유자 CLI 배포 상태는 로드맵 11-12 기준 "미배포"이고, 이 세션에서는 운영을 읽지 않아 확인하지 않았다(총괄 몫).
+- DOMPurify: 3.4.18이 아니라 이제 3.5.0으로 올린다. 3.4 계열 지원 종료.
+- tiptap·prosemirror: B2 아직 미연결. 올릴 판은 tiptap 3.35.0, prosemirror-view 1.43.0(한글 IME 관련 수정 포함), model 1.25.13.
+- undici lock 7.30.2: 미반영(두 lock 모두 7.30.1), 다음 Edge 배포 때.
+- `interactive-widget`·Adaptive Dark Mode: 27.3 beta 2 단계. 끄는 방법(`only light`)은 문서로 확인.
+- Storage S3 프로토콜: 미확인(이 세션 도구로 설정을 읽을 수 없음).
+- supabase-js 2.119.2·idb 8.0.4: 보안 사유 없음, 유지.
+
+### 총괄 판정 (2026-11-23)
+
+- **적용 필요:** 이번 회차에는 없다. 새 권고 두 건(DOMPurify GHSA-hrxw, supabase-js storage URL 검증)은 앱이 쓰는 옵션·입력 경로와 맞지 않는다. 플랫폼 변경도 코드 수정을 요구하지 않는다.
+- **관찰(다음 작업에 묶음):**
+  1. 다음 vendor 갱신 때 DOMPurify 3.5.0으로 올린다. 3.4 지원 종료로 이전 회차보다 우선한다. 대상은 `vendor/dompurify/purify.min.js`·`manifest.json`·`license_header`이고 `sw.js` CACHE 판올림은 통합 담당이 한다. 검사는 `source-markdown`을 불러오는 CI 등록 검사 전체. 위험도 낮음, 소유자 승인 불필요(보안 유지 갱신).
+  2. supabase-js 2.119.2는 같은 갱신 묶음의 후보로 둔다.
+  3. tiptap·prosemirror는 B2 연결 때 함께 올린다. iPad 터치 선택과 한글 조합으로 회귀를 확인한다.
+  4. undici lock은 다음 Edge 배포 때 갱신한다.
+- **소유자 확인·승인:**
+  1. Mac Chrome 158 업데이트. Apple 기기는 27.2.1이 그대로 최신이다.
+  2. Safari 27.3 정식 출시 때 Adaptive Dark Mode를 `color-scheme: only light`로 끌지 결정한다(디자인 판단, Designer와 함께).
+  3. `haedo-blog-publish`·`haedo-ai` CLI 배포(`--no-verify-jwt`)는 아직 대기다. 운영 함수 목록(총괄 읽기 조회, 2026-11-23)에서 두 함수의 배포 시각은 11-04·11-05이고, 저장소의 마지막 변경은 11-16(`fb9fdb7`)이다.
+  4. Vault `sb_secret_` 교체와 레거시 키 끄기, `haedo-news-wide` 배포는 끝났다. Vault·레거시 키는 소유자 보고(11-1x)로, `haedo-news-wide`는 운영 배포 시각(11-16 09:51 UTC)이 fast-xml-parser 5.12.1 커밋(`719224f`, 11-16 01:04 UTC) 뒤인 것으로 확인했다. 배포 소스 해시는 저장소와 대조하지 않았다.
+  5. Auth 옛 세션 무효화로 한 번 다시 로그인하게 될 수 있음을 알아 둔다.
+
+### 미검증·한계
+
+- DOMPurify Security 탭은 1쪽만 읽었다. 3.5.0 릴리스 노트에는 GHSA 번호가 없고, 권고 페이지는 GHSA-hrxw 하나만 대조했다.
+- Safari 27.3 `only light` 항목이 beta 1부터 있었는지 beta 2에서 추가됐는지는 문서에 판 구분이 없어 확정하지 못했다.
+- Supabase Auth v2.198.0의 호스팅 적용 시점은 공개 출처에 없다.
+- 운영 Supabase의 S3 프로토콜 상태와 Edge 함수별 lock은 읽지 않았다. 함수 목록·배포 시각만 총괄이 읽었다.
+
+### 자가개선 (지난 주 작업)
+
+- **CI 설치 단계 멈춤:** 11-18 `browser` 실패 두 번이 같은 원인이었다. 러너 이미지의 apt 미러 이름이 `azure.archive…`에서 `us-east-2.ec2.archive…`로 바뀌어, 그 이름 하나만 바꾸던 우회(`0ff8ee1`)가 맞지 않았다. 첫 실패 때 재실행이 통과해 원인을 늦게 찾았다. → 멈춘 지점을 로그의 시각 간격으로 찾았고, 우회를 이름 패턴(`*.archive.ubuntu.com`)과 제한 시간·재시도로 바꿨다(`d313d2e`). 재실행 통과는 원인 판정이 아니다.
+- **작업자가 사용 한도로 멈춤:** 복귀 위치 작업자가 구현·검사를 거의 끝낸 채 멈췄는데, 커밋이 하나도 없었다(지시서에는 "단위마다 커밋"이 있었다). 총괄이 저장해 둔 최종 사본과 작업 트리를 대조해 커밋했다. → 지시서의 커밋 조항을 "검사를 통과한 단위는 전체 점검 전에 바로 커밋"으로 구체화한다(AGENTS.md에 한 줄).
+- **디자인 세션의 회신 경로:** Designer 세션은 총괄에게 메시지를 보낼 수 없어, W5 완료 전달문이 그 세션의 기록에만 있었다. 총괄은 회신을 기다리기만 했다. → 다른 세션에 맡긴 일은 회신을 기다리지 않고 그 세션의 기록(`list_events`)을 읽어 확인한다(AGENTS.md에 한 줄).
+- **로컬 연속 검사의 결과 폴더:** "새 결과 폴더" 조건이 있는 검사 세 개가 앞선 실행의 폴더 때문에 0초 만에 종료 코드 1로 끝났다. 검사 실패와 실행 조건 실패를 구분해 다시 돌렸다. 로컬 실행 스크립트가 오류 문구 세 가지를 모두 알아보게 고친다(총괄 scratchpad, 저장소 밖).
+
 ## 주간 기술 동향 점검 — 2026-11-16 (3회차)
 
 기준: 저장소 `main` bb49a46(`haedo-v220`). 조사는 읽기 전용(확인일 모두 2026-11-16), 11-09 이후 새로 생기거나 바뀐 것만 적는다.
