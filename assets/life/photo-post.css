@@ -640,12 +640,19 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
 .photo-block img,
 .photo-read-image img {
   display: block;
-  width: auto;
   max-width: 100%;
   height: auto;
   margin-inline: auto;
   image-orientation: from-image;
   border-radius: var(--haedo-radius, 8px);
+}
+/* A photo being read has no width here: its width and height attributes (the photo's recorded size, the view copy's
+   for HEIC) give its width, capped at the column as when loaded, and its ratio, so it keeps its place before it has
+   loaded. With width:auto it was 0 until loaded, and a post put back at 560 by back or forward stood at 1026 once the
+   photos above had loaded (2026-11-23). renderRead corrects a recorded size that is not the loaded one. The editor's
+   photos keep width:auto. */
+.photo-block img {
+  width: auto;
 }
 .photo-block {
   min-height: 44px;
