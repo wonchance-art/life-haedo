@@ -2233,26 +2233,34 @@
     // line (폴더를 확인하고 있습니다.) went away 80ms after the list was put back; a photo whose recorded size is not its
     // own moves what follows it once it loads. Until the user acts (wheel, touch, pointer, key) or the screen changes, the
     // place is set again whenever the page's height changes, for up to a second after the last change (three at most).
+    // Any other move of the page (a scroll bar dragged, the app bringing a control into view) also ends it: a scroll away
+    // from the place while the height has stayed the same is not the browser keeping what was in view.
     let positionHold = null;
     function holdPosition(top, current) {
       positionHold?.();
       if (typeof global.ResizeObserver !== 'function') return;
-      const inputs = ['wheel', 'touchstart', 'pointerdown', 'keydown'];
-      let quiet = 0;
+      const page = document.documentElement, inputs = ['wheel', 'touchstart', 'pointerdown', 'keydown'];
+      let quiet = 0, height = page.scrollHeight;
       const stop = () => {
         observer.disconnect(); global.clearTimeout(quiet); global.clearTimeout(limit);
         for (const type of inputs) global.removeEventListener(type, stop, true);
+        global.removeEventListener('scroll', moved, true);
         if (positionHold === stop) positionHold = null;
       };
+      // A place below the page's end (cut to the end until the page is long enough) is not a move away.
+      const away = () => { const y = Math.round(global.scrollY); return y !== top && !(top > page.scrollHeight - global.innerHeight && y >= page.scrollHeight - global.innerHeight - 1); };
+      const moved = () => { if (page.scrollHeight === height && away()) stop(); };
       const observer = new global.ResizeObserver(() => {
         if (disposed || !current()) { stop(); return; }
+        height = page.scrollHeight;
         global.clearTimeout(quiet); quiet = global.setTimeout(stop, 1000);
         if (Math.round(global.scrollY) !== top) global.scrollTo({ top, behavior: 'instant' });
       });
       const limit = global.setTimeout(stop, 3000);
       for (const type of inputs) global.addEventListener(type, stop, { capture: true, passive: true });
+      global.addEventListener('scroll', moved, { capture: true, passive: true });
       positionHold = stop;
-      observer.observe(document.documentElement);
+      observer.observe(page);
     }
 
     // News: opening an article where it replaces the list pushes an entry; closing it in the app
