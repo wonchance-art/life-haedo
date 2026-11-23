@@ -861,19 +861,15 @@ html:has(.photo-posts[data-mode="edit"]) { scroll-padding-bottom: 88px; }
   /* A compact pill leaves the one-line status room for its short texts. */
   .photo-privacy-face > svg:last-child { display: none; }
   /* Revising a saved post on a phone: the icon keeps the visibility, the word gives way to 수정 중
-     (the button's name still says both), so the one-line save status keeps its room. */
-  /* 공개·비공개 is the privacy boundary, so from 360px it keeps its word next to 수정 중 (W5 판정 6); below 360px the
-     picture carries it, as in the reading row (the button's name still says both). */
-  @media (max-width: 359px) {
-    .photo-privacy-face:has(> svg:first-child):has(.photo-privacy-note) > .photo-privacy-label { display: none; }
-    .photo-privacy-face:has(> svg:first-child) > .photo-privacy-note::before { content: none; }
-  }
+     (the button's name still says both), so the one-line save status keeps its room. W5 kept the word from 360px; the
+     re-review (11-23, MAJOR-2) found the save status cut (바꾼 …) and a failure stacked one character per line, so up to
+     760px the icon carries the visibility again (photo-post-d1 checks 360, 375 and 390). */
+  .photo-privacy-face:has(> svg:first-child):has(.photo-privacy-note) > .photo-privacy-label { display: none; }
+  .photo-privacy-face:has(> svg:first-child) > .photo-privacy-note::before { content: none; }
   /* The same in the editor when a draft could not be uploaded: the icon keeps the visibility and
      the problem takes the word's place, so the save status beside it is not squeezed out. */
-  @media (max-width: 359px) {
-    .photo-posts[data-mode="edit"] .photo-privacy-face:has(> svg:first-child):has(.photo-privacy-problem) > .photo-privacy-label { display: none; }
-    .photo-posts[data-mode="edit"] .photo-privacy-face:has(> svg:first-child) > .photo-privacy-problem::before { content: none; }
-  }
+  .photo-posts[data-mode="edit"] .photo-privacy-face:has(> svg:first-child):has(.photo-privacy-problem) > .photo-privacy-label { display: none; }
+  .photo-posts[data-mode="edit"] .photo-privacy-face:has(> svg:first-child) > .photo-privacy-problem::before { content: none; }
   .photo-commandbar .photo-status { margin: 0; min-height: 0; font-size: 12px; line-height: 1.4; }
   /* A long error (a storage limit, a refused save) does not fit the one-line status slot of about
      110px: it takes its own full-width line under the command row instead of a five-line column. */

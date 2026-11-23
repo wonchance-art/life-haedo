@@ -181,6 +181,54 @@ async function main() {
       assert.match(await pillName(page), /기존 글 수정 중/);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, 'no sideways scroll at 390');
     });
+    // W5 re-review MAJOR-2 (2026-11-23): up to 760px the pill's 공개·비공개 word gives way to 수정 중 or to a problem (the
+    // icon and the button's name keep the visibility), so the one-line save status keeps its room. With the word kept
+    // from 360px, a revised post with a failed upload and a refused save grew the command row to 197px at 360 (the error
+    // one character per line) and cut 바꾼 내용 없음 to 바꾼 …. Here the row stays one line, the title does not move and
+    // no status text is cut, at 360, 375 and 390.
+    for (const width of [360, 375, 390]) await check('a revised post keeps one command row with an upload problem and a refused save at ' + width, { width, height: 844 }, async ({ page }) => {
+      const sample = await readSaved(page); await openPost(page, sample.postIds[0]);
+      await page.locator('#photoServerStatus[data-state="synced"]').waitFor();
+      await page.getByRole('button', { name: '글 수정', exact: true }).click(); await title(page).waitFor();
+      await page.waitForFunction(() => /수정 중/.test(document.querySelector('.photo-privacy')?.innerText || ''));
+      const measure = () => page.evaluate(() => {
+        const bar = document.querySelector('.photo-commandbar'), box = document.querySelector('.photo-commandbar .photo-status'), text = box?.querySelector('.photo-status-text');
+        const parts = [...bar.children].filter(part => part.checkVisibility()).map(part => part.getBoundingClientRect());
+        // The title's place in the editor (scroll does not change it) and the sticky tools above it (the row, and the
+        // recovery actions a failure shows under it by design).
+        const editor = document.querySelector('.photo-editor'), tools = document.querySelector('.photo-editor-tools');
+        return { row: Math.round(bar.getBoundingClientRect().height), tools: Math.round(tools.getBoundingClientRect().height),
+          title: Math.round(document.querySelector('#photoTitle').getBoundingClientRect().top - editor.getBoundingClientRect().top),
+          oneLine: parts.every(part => part.top < parts[0].bottom && part.bottom > parts[0].top),
+          // The status slot ends a line that does not fit with an ellipsis: cut when its content is wider than the slot.
+          status: text?.checkVisibility() ? { text: text.textContent, cut: box.scrollWidth > box.clientWidth + 0.5 } : null,
+          pill: document.querySelector('.photo-privacy').innerText.replace(/\s+/g, ' ').trim(), overflow: document.documentElement.scrollWidth - innerWidth };
+      });
+      const quiet = await measure();
+      assert.deepEqual([quiet.oneLine, quiet.status?.text, quiet.status?.cut], [true, '바꾼 내용 없음', false], width + ': the revising row is one line and 바꾼 내용 없음 is whole (' + JSON.stringify(quiet) + ')');
+      // The account upload of this revision fails (the BlogSync seam reports error), shown on the pill.
+      await page.evaluate(() => { window.__blogForceStatus = 'error'; });
+      await page.locator('.ql-editor').click(); await page.keyboard.press('End'); await page.keyboard.type(' 덧붙임');
+      await page.waitForFunction(() => /올리기 실패/.test(document.querySelector('.photo-privacy')?.innerText || ''), null, { timeout: 15000 });
+      // Then this device refuses the next save: the short failure stays shown beside the pill.
+      await page.evaluate(() => {
+        // This device's store refuses the write; the editor shows the store's own short failure (저장하지 못했습니다.).
+        const put = IDBObjectStore.prototype.put;
+        IDBObjectStore.prototype.put = function (...args) { if (window.__storeRefused) throw Object.assign(new Error(''), { code: 'storage_refused' }); return put.apply(this, args); };
+        window.__storeRefused = true;
+      });
+      await page.keyboard.type(' 한 번 더');
+      await page.waitForFunction(() => document.querySelector('.photo-commandbar .photo-status')?.dataset.state === 'error', null, { timeout: 15000 });
+      const loud = await measure();
+      const scene = width + ' ' + JSON.stringify({ quiet, loud });
+      assert.match(loud.pill, /올리기 실패/, scene + ': the problem is on the pill');
+      assert.match(await pillName(page), /비공개 · 올리기 실패/, scene + ': the button still names the visibility');
+      assert.equal(loud.status?.text, '저장하지 못했습니다.', scene + ': the failure is shown');
+      assert.deepEqual([loud.oneLine, loud.status.cut, loud.overflow], [true, false, 0], scene + ': one row, the failure whole, no sideways scroll');
+      // The failure may take a second line inside the row's status (62px at 360 before W5), never more, and the title
+      // moves only by what the tools above it add (that line and the recovery actions).
+      assert.ok(loud.row - quiet.row <= 8 && Math.abs((loud.title - quiet.title) - (loud.tools - quiet.tools)) <= 2, scene + ': the row grows by at most one status line and the title moves only with the tools above it');
+    });
   } finally { await browser.close(); }
   await fs.writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2));
   assert.deepEqual(report.pageErrors, [], 'page errors'); assert.deepEqual(report.consoleErrors, [], 'console errors');
