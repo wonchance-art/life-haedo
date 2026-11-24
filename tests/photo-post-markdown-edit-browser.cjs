@@ -251,6 +251,27 @@ async function flow(browser, width) {
     });
     const deviceCopy = text => page.evaluate(text => Object.keys(localStorage).filter(k => k.startsWith('haedo_life_post_recovery_v1:')).some(k => localStorage.getItem(k).includes(text)), text);
     const note = () => page.locator('.photo-edit-note:not(.photo-ai-hint)').textContent();
+    // 사본으로 이어 쓰기 stores the copy after the click returns (its evidence is read, then it is
+    // written) and then opens it, while the editor it started from is already on screen. Wait for
+    // that result: a post not in `known` is stored and the editor is no longer busy with it (CI run
+    // 45371985184 read the list before the write; a held IndexedDB write reproduces it locally).
+    const copied = async known => {
+      await awaitCondition(page, async known => {
+        const s = HaedoLife.Shell.storage, rows = await s.listPhotoPosts(await s.getActive());
+        return rows.some(row => !known.includes(row.id)) && document.querySelector('.photo-posts')?.getAttribute('aria-busy') !== 'true';
+      }, [...known], { timeout: 15000, label: 'the copy is stored and open' });
+      return (await docs()).find(d => !known.has(d.id));
+    };
+    // Holds a write transaction on the app's database for `ms`, as a slow disk delays the app's own.
+    const holdStorage = ms => page.evaluate(ms => new Promise((started, failed) => {
+      const open = indexedDB.open('life-tools-v1');
+      open.onerror = () => failed(open.error);
+      open.onsuccess = () => {
+        const db = open.result, tx = db.transaction(['meta'], 'readwrite'), store = tx.objectStore('meta'), end = performance.now() + ms;
+        const spin = () => { if (performance.now() < end) store.get('__hold__').onsuccess = spin; };
+        spin(); tx.oncomplete = () => db.close(); started();
+      };
+    }), ms);
     // An md post and a v2 revision draft an earlier app version left for it (stored directly).
     const legacy = (title, draftOps) => page.evaluate(async ([title, draftOps]) => {
       const s = HaedoLife.Shell.storage, c = HaedoLife.Core, M = HaedoLife.PhotoPost, w = await s.getActive();
@@ -359,9 +380,9 @@ async function flow(browser, width) {
       assert.equal(manifest.format, 'life-post-md-backup-v1', 'the editor backup of an md draft is md');
       assert.equal(body(manifest.markdown), body(restored.markdown));
       const before = new Set((await docs()).map(d => d.id));
-      await more('사본으로 이어 쓰기'); await page.locator('.ql-editor').waitFor();
+      await more('사본으로 이어 쓰기');
+      const copy = await copied(before);
       await page.waitForFunction(n => document.querySelectorAll('.photo-quill .photo-block').length === n, 2);
-      const copy = (await docs()).find(d => !before.has(d.id));
       assert.equal(copy.format, 'life-post-md-v1', 'the copy keeps the format'); assert.equal(copy.status, 'draft');
       assert.equal(body(copy.markdown), body(restored.markdown));
       await more('목록에서 숨기기'); await page.locator('.photo-article').waitFor();
@@ -375,8 +396,9 @@ async function flow(browser, width) {
       await typeAt(0, '사본 입력 ');
       await page.waitForFunction(() => document.querySelector('.photo-commandbar .photo-status')?.textContent.startsWith('이 기기에만 임시 보관 중'));
       const ids = new Set((await docs()).map(d => d.id));
-      await more('사본으로 이어 쓰기'); await page.locator('.ql-editor').waitFor();
-      const copy = (await docs()).find(d => !ids.has(d.id));
+      await holdStorage(1500);
+      await more('사본으로 이어 쓰기');
+      const copy = await copied(ids);
       assert.equal(copy.format, 'life-photo-post-v2'); assert.equal(copy.replaces, null);
       assert.match(copy.ops.map(op => typeof op.insert === 'string' ? op.insert : '').join(''), /^사본 입력 거부될 입력 첫 문단/);
       assert.deepEqual((await docs()).find(d => d.id === mdId), before, 'the md post is unchanged');
