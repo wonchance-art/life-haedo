@@ -592,6 +592,9 @@ jobs:
       - name: Verify the unconnected Markdown editor round trip and composition boundaries
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/post-markdown-editor-browser.cjs
+      - name: Verify restored Markdown posts read, edit, back up and refuse conversions without downgrading
+        if: ${{ matrix.group == 6 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/photo-post-markdown-edit-browser.cjs
       - name: Verify Markdown post thumbnails match their v2 sources
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/post-markdown-thumbnails-browser.cjs

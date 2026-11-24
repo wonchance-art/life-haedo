@@ -368,7 +368,25 @@
     if (!photos.length && ops.map(op => op.insert).join('') === '\u00a0') ops.length = 0;
     return { ops, photos };
   }
+  // The decoded body of the last few exact strings, in a browser page only (2026-11-24): one
+  // autosave of a Markdown post reads the same string in the codec, the model check, storage's
+  // checks and the list summary. Decoding is a pure function of the string, so an exact string
+  // seen just before gives that result again, as a copy of its own for every caller. Refusals are
+  // never kept. A server isolate (no document) shared by requests keeps nothing.
+  const recent = [], RECENT = typeof root.document === 'object' && root.document !== null ? 4 : 0;
   function parse(markdown) {
+    const hit = RECENT && typeof markdown === 'string' ? recent.find(entry => entry.markdown === markdown) : null;
+    if (hit) return structuredClone(hit.result);
+    const result = decode(markdown);
+    if (RECENT) {
+      recent.unshift({ markdown, result: structuredClone(result) });
+      recent.length = Math.min(recent.length, RECENT);
+    }
+    return result;
+  }
+  // The account boundary (sign-out, another account) forgets the kept bodies.
+  function forgetRecent() { recent.length = 0; }
+  function decode(markdown) {
     if (typeof markdown !== 'string' || markdown.length > LIMITS.markdown || new TextEncoder().encode(markdown).length > LIMITS.markdown ||
       /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\uD800-\uDFFF]/u.test(markdown)) throw fail('Markdown 본문의 문자와 길이를 확인해 주세요.');
     const tokens = parser().parse(markdown, {}), ops = [], photos = [], stack = [];
@@ -424,5 +442,5 @@
     return result;
   }
   return Object.freeze({ FORMAT, PHOTO_SCHEME, AI_OPEN, AI_CLOSE, LIMITS, fromDelta, fromV2, escapeInline,
-    parse, toDelta, canonicalize, toV2, remapPhotos, safeLink });
+    parse, toDelta, canonicalize, toV2, remapPhotos, safeLink, forgetRecent });
 });

@@ -238,6 +238,7 @@
     accountDocsSync?.dispose?.(); accountDocsSync = null;
     sync?.dispose?.(); sync = null;
     life.Storage?.clearAccount?.(); scopedStorage = null;
+    life.PostMarkdown?.forgetRecent?.();
     container.replaceChildren();
     activeKey = null; failure = null;
   }

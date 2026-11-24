@@ -14,6 +14,7 @@ const path = require('node:path');
 const { FakeCloud, accounts, base } = require('./life-sync-browser.cjs');
 const { playwright, makeContext, ready, settle } = require('./unified-home-browser.cjs');
 const { PlatformTables } = require('./schedule-entries-browser.cjs');
+const { instantScroll } = require('./helpers/instant-scroll.cjs');
 
 const output = path.resolve(process.env.NOTES_MENU_OUTPUT || '.local/notes-menu');
 const TODAY = '2026-11-03T12:00:00+09:00';
@@ -155,6 +156,11 @@ async function main() {
     const server = new FakeCloud(), device = 'notes-' + report.checks.length;
     const context = await makeContext(browser, server, device, accounts.a, { viewport, timezoneId: 'Asia/Seoul', locale: 'ko-KR' });
     await instrumentStorage(context);
+    // 2026-11-24 (docs/design-review/ci-failures/2026-11-24-load-timeouts.md): fill() focuses #homePostSearch and that focus
+    // scroll ran as html{scroll-behavior:smooth}; under load the next click (#homeTab-drafts) landed on .life-app while the
+    // page was still moving, so the 초안 tab never opened. Every click lands where Playwright aimed it; the app's own
+    // scroll calls already pass behavior: 'instant', and every position assertion below is unchanged.
+    await instantScroll(context);
     const page = await context.newPage(); page.setDefaultTimeout(15000);
     await page.clock.setFixedTime(new Date(TODAY));
     page.on('pageerror', error => report.pageErrors.push({ check: name, message: error.message }));
