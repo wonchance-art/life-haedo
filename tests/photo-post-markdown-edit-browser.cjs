@@ -17,6 +17,8 @@ const { playwright, makeContext, ready } = require('./unified-home-browser.cjs')
 const { FakeCloud, accounts, cloud, base } = require('./life-sync-browser.cjs');
 const { openPost } = require('./photo-post-entry.cjs');
 const { openCompatibility } = require('./page-composer-entry.cjs');
+const { unzipSync, strFromU8 } = require('../vendor/fflate/fflate.js');
+const { awaitCondition } = require('./helpers/await-condition.cjs');
 const out = path.resolve(process.env.PHOTO_POST_MARKDOWN_EDIT_OUTPUT || '.local/photo-post-markdown-edit');
 // A restored copy gets new photo ids (readBackup remaps them); the body is otherwise the same.
 const body = markdown => markdown.replace(/haedo-photo:[A-Za-z0-9_-]+/g, 'haedo-photo:ID');
@@ -33,6 +35,7 @@ async function flow(browser, width) {
   const page = await context.newPage(); page.setDefaultTimeout(15000);
   page.on('pageerror', error => report.pageErrors.push({ label, message: error.message }));
   page.on('console', event => { if (event.type() === 'error') report.consoleErrors.push({ label, message: event.text() }); });
+  page.on('dialog', dialog => dialog.accept());
   const check = async (name, task) => {
     console.log('START ' + label + ': ' + name);
     try { await task(); report.checks.push({ label, name, pass: true }); console.log('PASS ' + label + ': ' + name); }
@@ -53,7 +56,7 @@ async function flow(browser, width) {
     const s = HaedoLife.Shell.storage, w = await s.getActive();
     return Promise.all((await s.listPhotoPosts(w)).map(async row => {
       const d = await s.readPhotoPost(w, row.id);
-      return { id: d.id, format: d.format, status: d.status, revision: d.revision, replaces: d.replaces, title: d.title, markdown: d.markdown, ops: d.ops,
+      return { id: d.id, format: d.format, status: d.status, archived: d.archived, revision: d.revision, replaces: d.replaces, title: d.title, markdown: d.markdown, ops: d.ops,
         photos: d.photos.map(p => p.digest), attachments: d.attachments };
     }));
   });
@@ -66,11 +69,12 @@ async function flow(browser, width) {
     a.querySelectorAll('[data-photo-id]').forEach(n => n.removeAttribute('data-photo-id'));
     return a.innerHTML;
   });
-  const download = async action => {
+  const downloadBytes = async action => {
     const pending = page.waitForEvent('download'); pending.catch(() => {});
     await action(); const file = await pending;
-    return fs.readFile(await file.path(), 'utf8');
+    return fs.readFile(await file.path());
   };
+  const download = async action => (await downloadBytes(action)).toString('utf8');
   const exportHTML = () => download(async () => {
     await page.locator('.photo-read-actions .photo-more > summary').click();
     await click('HTML 읽기 파일 받기');
@@ -226,6 +230,160 @@ async function flow(browser, width) {
       assert.deepEqual(all.map(d => d.format).sort(), ['life-photo-post-v2', 'life-post-md-v1']);
       assert.equal(all.find(d => d.format === 'life-photo-post-v2').id, seed.v2Id, 'the only v2 document is the separate v2 post');
       assert.match(all.find(d => d.format === 'life-post-md-v1').markdown, /^거부될 입력 첫 문단/);
+      mdId = all.find(d => d.format === 'life-post-md-v1').id;
+    });
+
+    // Opens the md post's revision in the editor (a draft left for it opens instead).
+    const edit = async id => {
+      await go(); await openPost(page, id); await page.locator('.photo-article').waitFor();
+      await click('글 수정'); await page.locator('.ql-editor').waitFor();
+    };
+    const typeAt = async (where, text) => {
+      await page.evaluate(where => { const q = Quill.find(document.querySelector('.photo-quill')); q.focus(); q.setSelection(where === 'end' ? q.getLength() - 1 : where, 0, 'user'); }, where);
+      await page.keyboard.type(text);
+    };
+    const inject = () => page.evaluate(() => {
+      const original = HaedoLife.PostMarkdown;
+      window.__restoreCodec = () => { HaedoLife.PostMarkdown = original; };
+      HaedoLife.PostMarkdown = Object.freeze({ ...original, fromV2() {
+        throw Object.assign(new Error('본문이나 서식이 많아 이 글을 새 편집기로 바꿀 수 없습니다. 원래 글은 바뀌지 않았습니다.'), { code: 'post_markdown_conversion_limit' });
+      } });
+    });
+    const deviceCopy = text => page.evaluate(text => Object.keys(localStorage).filter(k => k.startsWith('haedo_life_post_recovery_v1:')).some(k => localStorage.getItem(k).includes(text)), text);
+    const note = () => page.locator('.photo-edit-note:not(.photo-ai-hint)').textContent();
+    // An md post and a v2 revision draft an earlier app version left for it (stored directly).
+    const legacy = (title, draftOps) => page.evaluate(async ([title, draftOps]) => {
+      const s = HaedoLife.Shell.storage, c = HaedoLife.Core, M = HaedoLife.PhotoPost, w = await s.getActive();
+      const v2 = M.create(c.id, '2026-11-20T03:00:00.000Z');
+      Object.assign(v2, { status: 'saved', title, ops: [{ insert: '원래 글\n' }] });
+      const post = await s.savePhotoPost(w, HaedoLife.PostMarkdown.fromV2(v2).document, 0);
+      const draft = M.create(c.id, '2026-11-21T03:00:00.000Z');
+      Object.assign(draft, { title, status: 'draft', replaces: { id: post.id, revision: post.revision }, ops: draftOps });
+      return { postId: post.id, draftId: (await s.savePhotoPost(w, draft, 0)).id };
+    }, [title, draftOps]);
+
+    await check('an old v2 revision draft of an md post keeps its underline and alignment in one recovery copy, with a notice', async () => {
+      const ids = await legacy('익명 옛 초안', [{ insert: '밑줄 글', attributes: { underline: true } }, { insert: ' 보통\n' }, { insert: '가운데' }, { insert: '\n', attributes: { align: 'center' } }]);
+      await edit(ids.postId);
+      assert.equal(await note(), '밑줄·정렬은 이 형식에 없어 저장할 때 빠집니다. 원래 판은 복구 사본으로 남깁니다.');
+      assert.equal(await page.locator('.photo-toolbar .ql-underline, .photo-toolbar .ql-align').count(), 0);
+      await typeAt('end', '덧'); await stored();
+      assert.equal(await note(), '밑줄·정렬은 이 형식에 없어 빠집니다. 원래 판은 복구 사본으로 남겼습니다.');
+      let all = await docs();
+      const draft = all.find(d => d.id === ids.draftId), copies = all.filter(d => d.title === '복구 사본 · 익명 옛 초안');
+      assert.equal(draft.format, 'life-post-md-v1'); assert.equal(draft.markdown, '밑줄 글 보통\n\n가운데덧\n');
+      assert.equal(copies.length, 1); assert.equal(copies[0].format, 'life-photo-post-v2'); assert.equal(copies[0].replaces, null);
+      assert.deepEqual(copies[0].ops, [{ insert: '밑줄 글', attributes: { underline: true } }, { insert: ' 보통\n' }, { insert: '가운데' }, { insert: '\n', attributes: { align: 'center' } }]);
+      await typeAt('end', '말'); await stored();
+      await click('글 저장'); await page.locator('.photo-article').waitFor();
+      all = await docs();
+      assert.equal(all.filter(d => d.title === '복구 사본 · 익명 옛 초안').length, 1, 'one copy, kept once');
+      const post = all.find(d => d.title === '익명 옛 초안');
+      assert.equal(post.format, 'life-post-md-v1'); assert.equal(post.status, 'saved'); assert.equal(post.markdown, '밑줄 글 보통\n\n가운데덧말\n');
+      assert.equal(all.some(d => d.id === ids.postId), false, 'the revision replaced the post');
+    });
+
+    await check('an old v2 revision draft with nothing to drop is stored as md without a copy, also over a revision moved elsewhere', async () => {
+      const ids = await legacy('익명 옛 보통 초안', [{ insert: '보통 글\n' }]);
+      await edit(ids.postId);
+      assert.equal(await note(), '');
+      // Another tab stores the same v2 draft again (only its revision moves) while input waits
+      // here: the input is stored over it and, holding nothing new, it is not kept.
+      await page.evaluate(async id => {
+        const q = Quill.find(document.querySelector('.photo-quill')); q.insertText(q.getLength() - 1, '가', 'user');
+        const s = HaedoLife.Shell.storage, w = await s.getActive(), d = await s.readPhotoPost(w, id); await s.savePhotoPost(w, d, d.revision);
+      }, ids.draftId);
+      await stored();
+      const all = await docs(), draft = all.find(d => d.id === ids.draftId);
+      assert.equal(draft.format, 'life-post-md-v1'); assert.equal(draft.markdown, '보통 글가\n');
+      assert.equal(all.filter(d => d.title.startsWith('복구 사본 · 익명 옛 보통')).length, 0, 'nothing to keep: no recovery copy');
+      await click('글 저장'); await page.locator('.photo-article').waitFor();
+      assert.equal((await docs()).find(d => d.title === '익명 옛 보통 초안').format, 'life-post-md-v1');
+    });
+
+    await check('typing and removing it again leaves no draft of the md post once the editor closes', async () => {
+      const before = await docs();
+      await edit(mdId);
+      await typeAt(0, 'x'); await stored();
+      assert.equal((await docs()).length, before.length + 1, 'the change was stored as a draft');
+      await page.keyboard.press('Backspace'); await stored();
+      await click('닫기'); await page.locator('[data-photo-post-id="' + mdId + '"]').waitFor({ state: 'attached' });
+      // Leaving removes the draft (BlogSync's deletion record first): wait for the list to settle.
+      await awaitCondition(page, async n => { const s = HaedoLife.Shell.storage; return (await s.listPhotoPosts(await s.getActive())).length === n; }, before.length, { timeout: 15000, label: 'the unchanged revision is removed' });
+      assert.deepEqual(await docs(), before, 'a revision that holds what the post holds is not kept');
+    });
+
+    await check('an md draft from a ZIP: 사본으로 이어 쓰기 and 목록에서 숨기기 store md-v1; the editor backup is md', async () => {
+      await go();
+      if (!await page.locator('.photo-files').evaluate(n => n.open)) await page.locator('.photo-files > summary').click();
+      await page.getByLabel('사진 글 ZIP 백업', { exact: true }).setInputFiles({ name: 'markdown.zip', mimeType: 'application/zip', buffer: Buffer.from(seed.zip) });
+      await click('새 초안으로 복원'); await page.locator('.ql-editor').waitFor();
+      const restored = (await docs()).find(d => d.status === 'draft' && d.title === '익명 Markdown 글');
+      assert.equal(restored.format, 'life-post-md-v1');
+      const zip = unzipSync(new Uint8Array(await downloadBytes(() => more('사진 포함 백업'))));
+      const manifest = JSON.parse(strFromU8(zip['manifest.json']));
+      assert.equal(manifest.format, 'life-post-md-backup-v1', 'the editor backup of an md draft is md');
+      assert.equal(body(manifest.markdown), body(restored.markdown));
+      const before = new Set((await docs()).map(d => d.id));
+      await more('사본으로 이어 쓰기'); await page.locator('.ql-editor').waitFor();
+      await page.waitForFunction(n => document.querySelectorAll('.photo-quill .photo-block').length === n, 2);
+      const copy = (await docs()).find(d => !before.has(d.id));
+      assert.equal(copy.format, 'life-post-md-v1', 'the copy keeps the format'); assert.equal(copy.status, 'draft');
+      assert.equal(body(copy.markdown), body(restored.markdown));
+      await more('목록에서 숨기기'); await page.locator('.photo-article').waitFor();
+      const hidden = (await docs()).find(d => d.id === copy.id);
+      assert.equal(hidden.format, 'life-post-md-v1'); assert.equal(hidden.archived, true);
+    });
+
+    await check('a refused input: 사본으로 이어 쓰기 keeps it as a new v2 draft and the md post stays as it was', async () => {
+      const before = (await docs()).find(d => d.id === mdId);
+      await edit(mdId); await inject();
+      await typeAt(0, '사본 입력 ');
+      await page.waitForFunction(() => document.querySelector('.photo-commandbar .photo-status')?.textContent.startsWith('이 기기에만 임시 보관 중'));
+      const ids = new Set((await docs()).map(d => d.id));
+      await more('사본으로 이어 쓰기'); await page.locator('.ql-editor').waitFor();
+      const copy = (await docs()).find(d => !ids.has(d.id));
+      assert.equal(copy.format, 'life-photo-post-v2'); assert.equal(copy.replaces, null);
+      assert.match(copy.ops.map(op => typeof op.insert === 'string' ? op.insert : '').join(''), /^사본 입력 거부될 입력 첫 문단/);
+      assert.deepEqual((await docs()).find(d => d.id === mdId), before, 'the md post is unchanged');
+      await page.evaluate(() => window.__restoreCodec());
+      await click('닫기');
+    });
+
+    await check('a refusal at 글 저장 after a stored draft keeps the input in this device copy', async () => {
+      await edit(mdId);
+      await typeAt(0, '저장 직전 '); await stored();
+      assert.equal(await deviceCopy('저장 직전'), false, 'a stored draft leaves no device copy');
+      const before = await docs();
+      await inject();
+      await click('글 저장');
+      await page.locator('.photo-commandbar .photo-status[role=alert]').waitFor();
+      assert.equal(await deviceCopy('저장 직전'), true, 'the refused save wrote the device copy');
+      assert.deepEqual(await docs(), before, 'nothing stored');
+      await page.evaluate(() => window.__restoreCodec());
+      await click('글 저장'); await page.locator('.photo-article').waitFor();
+      const post = (await docs()).find(d => d.title === '익명 Markdown 글' && d.status === 'saved' && !d.archived);
+      assert.equal(post.format, 'life-post-md-v1'); assert.match(post.markdown, /^저장 직전 /);
+      mdId = post.id;
+    });
+
+    await check('an md version stored elsewhere reaches the open editor, which keeps storing md-v1', async () => {
+      await edit(mdId);
+      await typeAt('end', '가'); await stored();
+      const draft = (await docs()).find(d => d.status === 'draft' && d.replaces?.id === mdId);
+      const other = await context.newPage();
+      await other.goto(base + '/index.html?section=records&view=page', { waitUntil: 'domcontentloaded' }); await ready(other);
+      await other.evaluate(async id => {
+        const s = HaedoLife.Shell.storage, w = await s.getActive(), d = await s.readPhotoPost(w, id);
+        await s.savePhotoPost(w, { ...d, markdown: '다른 탭에서 바꾼 **글** 끝\n', photos: [], updatedAt: new Date().toISOString() }, d.revision);
+      }, draft.id);
+      await page.waitForFunction(() => Quill.find(document.querySelector('.photo-quill')).getText() === '다른 탭에서 바꾼 글 끝\n');
+      assert.equal(await page.locator('.photo-toolbar .ql-underline').count(), 0, 'still the editor of a Markdown post');
+      await other.close();
+      await typeAt('end', '나'); await stored();
+      const now = (await docs()).find(d => d.id === draft.id);
+      assert.equal(now.format, 'life-post-md-v1'); assert.equal(now.markdown, '다른 탭에서 바꾼 **글** 끝나\n');
+      await more('수정 취소'); await page.locator('.photo-article').waitFor();
     });
   } finally { await context.close(); }
 }
