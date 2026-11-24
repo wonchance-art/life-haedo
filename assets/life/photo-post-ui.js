@@ -247,10 +247,65 @@
       if (choice) choice.focus({ preventScroll: true });
       else editor?.focus();
     }
-    // A Markdown document on either side is never "the same" as a copy (M.sameInput, MINOR-B).
-    const sameContent = (copy, d) => typeof M.sameInput === "function" ? M.sameInput(copy, d) : false;
     // When a change is written: never before the document's first time (another device's clock, m5).
     const stamp = (d) => (typeof M.writtenAt === "function" ? M.writtenAt(d) : new Date().toISOString());
+    // ---- A life-post-md-v1 post in this editor (2026-11-24, before B2) -------------------
+    // The editor works on the Delta projection of the Markdown body (an editing buffer in the
+    // v2 shape). Every store of that buffer writes Markdown again through the same codec
+    // (PostMarkdown.fromV2), so a Markdown post or its draft is never written in an older
+    // format. A v2 draft that revises a Markdown post (left by an earlier version) is stored as
+    // Markdown from its next store on. When the codec refuses the input, nothing is stored: the
+    // input stays in the editor and in this device's recovery copy.
+    const markdownBuffers = new WeakSet();
+    const isMarkdown = (d) => d?.format === "life-post-md-v1";
+    const storesMarkdown = (d) => !!d && markdownBuffers.has(d);
+    function editable(d, markdown = false) {
+      let value = d;
+      if (isMarkdown(d)) {
+        value = life.PostMarkdown.toV2(d);
+        markdown = true;
+      }
+      if (markdown && value) markdownBuffers.add(value);
+      return value;
+    }
+    const MARKDOWN_REFUSALS = {
+      post_markdown_conversion_boundary: "사진 바로 앞 문장이 줄바꿈 없이 이어져 있어 이 글의 형식으로 보관할 수 없습니다. 사진 앞 문장 끝에서 줄을 바꿔 주세요.",
+      post_markdown_conversion_limit: "본문이나 서식이 많아 이 글의 형식으로 보관할 수 없습니다. 내용을 줄여 주세요.",
+    };
+    // The stored form of `value` (a document taken from `buffer`): Markdown for a Markdown
+    // buffer, `value` itself otherwise. A codec refusal keeps its code and says what to change.
+    function storedForm(buffer, value) {
+      if (!storesMarkdown(buffer)) return value;
+      let converted;
+      try {
+        converted = life.PostMarkdown.fromV2({ ...value, format: "life-photo-post-v2" }).document;
+      } catch (cause) {
+        const message = MARKDOWN_REFUSALS[cause?.code];
+        throw message ? Object.assign(new Error(message), { code: cause.code }) : cause;
+      }
+      M.validate(converted);
+      return converted;
+    }
+    // Content fingerprints compare what storage holds: a Markdown buffer is compared as the
+    // Markdown it would be stored as (its ops can be split differently from the stored body).
+    function keyOf(d) {
+      if (storesMarkdown(d)) try { return M.contentKey(storedForm(d, M.normalize(d).doc)); } catch (_) {}
+      return M.contentKey(d);
+    }
+    const hashOf = (d) => M.keyHash(keyOf(d));
+    // A Markdown document on either side is never "the same" as a copy for M.sameInput
+    // (MINOR-B). A stored Markdown post is compared here as the Markdown the copy would become.
+    function sameContent(copy, d) {
+      if (typeof M.sameInput !== "function") return false;
+      if (!isMarkdown(d) || !copy || !Array.isArray(copy.ops)) return M.sameInput(copy, d);
+      try {
+        const buffer = editable(d);
+        const input = M.normalize({ ...buffer, title: copy.title, ops: copy.ops, attachments: copy.attachments }).doc;
+        return M.contentKey(storedForm(buffer, input)) === M.contentKey(d);
+      } catch (_) {
+        return false;
+      }
+    }
     // Which device copies have no draft to open in place, and why (see `strays`).
     async function strayCopies(rows, token) {
       const byId = new Map(rows.map((row) => [row.id, row])),
@@ -1076,9 +1131,9 @@
         token = epoch;
       let payload;
       try {
-        // Only a valid document reaches storage and account sync.
+        // Only a valid document reaches storage and account sync, in the format the post has.
         M.validate(normal.doc);
-        payload = structuredClone(normal.doc);
+        payload = storedForm(target, structuredClone(normal.doc));
       } catch (cause) {
         keepLocally(tick, cause);
         return;
@@ -1382,7 +1437,7 @@
     async function settleDraft() {
       if (mode !== "edit" || !doc || doc.status !== "draft" || offer || busy || composing || dirtyTick !== storedTick) return false;
       const target = doc;
-      if (!(M.isEmpty(target) || (target.replaces && baseline !== null && M.contentKey(target) === baseline))) return false;
+      if (!(M.isEmpty(target) || (target.replaces && baseline !== null && keyOf(target) === baseline))) return false;
       if (target.revision > 0 && staleApp()) return false;
       try { await removeDraft(target); }
       catch (_) { return false; }
@@ -1496,8 +1551,8 @@
               empty.attachments?.length)
           )
             empty = null;
-          doc = empty ? M.upgrade(empty) : M.create(life.Core.id);
-          storedBase = empty ? M.contentHash(doc) : "";
+          doc = empty ? editable(M.upgrade(empty)) : M.create(life.Core.id);
+          storedBase = empty ? hashOf(doc) : "";
           offer = usableCopy(recoveryStore.read(workspaceId, doc.id));
           strays = await strayCopies(rows, token);
           if (!current(token)) return;
@@ -1523,7 +1578,7 @@
       setBusy(true); loading = true;
       try {
         const next = await storage.readPhotoPost(workspaceId, id);
-        let orphan = null;
+        let orphan = null, markdownTarget = false;
         const waiting = [];
         baseline = null;
         if (!current(token)) return;
@@ -1554,6 +1609,8 @@
               break;
             }
           }
+          // A revision of a Markdown post is stored as Markdown, also one an earlier version left in v2.
+          markdownTarget = isMarkdown(next);
           doc = retained || {
             ...structuredClone(next),
             id: life.Core.id(),
@@ -1584,15 +1641,16 @@
             const original = await storage.readPhotoPost(workspaceId, next.replaces.id).catch(() => null);
             if (!current(token)) return;
             if (original?.status === "saved" && original.revision === next.replaces.revision) baseline = M.contentKey(original);
+            if (isMarkdown(original)) markdownTarget = true;
           }
         }
         mode =
           !next.archived && (editing || next.status === "draft")
             ? "edit"
             : "read";
-        if (mode === "edit") doc = M.upgrade(doc);
         // A stored draft: what it holds. A revision not stored yet: what the saved post holds.
         storedBase = mode !== "edit" ? null : doc.revision > 0 ? M.contentHash(doc) : M.contentHash(next);
+        if (mode === "edit") doc = editable(M.upgrade(doc), markdownTarget);
         offer = mode === "edit" ? usableCopy(recoveryStore.read(workspaceId, doc.id) || orphan) : null;
         strays = mode === "edit" ? waiting : [];
         error = null;
@@ -1668,15 +1726,22 @@
       const token = epoch;
       await flush();
       if (!current(token)) return;
-      const draftId = doc.id,
-        payload = structuredClone(M.normalize(doc).doc);
+      const draftId = doc.id;
+      let payload = structuredClone(M.normalize(doc).doc);
       let previousId = payload.replaces?.id || payload.id;
       payload.status = "saved";
       payload.updatedAt = stamp(payload);
       // The strict check, naming what to fix, belongs to this explicit save.
       try {
         M.validate(payload);
+        // A Markdown post is saved as Markdown again; a refusal stores nothing (the input stays
+        // in the editor and in the device copy autosave wrote).
+        payload = storedForm(doc, payload);
       } catch (cause) {
+        if (MARKDOWN_REFUSALS[cause?.code]) {
+          writeCopy();
+          throw Object.assign(new Error("저장하지 못했습니다"), { code: cause.code, detail: cause.message + " 입력은 그대로 있습니다." });
+        }
         // A long reason reads on its own line; short ones stay in the status.
         if (cause?.code !== "invalid_photo_post" || String(cause.message).length <= 30) throw cause;
         throw Object.assign(new Error("저장하지 못했습니다"), { code: cause.code, detail: cause.message });
@@ -1756,7 +1821,7 @@
       await flush();
       guard();
       const token = epoch,
-        next = M.upgrade(M.normalize(doc).doc);
+        next = storedForm(doc, M.upgrade(M.normalize(doc).doc));
       next.archived = value;
       next.updatedAt = stamp(next);
       setBusy(true);
@@ -1767,9 +1832,9 @@
           doc.revision,
         );
         if (!current(token)) return;
-        doc = saved;
-        resetTicks();
         mode = value ? "read" : saved.status === "draft" ? "edit" : "read";
+        doc = mode === "edit" ? editable(saved) : saved;
+        resetTicks();
         error = null;
         committed = false;
         render();
@@ -1801,8 +1866,11 @@
       const token = epoch;
       if (saving) await saving.catch(() => {});
       if (!current(token)) return;
-      const next = M.upgrade(outputSnapshot()),
-        now = new Date().toISOString();
+      let next = M.upgrade(outputSnapshot());
+      const now = new Date().toISOString();
+      // A copy keeps the format of a Markdown post; when the codec refuses the input, the copy
+      // (a new post, nothing it replaces) keeps the input in the editor's v2 form instead.
+      try { next = storedForm(doc, next); } catch (_) {}
       // outputSnapshot may settle authorship marks; this copy is the write.
       cancelAutosave();
       const previousId = doc.replaces?.id || doc.id,
@@ -1826,9 +1894,9 @@
         recoveryStore.clear(workspaceId, sourceId);
         keptTick = -1;
         unstored = null;
-        doc = saved;
-        resetTicks();
         mode = nextStatus === "saved" ? "read" : "edit";
+        doc = mode === "edit" ? editable(saved) : saved;
+        resetTicks();
         error = null;
         committed = nextStatus === "saved";
         committedOver = false;
@@ -2135,7 +2203,7 @@
       closeViewer?.();
       const documentId = doc.id,
         photos = new Map(doc.photos.map((photo) => [photo.id, photo]));
-      const items = doc.ops
+      const items = M.contentOps(doc)
         .filter((op) => op.insert?.photo)
         .map((op) => ({
           ...op.insert.photo,
@@ -2289,7 +2357,7 @@
         }
         line = document.createDocumentFragment();
       }
-      for (const op of value.ops) {
+      for (const op of M.contentOps(value)) {
         if (typeof op.insert !== "string") {
           if (line.childNodes.length) endLine();
           listNode = null;
@@ -2814,6 +2882,9 @@
         heading.append(o);
       }
       formatPanel.append(heading);
+      // A Markdown post has no underline or alignment (2026-11-02 owner decision): its editor
+      // does not offer them, so nothing typed here is dropped when it is stored.
+      const markdownBody = storesMarkdown(doc);
       for (const [key, name, value] of [
         ["bold", "굵게"],
         ["italic", "기울임"],
@@ -2823,7 +2894,7 @@
         ["list", "번호 목록", "ordered"],
         ["align", "가운데 정렬", "center"],
         ["link", "링크"],
-      ]) {
+      ].filter(([key]) => !markdownBody || (key !== "underline" && key !== "align"))) {
         const b = el("button");
         b.type = "button";
         b.className = "ql-" + key;
@@ -2872,19 +2943,26 @@
       insertPhoto.prepend(glyph("image"));
       // The editor adapter lives at the tool registration boundary so a future
       // editor can replace it without changing the suggestion panel.
+      // What to do first before AI 제안 can open (2026-11-24): a usage hint on the note line
+      // under the save state, never a failure. The save state, the recovery actions, the body and
+      // the selection stay as they are.
+      const suggestHint = (text) => {
+        showChangeNote(text);
+        return null;
+      };
       const suggest = iconControl(button("AI 제안", () => {
-        if (imeActive()) throw new Error("입력을 마친 뒤 다시 눌러 주세요.");
+        if (imeActive() || attachmentUI?.composing()) return suggestHint("입력을 마친 뒤 다시 눌러 주세요.");
         guard();
         if (!life.WritingAI || !life.WritingAIUI?.open)
           throw new Error("AI 제안을 준비하지 못했습니다. 앱을 새로고침한 뒤 다시 열어 주세요.");
-        settleAuthorship();
         const range = editor.getSelection() || editor.selection?.savedRange;
-        if (!range?.length) throw new Error(life.WritingAI.MESSAGES.ai_selection_required);
+        if (!range?.length) return suggestHint(life.WritingAI.MESSAGES.ai_selection_required);
         if (range.index + range.length >= editor.getLength())
-          throw new Error("마지막 빈 줄을 제외하고 AI에 보낼 글을 선택해 주세요.");
+          return suggestHint("마지막 빈 줄을 제외하고 AI에 보낼 글을 선택해 주세요.");
+        if (editor.getContents(range.index, range.length).ops.some(op => typeof op.insert !== "string"))
+          return suggestHint(life.WritingAI.MESSAGES.ai_selection_has_photo);
+        settleAuthorship();
         const selectionOps = editor.getContents(range.index, range.length).ops;
-        if (selectionOps.some(op => typeof op.insert !== "string"))
-          throw new Error(life.WritingAI.MESSAGES.ai_selection_has_photo);
         const target = doc, targetEditor = editor, token = epoch, version = dirtyTick;
         const selectedRange = { index: range.index, length: range.length };
         const isTarget = () => current(token) && doc === target && editor === targetEditor && mode === "edit";
@@ -2986,7 +3064,7 @@
           "link",
           "author",
           "photo",
-        ],
+        ].filter((name) => !markdownBody || (name !== "underline" && name !== "align")),
         modules: {
           toolbar,
           history: { userOnly: true, delay: 700 },
@@ -3032,7 +3110,7 @@
       }
       const photos = new Map(doc.photos.map((p) => [p.id, p]));
       editor.setContents(
-        doc.ops.map((op) =>
+        M.contentOps(doc).map((op) =>
           typeof op.insert === "string"
             ? op
             : {
@@ -3427,7 +3505,7 @@
         const hadFocus = !!editor?.hasFocus?.(), range = hadFocus ? editor.getSelection() : null, before = range ? editor.getContents() : null;
         const titleFocus = document.activeElement === titleInput && titleInput ? [titleInput.selectionStart, titleInput.selectionEnd] : null;
         const y = root.scrollY;
-        doc = M.upgrade(next);
+        doc = editable(M.upgrade(next), storesMarkdown(was));
         if (nextBaseline !== undefined) baseline = nextBaseline;
         storedBase = M.contentHash(next);
         render();
@@ -3455,6 +3533,8 @@
       }
     }
     function render() {
+      // The editor never holds a stored Markdown document itself, only its editing buffer.
+      if (mode === "edit" && isMarkdown(doc)) doc = editable(doc);
       syncHold();
       if (!host || !valid()) return;
       cancelAutosave();
@@ -3463,7 +3543,7 @@
       // An editor drawn for a stored document with nothing unsaved shows what is
       // stored: the fingerprint follows the document (also after it was just
       // stored under a new id, as 현재 입력을 새 초안으로 보관 does).
-      else if (doc?.revision > 0 && dirtyTick === storedTick) storedBase = M.contentHash(doc);
+      else if (doc?.revision > 0 && dirtyTick === storedTick) storedBase = hashOf(doc);
       const token = ++epoch;
       serverSequence++; serverBusy = false;
       serverStatus = serverActions = null;
@@ -3535,7 +3615,7 @@
                       0,
                     );
                     if (!current(t)) return;
-                    doc = result;
+                    doc = editable(result);
                     mode = "edit";
                     resetTicks();
                     error = null;
@@ -3650,7 +3730,7 @@
                         .then((value) => {
                           if (!current(token) || !entry.target.isConnected)
                             return;
-                          const first = value.ops.find((op) => op.insert?.photo)
+                          const first = M.contentOps(value).find((op) => op.insert?.photo)
                             ?.insert.photo.id;
                           const photo = value.photos.find(
                             (p) => p.id === first,

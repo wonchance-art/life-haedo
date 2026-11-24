@@ -24,6 +24,25 @@ const setSelection = (page, index, length) => page.evaluate(([i, n]) => {
   const q = Quill.find(document.querySelector('.photo-quill')); q.focus(); q.setSelection(i, n, 'user');
 }, [index, length]);
 const aiText = state => state.ops.filter(op => op.attributes?.author === 'ai').map(op => op.insert).join('');
+// AI 제안 pressed before it can open (2026-11-24): a usage hint on the note line under the save
+// state. The save state, the recovery actions, the body and the selection are what they were.
+const entryState = page => page.evaluate(() => {
+  const status = document.querySelector('.photo-commandbar .photo-status'), q = Quill.find(document.querySelector('.photo-quill'));
+  const recovery = document.querySelector('.photo-recovery-actions'), note = document.querySelector('.photo-edit-note');
+  return { status: { text: status.textContent, state: status.dataset.state, role: status.getAttribute('role') },
+    recoveryHidden: recovery.hidden, alerts: document.querySelectorAll('.photo-editor [role=alert]').length,
+    selection: q.selection.savedRange && { index: q.selection.savedRange.index, length: q.selection.savedRange.length },
+    note: note && !note.hidden ? { text: note.textContent, role: note.getAttribute('role') } : null };
+});
+async function assertEntryHint(page, before, text, label) {
+  await awaitCondition(page, value => document.querySelector('.photo-edit-note')?.textContent === value && !document.querySelector('.photo-edit-note').hidden, text, { timeout: 5000, label });
+  const after = await entryState(page);
+  assert.deepEqual(after.note, { text, role: 'status' }, label + ': polite hint');
+  assert.deepEqual(after.status, before.status, label + ': the save state is unchanged');
+  assert.equal(after.recoveryHidden, true, label + ': no recovery actions');
+  assert.equal(after.alerts, 0, label + ': no error state');
+  assert.deepEqual(after.selection, before.selection, label + ': the selection is unchanged');
+}
 const gate = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
 class AIHTTP {
   constructor() { this.requests = []; this.usageRequests = 0; this.next = null; this.expectedStatuses = []; this.expectedNetworkFailures = 0; this.remainingMicroUsd = 7500000; }
@@ -218,6 +237,41 @@ async function flow(browser, { label, viewport, hasTouch = false, boundaryOnly =
       await page.keyboard.type('직접 고쳤다');
       assert.equal(aiText(await editorState(page)), '', 'owner edit is not automatically AI text');
     });
+    await typeFixture(page);
+    await check('AI entry without a usable selection shows a hint, never a save failure, and changes nothing', async () => {
+      await page.waitForFunction(() => document.querySelector('.photo-commandbar .photo-status')?.textContent === '자동 저장됨');
+      const original = await editorState(page), count = ai.requests.length;
+      for (const [label, index, length, text] of [
+        ['no selection', PREFIX.length, 0, 'AI에 보낼 글을 선택해 주세요.'],
+        ['a selection with the last line', PREFIX.length, original.text.length - PREFIX.length, '마지막 빈 줄을 제외하고 AI에 보낼 글을 선택해 주세요.'],
+      ]) {
+        if (length) {
+          // Quill clamps a selection it sets before the last line break; the entry reads the
+          // range kept from the editor's last focus, which can end there. Set that range itself.
+          await page.locator('#photoTitle').focus();
+          await page.evaluate(([i, n]) => { Quill.find(document.querySelector('.photo-quill')).selection.savedRange = { index: i, length: n }; }, [index, length]);
+        } else await setSelection(page, index, length);
+        const before = await entryState(page);
+        if (length) await page.locator('#photoAI').evaluate(button => button.click());
+        else await page.locator('#photoAI').click();
+        await assertEntryHint(page, before, text, label);
+        assert.equal(await panel(page).count(), 0, label + ': no panel');
+        assert.equal(ai.requests.length, count, label + ': nothing sent');
+        assert.deepEqual(await editorState(page), original, label + ': the body is unchanged');
+      }
+      await page.locator('.ql-editor').evaluate(node => node.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: 'ㅎ' })));
+      await setSelection(page, PREFIX.length, SELECTED.length);
+      const before = await entryState(page);
+      await page.locator('#photoAI').evaluate(button => button.click());
+      await assertEntryHint(page, before, '입력을 마친 뒤 다시 눌러 주세요.', 'an open composition');
+      assert.equal(await panel(page).count(), 0); assert.equal(ai.requests.length, count);
+      assert.deepEqual(await editorState(page), original, 'composition: the body is unchanged');
+      await page.locator('.ql-editor').evaluate(node => node.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '' })));
+      await shot('entry-hint');
+      // With a usable selection the same control opens the panel as before.
+      await setSelection(page, PREFIX.length, SELECTED.length);
+      await openSuggestions(page); await action(page, '닫기').click();
+    });
     if (label !== 'desktop') return;
     await typeFixture(page);
     await check('direct request and optional guidance preserve exact bytes and refuse an unfinished request-field composition', async () => {
@@ -260,8 +314,9 @@ async function flow(browser, { label, viewport, hasTouch = false, boundaryOnly =
       // Quill may replace the selected range when composition starts; the AI
       // entry must preserve the actual state immediately before its click.
       const entryOriginal = await editorState(page);
+      const entryBefore = await entryState(page);
       await page.locator('#photoAI').evaluate(button => button.click());
-      await awaitCondition(page, () => document.querySelector('.photo-commandbar .photo-status-text').textContent === '입력을 마친 뒤 다시 눌러 주세요.', null, { timeout: 5000, label: 'entry explains unfinished input without claiming an application' });
+      await assertEntryHint(page, entryBefore, '입력을 마친 뒤 다시 눌러 주세요.', 'entry explains unfinished input without claiming an application');
       assert.equal(await panel(page).count(), 0, 'unfinished editor composition cannot open a request');
       assert.equal(ai.requests.length, requestCount, 'unfinished editor composition sends nothing');
       assert.deepEqual(await editorState(page), entryOriginal, 'entry guard preserves the complete input');
@@ -382,8 +437,10 @@ async function flow(browser, { label, viewport, hasTouch = false, boundaryOnly =
       });
       await setSelection(page, index, 1);
       const count = ai.requests.length;
+      await page.waitForFunction(() => document.querySelector('.photo-commandbar .photo-status')?.textContent === '자동 저장됨');
+      const entryBefore = await entryState(page);
       await page.locator('#photoAI').click();
-      await awaitCondition(page, () => document.querySelector('.photo-commandbar .photo-status-text').textContent.includes('사진이 들어 있는 선택'), null, { timeout: 5000, label: 'photo selection is refused' });
+      await assertEntryHint(page, entryBefore, '사진이 들어 있는 선택에는 제안을 적용할 수 없어요.', 'photo selection is refused');
       assert.equal(await panel(page).isVisible(), false); assert.equal(ai.requests.length, count);
       assert.deepEqual(await editorState(page), before, 'photo ops remain exact');
       const savedPhotos = await page.evaluate(async () => {
