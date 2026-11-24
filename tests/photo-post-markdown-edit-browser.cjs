@@ -301,6 +301,40 @@ async function flow(browser, width) {
       assert.equal((await docs()).find(d => d.title === '익명 옛 보통 초안').format, 'life-post-md-v1');
     });
 
+    await check('saving an old v2 revision draft with nothing typed still keeps its underline in one recovery copy', async () => {
+      const ids = await legacy('익명 바로 저장', [{ insert: '밑줄만', attributes: { underline: true } }, { insert: '\n' }]);
+      await edit(ids.postId);
+      await click('글 저장'); await page.locator('.photo-article').waitFor();
+      const all = await docs(), copies = all.filter(d => d.title === '복구 사본 · 익명 바로 저장');
+      assert.equal(copies.length, 1); assert.equal(copies[0].format, 'life-photo-post-v2');
+      assert.deepEqual(copies[0].ops, [{ insert: '밑줄만', attributes: { underline: true } }, { insert: '\n' }]);
+      const post = all.find(d => d.title === '익명 바로 저장');
+      assert.equal(post.format, 'life-post-md-v1'); assert.equal(post.status, 'saved'); assert.equal(post.markdown, '밑줄만\n');
+    });
+
+    await check('a v2 version with underline that another tab stores for the open draft is kept in one recovery copy on the next input', async () => {
+      const ids = await legacy('익명 원격 v2', [{ insert: '보통 글\n' }]);
+      await edit(ids.postId);
+      assert.equal(await note(), '');
+      // An earlier app version in another tab stores the same draft again, now with underline.
+      const other = await context.newPage();
+      await other.goto(base + '/index.html?section=records&view=page', { waitUntil: 'domcontentloaded' }); await ready(other);
+      await other.evaluate(async id => {
+        const s = HaedoLife.Shell.storage, w = await s.getActive(), d = await s.readPhotoPost(w, id);
+        await s.savePhotoPost(w, { ...d, ops: [{ insert: '원격', attributes: { underline: true } }, { insert: ' 글\n' }], updatedAt: new Date().toISOString() }, d.revision);
+      }, ids.draftId);
+      await other.close();
+      await page.waitForFunction(() => Quill.find(document.querySelector('.photo-quill')).getText() === '원격 글\n');
+      await typeAt('end', '끝'); await stored();
+      const all = await docs(), copies = all.filter(d => d.title === '복구 사본 · 익명 원격 v2');
+      assert.equal(copies.length, 1, 'the remote v2 version is kept');
+      assert.deepEqual(copies[0].ops, [{ insert: '원격', attributes: { underline: true } }, { insert: ' 글\n' }]);
+      const draft = all.find(d => d.id === ids.draftId);
+      assert.equal(draft.format, 'life-post-md-v1'); assert.equal(draft.markdown, '원격 글끝\n');
+      assert.equal(await note(), '밑줄·정렬은 이 형식에 없어 빠집니다. 원래 판은 복구 사본으로 남겼습니다.');
+      await click('닫기');
+    });
+
     await check('typing and removing it again leaves no draft of the md post once the editor closes', async () => {
       const before = await docs();
       await edit(mdId);
