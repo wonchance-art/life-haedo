@@ -210,6 +210,10 @@
       changeNote = "",
       changeNoteTimer = null,
       noteLine = null,
+      // AI 제안's usage hints (2026-11-24): their own polite line, so a note about what storing
+      // did (a conflict, a recovery copy) is never replaced by one.
+      hintLine = null,
+      hintTimer = null,
       // The account state of the stored draft being edited (read from BlogSync,
       // never changed here except by the explicit retry): { id, revision, status }.
       draftServer = null,
@@ -286,10 +290,26 @@
       M.validate(converted);
       return converted;
     }
+    // A v2 draft an earlier version left for a Markdown post, until its first store as Markdown:
+    // { dropped } says whether that store loses formats Markdown has no place for (underline,
+    // alignment). Then the stored v2 draft is kept first as a `복구 사본` (2026-11-02 owner
+    // decision: the original version stays as a recovery copy), in the same transaction.
+    const legacyDrafts = new WeakMap();
+    const LEGACY_DROPPED = "밑줄·정렬은 이 형식에 없어 빠집니다. 원래 판은 복구 사본으로 남겼습니다.";
+    function markLegacy(buffer, stored) {
+      if (!storesMarkdown(buffer) || isMarkdown(stored) || !(stored?.revision > 0)) return;
+      let dropped = true;
+      try {
+        const result = life.PostMarkdown.fromV2({ ...M.normalize(M.upgrade(stored)).doc, format: "life-photo-post-v2" });
+        dropped = result.dropped.underline + result.dropped.align > 0;
+      } catch (_) {}
+      legacyDrafts.set(buffer, { dropped });
+    }
     // Content fingerprints compare what storage holds: a Markdown buffer is compared as the
     // Markdown it would be stored as (its ops can be split differently from the stored body).
+    // A legacy v2 draft is compared as the v2 document storage still holds.
     function keyOf(d) {
-      if (storesMarkdown(d)) try { return M.contentKey(storedForm(d, M.normalize(d).doc)); } catch (_) {}
+      if (storesMarkdown(d) && !legacyDrafts.has(d)) try { return M.contentKey(storedForm(d, M.normalize(d).doc)); } catch (_) {}
       return M.contentKey(d);
     }
     const hashOf = (d) => M.keyHash(keyOf(d));
@@ -546,6 +566,8 @@
       editor = null;
       strayBand = null;
       noteLine = null;
+      clearTimeout(hintTimer);
+      hintLine = null;
       composingRange = null;
       composingText = "";
       draftTimers.forEach(clearTimeout);
@@ -1153,6 +1175,7 @@
           unstored = null;
           failedStore = null;
           storedHandedOver(target);
+          legacyDrafts.delete(target);
           storedBase = M.contentHash(payload);
           storedAt = Date.now();
           // The stored draft now holds everything: the device copy is done.
@@ -1193,8 +1216,14 @@
     // as a recovery copy (storage.savePhotoPostOver). A draft deleted elsewhere is stored again.
     // A draft that became a saved post or was hidden elsewhere is refused as before.
     async function storeDraft(target, payload) {
+      const note = (saved, text) => Object.defineProperty(saved, "overNote", { value: text, enumerable: false });
+      const legacy = legacyDrafts.get(target)?.dropped && payload.status === "draft" && target.revision > 0 && typeof storage.savePhotoPostOver === "function";
       try {
-        return await storage.savePhotoPost(workspaceId, payload, target.revision);
+        if (!legacy) return await storage.savePhotoPost(workspaceId, payload, target.revision);
+        // The stored v2 draft becomes a recovery copy and the Markdown input takes its place, at once.
+        const saved = await storage.savePhotoPostOver(workspaceId, payload, target.revision, { over: { id: target.id, revision: target.revision }, copyId: life.Core.id(), keep: true });
+        if (saved.keptCopyId) try { root.HaedoLife?.BlogSync?.noteLocalDraftSaved?.(saved.keptCopyId); } catch (_) {}
+        return note(saved, saved.keptCopyId ? LEGACY_DROPPED : "");
       } catch (cause) {
         if (cause?.code !== "photo_post_conflict" || payload.status !== "draft" || target.revision === 0 || typeof storage.savePhotoPostOver !== "function") throw cause;
         const stored = await storage.readPhotoPost(workspaceId, target.id).catch((e) => {
@@ -1203,7 +1232,6 @@
         });
         if (stored && stored.status === "draft" && !stored.archived && stored.revision === target.revision) throw cause;
         if (!valid() || doc !== target) throw cause;
-        const note = (saved, text) => Object.defineProperty(saved, "overNote", { value: text, enumerable: false });
         // Gone, saved as a post or hidden elsewhere (another tab deleted, finished or hid this same draft): the
         // input is kept as a draft of its own under a new id, with the draft's exact source evidence. Never under
         // the same id again (review B1): its server identity was deleted, and a re-created one would start again at
@@ -1225,7 +1253,7 @@
         }
         const value = { ...payload, revision: stored.revision };
         // What storage holds may differ only by its revision (nothing this editor has not seen): nothing to keep then.
-        const keep = !(typeof storedBase === "string" && storedBase && M.contentHash(stored) === storedBase);
+        const keep = legacy || !(typeof storedBase === "string" && storedBase && M.contentHash(stored) === storedBase);
         const saved = await storage.savePhotoPostOver(workspaceId, value, stored.revision, { over: { id: stored.id, revision: stored.revision }, copyId: life.Core.id(), keep });
         if (saved.keptCopyId) try { root.HaedoLife?.BlogSync?.noteLocalDraftSaved?.(saved.keptCopyId); } catch (_) {}
         return note(saved, saved.keptCopyId ? "다른 탭이나 기기에서 바뀐 내용은 복구 사본으로 남겼어요" : "");
@@ -1412,8 +1440,11 @@
       return M.normalize(doc).doc;
     }
     async function backup() {
-      const value = outputSnapshot(),
-        token = epoch;
+      let value = outputSnapshot();
+      const token = epoch;
+      // The input of a Markdown post is backed up in its format; input the codec refuses is
+      // still backed up, in the editor's own form.
+      if (storesMarkdown(doc)) try { value = life.PostMarkdown.fromV2({ ...value, format: "life-photo-post-v2" }).document; } catch (_) {}
       setBusy(true);
       try {
         const blob = await M.backup(value, { lenient: true });
@@ -1650,7 +1681,12 @@
             : "read";
         // A stored draft: what it holds. A revision not stored yet: what the saved post holds.
         storedBase = mode !== "edit" ? null : doc.revision > 0 ? M.contentHash(doc) : M.contentHash(next);
-        if (mode === "edit") doc = editable(M.upgrade(doc), markdownTarget);
+        if (mode === "edit") {
+          const storedDoc = doc;
+          doc = editable(M.upgrade(doc), markdownTarget);
+          markLegacy(doc, storedDoc);
+          if (legacyDrafts.get(doc)?.dropped) showChangeNote("밑줄·정렬은 이 형식에 없어 저장할 때 빠집니다. 원래 판은 복구 사본으로 남깁니다.");
+        }
         offer = mode === "edit" ? usableCopy(recoveryStore.read(workspaceId, doc.id) || orphan) : null;
         strays = mode === "edit" ? waiting : [];
         error = null;
@@ -1724,6 +1760,9 @@
       if (asNew) return saveIndependent("saved");
       guard();
       const token = epoch;
+      // Nothing typed yet in a legacy draft whose formats Markdown drops: it is stored as a
+      // Markdown draft first, which keeps the v2 draft as a recovery copy (storeDraft).
+      if (legacyDrafts.get(doc)?.dropped && dirtyTick === storedTick) dirtyTick++;
       await flush();
       if (!current(token)) return;
       const draftId = doc.id;
@@ -2795,6 +2834,10 @@
       noteLine = el("p", "", "photo-edit-note");
       noteLine.setAttribute("role", "status");
       sticky.append(noteLine);
+      hintLine = el("p", "", "photo-edit-note photo-ai-hint");
+      hintLine.setAttribute("role", "status");
+      hintLine.hidden = true;
+      sticky.append(hintLine);
       showChangeNote();
       if (doc.replaces && blogSync?.getState) {
         // Revising a saved post: the pill says whether that post has a public copy.
@@ -2946,8 +2989,18 @@
       // What to do first before AI 제안 can open (2026-11-24): a usage hint on the note line
       // under the save state, never a failure. The save state, the recovery actions, the body and
       // the selection stay as they are.
+      // The line is emptied first, so the same hint pressed again is read out again.
       const suggestHint = (text) => {
-        showChangeNote(text);
+        const line = hintLine;
+        if (!line) return null;
+        clearTimeout(hintTimer);
+        line.textContent = "";
+        hintTimer = setTimeout(() => {
+          if (hintLine !== line) return;
+          line.textContent = text;
+          line.hidden = false;
+          hintTimer = setTimeout(() => { if (hintLine === line) { line.textContent = ""; line.hidden = true; } }, 8000);
+        }, 50);
         return null;
       };
       const suggest = iconControl(button("AI 제안", () => {
@@ -3506,6 +3559,7 @@
         const titleFocus = document.activeElement === titleInput && titleInput ? [titleInput.selectionStart, titleInput.selectionEnd] : null;
         const y = root.scrollY;
         doc = editable(M.upgrade(next), storesMarkdown(was));
+        markLegacy(doc, next);
         if (nextBaseline !== undefined) baseline = nextBaseline;
         storedBase = M.contentHash(next);
         render();

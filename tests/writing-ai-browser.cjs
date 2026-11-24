@@ -28,14 +28,14 @@ const aiText = state => state.ops.filter(op => op.attributes?.author === 'ai').m
 // state. The save state, the recovery actions, the body and the selection are what they were.
 const entryState = page => page.evaluate(() => {
   const status = document.querySelector('.photo-commandbar .photo-status'), q = Quill.find(document.querySelector('.photo-quill'));
-  const recovery = document.querySelector('.photo-recovery-actions'), note = document.querySelector('.photo-edit-note');
+  const recovery = document.querySelector('.photo-recovery-actions'), note = document.querySelector('.photo-ai-hint');
   return { status: { text: status.textContent, state: status.dataset.state, role: status.getAttribute('role') },
     recoveryHidden: recovery.hidden, alerts: document.querySelectorAll('.photo-editor [role=alert]').length,
     selection: q.selection.savedRange && { index: q.selection.savedRange.index, length: q.selection.savedRange.length },
     note: note && !note.hidden ? { text: note.textContent, role: note.getAttribute('role') } : null };
 });
 async function assertEntryHint(page, before, text, label) {
-  await awaitCondition(page, value => document.querySelector('.photo-edit-note')?.textContent === value && !document.querySelector('.photo-edit-note').hidden, text, { timeout: 5000, label });
+  await awaitCondition(page, value => document.querySelector('.photo-ai-hint')?.textContent === value && !document.querySelector('.photo-ai-hint').hidden, text, { timeout: 5000, label });
   const after = await entryState(page);
   assert.deepEqual(after.note, { text, role: 'status' }, label + ': polite hint');
   assert.deepEqual(after.status, before.status, label + ': the save state is unchanged');
@@ -268,6 +268,26 @@ async function flow(browser, { label, viewport, hasTouch = false, boundaryOnly =
       assert.deepEqual(await editorState(page), original, 'composition: the body is unchanged');
       await page.locator('.ql-editor').evaluate(node => node.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '' })));
       await shot('entry-hint');
+      // The same hint pressed again is emptied and written again, so a screen reader reads it again.
+      await setSelection(page, PREFIX.length, 0);
+      await page.locator('#photoAI').click();
+      await awaitCondition(page, () => document.querySelector('.photo-ai-hint')?.textContent === 'AI에 보낼 글을 선택해 주세요.', null, { timeout: 5000, label: 'first press' });
+      await page.evaluate(() => {
+        window.__hintWrites = [];
+        const line = document.querySelector('.photo-ai-hint');
+        new MutationObserver(() => window.__hintWrites.push(line.textContent)).observe(line, { childList: true, characterData: true, subtree: true });
+      });
+      await page.locator('#photoAI').click();
+      await awaitCondition(page, () => window.__hintWrites.at(-1) === 'AI에 보낼 글을 선택해 주세요.', null, { timeout: 5000, label: 'second press is written again' });
+      assert.deepEqual(await page.evaluate(() => window.__hintWrites), ['', 'AI에 보낼 글을 선택해 주세요.']);
+      // A note about what storing did stays on its own line: the hint never replaces it.
+      await page.evaluate(() => { const q = Quill.find(document.querySelector('.photo-quill')); q.insertText(q.getLength() - 1, '\u000b', 'user'); });
+      await awaitCondition(page, () => document.querySelector('.photo-edit-note:not(.photo-ai-hint)')?.textContent === '쓸 수 없는 문자를 뺐어요', null, { timeout: 8000, label: 'a storing note is shown' });
+      await setSelection(page, PREFIX.length, 0);
+      await page.locator('#photoAI').click();
+      await awaitCondition(page, () => document.querySelector('.photo-ai-hint')?.textContent === 'AI에 보낼 글을 선택해 주세요.', null, { timeout: 5000, label: 'hint beside the storing note' });
+      assert.equal(await page.locator('.photo-edit-note:not(.photo-ai-hint)').textContent(), '쓸 수 없는 문자를 뺐어요', 'the storing note stays');
+      await page.waitForFunction(() => document.querySelector('.photo-commandbar .photo-status')?.textContent === '자동 저장됨');
       // With a usable selection the same control opens the panel as before.
       await setSelection(page, PREFIX.length, SELECTED.length);
       await openSuggestions(page); await action(page, '닫기').click();
