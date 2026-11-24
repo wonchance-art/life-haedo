@@ -362,7 +362,7 @@ async function flow(browser, width) {
       assert.deepEqual(await docs(), before, 'nothing stored');
       await page.evaluate(() => window.__restoreCodec());
       await click('글 저장'); await page.locator('.photo-article').waitFor();
-      const post = (await docs()).find(d => d.title === '익명 Markdown 글' && d.status === 'saved' && !d.archived);
+      const post = (await docs()).find(d => d.id !== seed.v2Id && d.title === '익명 Markdown 글' && d.status === 'saved' && !d.archived);
       assert.equal(post.format, 'life-post-md-v1'); assert.match(post.markdown, /^저장 직전 /);
       mdId = post.id;
     });
