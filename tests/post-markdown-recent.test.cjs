@@ -19,6 +19,30 @@ test('a repeated exact string gives an equal result that is a copy of its own', 
   assert.equal(P.canonicalize(body), body);
 });
 
+test('two cache hits are two copies: changing one changes neither the next hit nor a fresh decode', () => {
+  const text = '캐시 사본 검사 **굵게**\n\n- 목록\n';
+  const first = P.parse(text), c = P.parse(text), d = P.parse(text);
+  assert.notEqual(c, d); assert.notEqual(c.ops, d.ops); assert.notEqual(c.ops[0], d.ops[0]); assert.notEqual(c.photos, d.photos);
+  const expected = structuredClone(d);
+  c.ops[0].insert = '바뀐 글'; c.ops.push({ insert: 'x\n' }); c.photos.push('x'); c.markdown = '';
+  d.ops.length = 0;
+  assert.deepEqual(P.parse(text), expected, 'the next hit is unchanged');
+  assert.deepEqual(first, expected, 'and equals the fresh decode');
+  P.forgetRecent();
+  assert.deepEqual(P.parse(text), expected, 'a decode after forgetting gives the same result');
+});
+
+test('forgetRecent empties what is kept: the next read decodes again', () => {
+  const m = require('../vendor/markdown-it/markdown-it.umd.min.js');
+  let n = 0; const parse = m.prototype.parse;
+  m.prototype.parse = function (...a) { n++; return parse.apply(this, a); };
+  try {
+    const text = '잊는 글 ' + Date.now() + '\n';
+    P.parse(text); P.parse(text); assert.equal(n, 1);
+    P.forgetRecent(); P.parse(text); assert.equal(n, 2);
+  } finally { m.prototype.parse = parse; }
+});
+
 test('a refused string is refused every time and a non-canonical one keeps its own canonical form', () => {
   for (let i = 0; i < 2; i++) assert.throws(() => P.parse('- a\n  - b\n'), /중첩/);
   const loose = '첫 문단 __굵게__\n';

@@ -384,6 +384,8 @@
     }
     return result;
   }
+  // The account boundary (sign-out, another account) forgets the kept bodies.
+  function forgetRecent() { recent.length = 0; }
   function decode(markdown) {
     if (typeof markdown !== 'string' || markdown.length > LIMITS.markdown || new TextEncoder().encode(markdown).length > LIMITS.markdown ||
       /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\uD800-\uDFFF]/u.test(markdown)) throw fail('Markdown 본문의 문자와 길이를 확인해 주세요.');
@@ -440,5 +442,5 @@
     return result;
   }
   return Object.freeze({ FORMAT, PHOTO_SCHEME, AI_OPEN, AI_CLOSE, LIMITS, fromDelta, fromV2, escapeInline,
-    parse, toDelta, canonicalize, toV2, remapPhotos, safeLink });
+    parse, toDelta, canonicalize, toV2, remapPhotos, safeLink, forgetRecent });
 });
